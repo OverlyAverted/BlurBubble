@@ -78,3 +78,23 @@ This manual outlines the specific hardware calibrations, application rules, and 
 ### 📋 Operational Procedure
 1.  As long as your phone stays connected to `Home_Secure_Net`, the active shield is safely suspended, allowing you and family members to record family videos without camera interference or local blurring.
 2.  The split second you step out of range and disconnect from the home Wi-Fi (such as walking out to the street), the dashboard automatically arms the shield, setting the Privacy level back to your preferred default public level (`Strict Blur`).
+
+---
+
+## Use Case 5: Comprehensive Digital Opt-Out & Crawler Defense
+*Defending individual digital and spatial identity footprints against automated scraper networks, AI training crawlers, and data-broker background check indices.*
+
+### 🛠️ Hardware Requirements & Setup
+*   **Device**: Primary smartphone running the BlurBubble active background agent.
+*   **Protocol Link**: Dynamic robots.txt and API webhook integrations.
+
+### ⚙️ Dashboard Calibration Settings
+*   **Universal Surveillance Intercept**: Enabled (Smartphone Cams, Municipal CCTV, Ring/Nest smart devices, Drones).
+*   **AI Crawler & Dataset Exclusion**: Active (GPTBot, Google-Extended, Claude crawler, CCBot dataset blocks enabled).
+*   **Automated Data Broker Sweep**: Armed (ON). Sends continuous cryptographic CCPA/BIPA deletions.
+
+### 📋 Operational Procedure
+1.  Verify that your custom options are enabled within the **Universal Surveillance Intercept** and **AI Dataset Exclusion** control boards.
+2.  Run the **Interactive Face Lookup Simulator Lab** on the dashboard to test your shield combinations. The lab simulates real-time scans from smart-cameras, looking up matches in scraper databases.
+3.  Observe the audit trail logs generating live. If any crawlers (like GPTBot) or database lookups are intercepted, the client-side compliance ledger immediately dispatches do-not-track signatures and records the deflection in your history log.
+

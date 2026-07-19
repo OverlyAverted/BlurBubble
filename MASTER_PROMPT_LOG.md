@@ -55,6 +55,14 @@ This registry catalogs the developmental history of the BlurBubble codebase, pre
   * **Active Ultrasonic Speech Privacy Jammer (`ultrasonic_speech_jammer.c`)**: Highly optimized C microcontroller firmware utilizing high-frequency PWM timers to drive piezoelectric transducer arrays at 24kHz - 25.5kHz with frequency sweeps and AM white noise envelopes to silent-jam recording devices.
   * **Smart Glass Liquid Crystal Lens Shutter (`liquid_crystal_shutter.ino`)**: Arduino microcontroller sketch that listens to active NIR structured lasers (such as LIDAR or FaceID vcsel grids) and toggles ±12V AC square-wave lens shutters to blind the rolling camera sensors.
 
+### 📍 Milestone 5: No Data About Me - Universal Surveillance Intercept Grid & Dataset Exclusions
+* **Focus**: Extending localized boundary shields to universal physical devices (smartphones, municipal CCTV, smart home IoT, drones) and establishing proactive defense against web crawler scrapers, AI training datasets, and background search brokers.
+* **Core Capabilities Added**:
+  * **Universal Surveillance Intercept Grid**: Advanced on/off toggles for smartphone cameras, municipal CCTV systems, smart home IoT doorbells (Nest/Ring), and aerial drone camera shields.
+  * **AI Dataset Exclusion Hub**: Standardized crawler refusal headers targeting OpenAI (GPTBot), Google (Google-Extended), Anthropic (Claude crawler), and Common Crawl (CCBot).
+  * **Automated Data Broker Sweep**: Cryptographically signed BIPA/CCPA deletion requests sent automatically to popular people search websites and background check services.
+  * **Consolidated Shield Outcomes**: Integrated all 13 active shields into the Interactive Face Lookup Simulator's logic, dynamically rendering protective handshakes and generating real-time audit logs upon mock scans.
+
 ---
 
 ## 🛠️ 3. Current Live Architecture

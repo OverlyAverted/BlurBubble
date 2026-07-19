@@ -85,3 +85,22 @@ Bystander hostility and legal vulnerability are resolved:
 ### 4.3 General Public (Personal Sovereign Agency)
 *   Individuals retain the active, sovereign authority to express their privacy boundaries on-demand.
 *   By downloading the dashboard or activating a passive RF beacon, the citizen receives absolute protection. If they choose not to utilize the app, they remain exposed, but are always equipped with the tools to defend themselves at any moment.
+
+---
+
+## 5. AI Crawler & Data Broker Opt-Out Compliance (BIPA / CCPA Automated Directives)
+
+BlurBubble incorporates automated compliance protocols that interface with the web's foundational scraping rules and major US state privacy laws (CCPA, CPRA, BIPA).
+
+### 5.1 Dynamic Robots.txt and LLM Dataset Refusal
+BlurBubble's agent continuously broadcasts Standardized LLM Dataset Exclusions mapped to modern robots.txt policies:
+*   **GPTBot (OpenAI)**: Block directives prevent OpenAI's dynamic spiders from using private media assets, social profiles, and voice transcripts in future GPT foundation training runs.
+*   **Google-Extended**: Explicit opt-out tokens reject the crawling of personal web folders and audio directories by Google's Gemini training indexers.
+*   **Anthropic (Claude-Bot)**: Block configurations stop crawl runs by Claude's index nodes.
+*   **CCBot (Common Crawl)**: Pre-emptive metadata exclusions prevent CCBot from bundling user media footprints into open-source public training corpora.
+
+### 5.2 Automated People Search & Data Broker Sweep
+To defend against retroactive lookup networks (such as PimEyes, BeenVerified, Spokeo, and Whitepages), BlurBubble's client-side core packages cryptographically-signed CCPA "Do Not Sell My Info" and BIPA deletion directives:
+*   **On-Demand Takedowns**: Upon scanning or detecting unconsented profile lookups, the dashboard automatically generates a signed CCPA Article 4 deletion request.
+*   **Direct API Handshakes**: Direct compliance headers are delivered to matching database brokers, requiring automated removal within the legally mandated grace window.
+

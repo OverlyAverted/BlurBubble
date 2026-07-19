@@ -91,6 +91,19 @@ export interface CitizenState {
   targetedSoundAngle?: number;
   targetedPeripheralConnected?: boolean;
   targetedSoundIntensity?: number;
+  adversarialPoisoning?: boolean;
+  decoyPersonaBroadcast?: boolean;
+  rfc9402SocialBlock?: boolean;
+  regulatoryCeaseAndDesist?: boolean;
+  mobileCamsBlock?: boolean;
+  cctvBlock?: boolean;
+  smartHomeExclusion?: boolean;
+  aerialDroneDisruption?: boolean;
+  gptBotExclusion?: boolean;
+  googleExtendedBlock?: boolean;
+  anthropicBlock?: boolean;
+  commonCrawlOptOut?: boolean;
+  dataBrokersSweep?: boolean;
 }
 
 export interface WifiTriggerRule {

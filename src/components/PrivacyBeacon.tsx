@@ -44,6 +44,8 @@ import {
   BellRing,
   Award,
   Cpu,
+  Smartphone,
+  Bot,
   Calendar,
   Zap,
   FileText,
@@ -458,6 +460,12 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
   const [scannedWifiSuccess, setScannedWifiSuccess] = useState<string | null>(null);
   const [calibratingFaceId, setCalibratingFaceId] = useState<string | null>(null);
   const [calibrationProgress, setCalibrationProgress] = useState<number>(0);
+  
+  // No Data About Me Search simulation states
+  const [simulatingFaceSearch, setSimulatingFaceSearch] = useState(false);
+  const [faceSearchProgress, setFaceSearchProgress] = useState(0);
+  const [faceSearchResult, setFaceSearchResult] = useState<string | null>(null);
+  const [faceSearchLogs, setFaceSearchLogs] = useState<string[]>([]);
 
   // Find Tag / Bidirectional Audio & Visual Alerts
   const [ringingTagId, setRingingTagId] = useState<string | null>(null);
@@ -9000,6 +9008,616 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Anti-AI Social Scrape & Identity Shield (No Data About Me) Panel */}
+                  <div className="mt-8 pt-6 border-t border-slate-900/60 space-y-4">
+                    <div className="bg-slate-950 border-2 border-slate-900/80 rounded-2xl overflow-hidden shadow-2xl relative">
+                      <div className="absolute top-0 right-0 p-3">
+                        <span className="text-[9px] font-mono text-emerald-400/60 uppercase tracking-widest bg-emerald-950/20 border border-emerald-900/40 px-2 py-0.5 rounded">
+                          RFC-9402 Compliant
+                        </span>
+                      </div>
+                      
+                      {/* Header */}
+                      <div className="p-5 border-b border-slate-900/80 bg-gradient-to-r from-slate-950 to-slate-900/40">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/20 rounded-xl">
+                            <Fingerprint className="w-5 h-5 text-emerald-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-extrabold text-white uppercase tracking-wider font-sans">
+                              Identity Shield &amp; AI Social-Scrape Blocker
+                            </h3>
+                            <p className="text-[11px] text-slate-400 max-w-xl leading-normal mt-0.5">
+                              Defends your face from reverse-image scanners (PimEyes, Clearview AI) and prevents smart glasses from linking your physical face to social media or personal accounts.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content Area */}
+                      <div className="p-5 space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          
+                          {/* Toggle 1: Adversarial Pixel Noise Injection */}
+                          <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-800 transition">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                                  Adversarial Pixel Poisoning
+                                </span>
+                                <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Fawkes 1.2</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 leading-normal">
+                                Injects invisible, pixel-space adjustments into your public face records. Corrupts the facial-recognition vector to cause lookup failure.
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                              <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.adversarialPoisoning ? 'Poisoned Embeddings' : 'Standard Embeddings'}</span>
+                              <button
+                                type="button"
+                                id="toggle-adversarial-poisoning"
+                                onClick={() => onChange({ ...state, adversarialPoisoning: !state.adversarialPoisoning })}
+                                className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                  state.adversarialPoisoning
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : 'bg-slate-900 text-slate-500 border border-slate-850'
+                                }`}
+                              >
+                                {state.adversarialPoisoning ? 'ON (ACTIVE)' : 'OFF'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Toggle 2: Decoy Persona Broadcasting */}
+                          <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-800 transition">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                  <Users className="w-3.5 h-3.5 text-emerald-400" />
+                                  Decoy Persona Broadcasting
+                                </span>
+                                <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Ephemeral ID</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 leading-normal">
+                                Broadcasts a randomized, virtual persona to nearby compliance-seeking smart glasses, keeping your real identity fully invisible.
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                              <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.decoyPersonaBroadcast ? 'Randomizing AR ID' : 'Real ID (Opt-In Only)'}</span>
+                              <button
+                                type="button"
+                                id="toggle-decoy-persona"
+                                onClick={() => onChange({ ...state, decoyPersonaBroadcast: !state.decoyPersonaBroadcast })}
+                                className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                  state.decoyPersonaBroadcast
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : 'bg-slate-900 text-slate-500 border border-slate-850'
+                                }`}
+                              >
+                                {state.decoyPersonaBroadcast ? 'ON (ACTIVE)' : 'OFF'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Toggle 3: RFC-9402 Social Lookup Block */}
+                          <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-800 transition">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                  <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                                  RFC-9402 Social Block
+                                </span>
+                                <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Opt-Out Header</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 leading-normal">
+                                Transmits explicit, cryptographically signed `do-not-associate` instructions in all outbound radio beacon frames to legally deny data linkups.
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                              <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.rfc9402SocialBlock ? 'Header Transmitting' : 'Header Muted'}</span>
+                              <button
+                                type="button"
+                                id="toggle-rfc9402-block"
+                                onClick={() => onChange({ ...state, rfc9402SocialBlock: !state.rfc9402SocialBlock })}
+                                className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                  state.rfc9402SocialBlock
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : 'bg-slate-900 text-slate-500 border border-slate-850'
+                                }`}
+                              >
+                                {state.rfc9402SocialBlock ? 'ON (ACTIVE)' : 'OFF'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Toggle 4: Regulatory Cease-and-Desist Registration */}
+                          <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-800 transition">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                                  Biometric Legal Block
+                                </span>
+                                <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">BIPA / CCPA</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 leading-normal">
+                                Places your face hash on a secure global exclusion ledger. Automatically delivers legal opt-out commands to PimEyes, Clearview, and similar web indexers.
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                              <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.regulatoryCeaseAndDesist ? 'Ledger Active' : 'Ledger Standby'}</span>
+                              <button
+                                type="button"
+                                id="toggle-legal-block"
+                                onClick={() => onChange({ ...state, regulatoryCeaseAndDesist: !state.regulatoryCeaseAndDesist })}
+                                className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                  state.regulatoryCeaseAndDesist
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : 'bg-slate-900 text-slate-500 border border-slate-850'
+                                }`}
+                              >
+                                {state.regulatoryCeaseAndDesist ? 'ON (ACTIVE)' : 'OFF'}
+                              </button>
+                            </div>
+                          </div>
+
+                        {/* UNIVERSAL RECORDING PROTECTION SHIELD */}
+                        <div className="border-t border-slate-900/60 pt-5 space-y-4">
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded uppercase tracking-wider">
+                              Multi-Device Broadcast Protocol
+                            </span>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 pt-1">
+                              <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                              Universal Surveillance Intercept Grid
+                            </h4>
+                            <p className="text-[10px] text-slate-400 leading-normal">
+                              Extend compliance standard refusals beyond smart glasses to all physical camera classes and recording devices within your perimeter shield range.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Mobile Cams Block */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                                    Mobile &amp; Smartphone Cams
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">OS Integration</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Forces compatible native mobile camera apps and user devices in range to automatically mask/blur your facial profile in photos and video feeds.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.mobileCamsBlock ? 'Broadcasting Refusal' : 'Refusal Suspended'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-mobile-cams-block"
+                                  onClick={() => onChange({ ...state, mobileCamsBlock: !state.mobileCamsBlock })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.mobileCamsBlock
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-850'
+                                  }`}
+                                >
+                                  {state.mobileCamsBlock ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* CCTV & Security Cam Refusal */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Video className="w-3.5 h-3.5 text-emerald-400" />
+                                    Municipal CCTV &amp; Security Cams
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">B2G Grid Link</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Delivers optical-refusal handshake hashes directly to compliant municipal and commercial security camera networks to enforce automated live blurs.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.cctvBlock ? 'Enforcing Live Blurs' : 'CCTV Transmitting Real'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-cctv-block"
+                                  onClick={() => onChange({ ...state, cctvBlock: !state.cctvBlock })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.cctvBlock
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-850'
+                                  }`}
+                                >
+                                  {state.cctvBlock ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Smart Home IoT Exclusion */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Home className="w-3.5 h-3.5 text-emerald-400" />
+                                    Smart Home IoT (Ring/Nest)
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Local Wi-Fi Beacon</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Broadcasts localized smart-refusal packets via BLE and Wi-Fi to neighbors' Ring, Nest, or outdoor smart cams to suspend unconsented clip recordings.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.smartHomeExclusion ? 'Suppressing IoT' : 'IoT Tracking On'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-smarthome-exclusion"
+                                  onClick={() => onChange({ ...state, smartHomeExclusion: !state.smartHomeExclusion })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.smartHomeExclusion
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-850'
+                                  }`}
+                                >
+                                  {state.smartHomeExclusion ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Aerial Drones Disruption */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                                    Drone &amp; Aerial Camera Shield
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">RF Deflector</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Encodes standard geospatial exclusion tags into localized signal bursts, notifying mapping and surveillance drones to omit your coordinate envelope.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.aerialDroneDisruption ? 'Geofence Active' : 'Standby Mode'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-aerial-disruption"
+                                  onClick={() => onChange({ ...state, aerialDroneDisruption: !state.aerialDroneDisruption })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.aerialDroneDisruption
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.aerialDroneDisruption ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* AI WEB CRAWLER & RETROACTIVE DATA SCRAPER SHIELD */}
+                        <div className="border-t border-slate-900/60 pt-5 space-y-4">
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded uppercase tracking-wider">
+                              AI Training Dataset Protection
+                            </span>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 pt-1">
+                              <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                              Autonomous AI Crawler &amp; Dataset Exclusion Hub
+                            </h4>
+                            <p className="text-[10px] text-slate-400 leading-normal">
+                              Prevent automated bots from scraping your face prints, spoken vocal transcripts, and personal profiles to feed large language models or biometric datasets.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* OpenAI GPTBot */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                                    OpenAI GPTBot Opt-Out
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">robots.txt Block</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Broadcasting global exclusion headers instructing OpenAI's GPTBot and web indexes to skip your personal media, photos, and public profiles.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.gptBotExclusion ? 'Scraping Prohibited' : 'Unprotected Scraping'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-gptbot-exclusion"
+                                  onClick={() => onChange({ ...state, gptBotExclusion: !state.gptBotExclusion })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.gptBotExclusion
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.gptBotExclusion ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Google-Extended */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                                    Google-Extended Refusal
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Gemini training</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Declares strict dataset refusals to prevent Google-Extended spider crawlers from mining your speech prints or physical assets for Gemini training.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.googleExtendedBlock ? 'Gemini Block Active' : 'Index Allowed'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-google-extended-block"
+                                  onClick={() => onChange({ ...state, googleExtendedBlock: !state.googleExtendedBlock })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.googleExtendedBlock
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.googleExtendedBlock ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Anthropic crawler block */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                                    Anthropic Claude Exclusion
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Claude crawler</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Denies indexing rights to Anthropic-AI crawler agents. Protects your digital identity assets and creative vocal files from LLM integration.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.anthropicBlock ? 'Claude Excluded' : 'Crawlers Permitted'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-anthropic-block"
+                                  onClick={() => onChange({ ...state, anthropicBlock: !state.anthropicBlock })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.anthropicBlock
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.anthropicBlock ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Common Crawl */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                                    Common Crawl CCBot Block
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Dataset Shield</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Submits permanent "No-Scrape" watermarked assertions to CCBot nodes, keeping your private web footprints out of public foundation model repositories.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.commonCrawlOptOut ? 'CCBot Opt-Out Transmitted' : 'CCBot Scraping Active'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-ccbot-optout"
+                                  onClick={() => onChange({ ...state, commonCrawlOptOut: !state.commonCrawlOptOut })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.commonCrawlOptOut
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.commonCrawlOptOut ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Identity Data Brokers */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition col-span-1 md:col-span-2">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                                    Retroactive Data Broker Sweep (Spokeo, BeenVerified, Whitepages)
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Legal Automaton</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Sends automated, cryptographically signed BIPA / CCPA "Do Not Sell My Info" and deletion demands directly to 140+ popular people search directories and online background-check aggregators.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.dataBrokersSweep ? 'Continuous Automated Deletion Active' : 'Standby Mode'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-databrokers-sweep"
+                                  onClick={() => onChange({ ...state, dataBrokersSweep: !state.dataBrokersSweep })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.dataBrokersSweep
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.dataBrokersSweep ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+
+                        {/* Interactive Face Lookup Simulator Lab */}
+                        <div className="mt-4 p-5 bg-slate-950 border border-slate-900 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                <Activity className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                                Biometric Reverse-Lookup Simulation Lab
+                              </h4>
+                              <p className="text-[10px] text-slate-400">
+                                Test how nearby AI glasses or biometric search crawlers respond when attempting to scan and identify your physical face.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              id="run-face-search-simulation"
+                              disabled={simulatingFaceSearch}
+                              onClick={() => {
+                                setSimulatingFaceSearch(true);
+                                setFaceSearchProgress(0);
+                                setFaceSearchResult(null);
+                                setFaceSearchLogs([]);
+                                
+                                const steps = [
+                                  { progress: 10, msg: "⚡ Scan initiated. Analyzing feed sources (Smart Glasses, Smartphones, Local CCTV)..." },
+                                  { progress: 25, msg: "📐 Extracting high-dimensional facial vector geometry..." },
+                                  { progress: 45, msg: "📡 Checking real-time RF/BLE opt-out beacon broadcast handshakes..." },
+                                  { progress: 65, msg: "🔍 Querying major facial databases, AI training datasets, and scraper nodes (PimEyes, Clearview)..." },
+                                  { progress: 85, msg: "🛰️ Evaluating legal compliance directives and automated opt-out headers..." }
+                                ];
+                                
+                                steps.forEach((step, idx) => {
+                                  setTimeout(() => {
+                                    setFaceSearchProgress(step.progress);
+                                    setFaceSearchLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${step.msg}`]);
+                                  }, (idx + 1) * 450);
+                                });
+
+                                setTimeout(() => {
+                                  setFaceSearchProgress(100);
+                                  
+                                  // Determine outcomes based on active toggles
+                                  let blockDetails = "";
+                                  let titleResult = "";
+                                  const activeBlocks: string[] = [];
+                                  
+                                  if (state.adversarialPoisoning) activeBlocks.push("Adversarial Pixel Poisoning");
+                                  if (state.rfc9402SocialBlock) activeBlocks.push("RFC-9402 Outbound Headers");
+                                  if (state.decoyPersonaBroadcast) activeBlocks.push("Decoy Ephemeral Broadcast");
+                                  if (state.regulatoryCeaseAndDesist) activeBlocks.push("BIPA/CCPA Exclusion Ledger");
+                                  if (state.mobileCamsBlock) activeBlocks.push("Universal Smartphone Blocker");
+                                  if (state.cctvBlock) activeBlocks.push("CCTV Network Opt-Out");
+                                  if (state.smartHomeExclusion) activeBlocks.push("Smart Home IoT Suppressor");
+                                  if (state.aerialDroneDisruption) activeBlocks.push("Geospatial Aerial Tagging");
+                                  if (state.gptBotExclusion) activeBlocks.push("GPTBot Dataset Shield");
+                                  if (state.googleExtendedBlock) activeBlocks.push("Google-Extended Refusal");
+                                  if (state.anthropicBlock) activeBlocks.push("Claude Core Exclusion");
+                                  if (state.commonCrawlOptOut) activeBlocks.push("CCBot Dataset Block");
+                                  if (state.dataBrokersSweep) activeBlocks.push("Automated Data Broker Sweep");
+
+                                  const logsList = [`[${new Date().toLocaleTimeString()}] 🛡️ Shield Diagnostics Summary:`];
+                                  if (state.mobileCamsBlock) {
+                                    logsList.push("  -> [SMARTPHONE INTERCEPT] Nearby smartphone camera preview frames successfully scrambled.");
+                                  }
+                                  if (state.cctvBlock) {
+                                    logsList.push("  -> [CCTV SHIELD] Compliant municipal camera networks applied real-time black-bar overlay.");
+                                  }
+                                  if (state.smartHomeExclusion) {
+                                    logsList.push("  -> [SMART HOME] Nearby Nest and Ring doorbell cameras halted active clips of your face.");
+                                  }
+                                  if (state.aerialDroneDisruption) {
+                                    logsList.push("  -> [AERIAL SHIELD] Drones flying overhead flagged current coordinate bubble as RESTRICTED.");
+                                  }
+                                  if (state.gptBotExclusion || state.googleExtendedBlock || state.anthropicBlock || state.commonCrawlOptOut) {
+                                    logsList.push("  -> [BOT EXCLUSION] GPTBot, Google-Extended, and CCBot spiders blocked from indexing media profiles.");
+                                  }
+                                  if (state.dataBrokersSweep) {
+                                    logsList.push("  -> [BROKER AUTOMATION] Sent BIPA deletion directives to PimEyes and BeenVerified databases.");
+                                  }
+
+                                  setFaceSearchLogs(prev => [...prev, ...logsList]);
+
+                                  if (activeBlocks.length > 0) {
+                                    titleResult = `Shield Enforced: ${activeBlocks.length} Layers Active`;
+                                    blockDetails = `Your physical face profile was fully defended from lookup using standard handshakes. Active protection shields used: ${activeBlocks.join(", ")}. Facial index match returned 0 linked social handles or personal profiles.`;
+                                  } else {
+                                    titleResult = "🚨 WARNING: Identity Profile Exposed";
+                                    blockDetails = "All blockers disabled! Scraper lookup successfully matched your physical face coordinates to public accounts on Instagram, X, and LinkedIn. Linked handle: @paul_stuart.";
+                                  }
+                                  
+                                  setFaceSearchResult(titleResult);
+                                  setFaceSearchLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] outcome: ${titleResult} - ${blockDetails}`]);
+                                  setSimulatingFaceSearch(false);
+                                  playLocalSoundTest('sonar_chime', 80);
+                                }, 2700);
+                              }}
+                              className={`text-[10px] px-4 py-2 rounded-lg font-bold uppercase transition select-none cursor-pointer ${
+                                simulatingFaceSearch
+                                  ? 'bg-slate-900 text-slate-500 border border-slate-850 cursor-not-allowed'
+                                  : 'bg-blue-500 hover:bg-blue-600 text-slate-950 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
+                              }`}
+                            >
+                              {simulatingFaceSearch ? "SIMULATING..." : "START SCAN TEST"}
+                            </button>
+                          </div>
+
+                          {/* Progress bar */}
+                          {simulatingFaceSearch && (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[9px] font-mono text-slate-500">
+                                <span>Scanning Matrix Coordinates...</span>
+                                <span>{faceSearchProgress}%</span>
+                              </div>
+                              <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
+                                <motion.div
+                                  className="h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${faceSearchProgress}%` }}
+                                  transition={{ duration: 0.1 }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Terminal Logs & Results */}
+                          {faceSearchLogs.length > 0 && (
+                            <div className="p-3.5 bg-slate-950 border border-slate-900 rounded-lg space-y-2 max-h-48 overflow-y-auto font-mono text-[9px] leading-relaxed">
+                              {faceSearchLogs.map((log, i) => (
+                                <div key={i} className={log.includes("outcome:") ? "text-emerald-400 font-bold border-t border-slate-900 pt-2 mt-2" : "text-slate-400"}>
+                                  {log}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
                     </div>
                   </div>
 

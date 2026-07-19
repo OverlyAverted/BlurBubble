@@ -208,6 +208,24 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
   const [useVirtualWebcam, setUseVirtualWebcam] = useState(false);
   const [blurPosition, setBlurPosition] = useState({ x: 50, y: 40 }); // percentage coords
   
+  // Camera selection option to use front or back camera
+  const [webcamFacingMode, setWebcamFacingMode] = useState<'user' | 'environment'>('user');
+  const [qrFacingMode, setQrFacingMode] = useState<'environment' | 'user'>('environment');
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedWebcamId, setSelectedWebcamId] = useState<string>('');
+  const [selectedQrCameraId, setSelectedQrCameraId] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const videoDevices = devices.filter(d => d.kind === 'videoinput');
+          setAvailableCameras(videoDevices);
+        })
+        .catch(err => console.warn("enumerateDevices failed: ", err));
+    }
+  }, [webcamActive]);
+  
   // Kalman Filter Configuration & State Refs
   const [kalmanEnabled, setKalmanEnabled] = useState(true);
   const [kalmanQ, setKalmanQ] = useState(0.08); // Process noise covariance
@@ -379,7 +397,14 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
   // Stop/Start camera on change of scan states
   useEffect(() => {
     if (isQrScanning && isRealCameraActive) {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      const videoConstraints: any = {};
+      if (selectedQrCameraId) {
+        videoConstraints.deviceId = { exact: selectedQrCameraId };
+      } else {
+        videoConstraints.facingMode = qrFacingMode;
+      }
+
+      navigator.mediaDevices.getUserMedia({ video: videoConstraints })
         .then(stream => {
           setQrStream(stream);
           if (qrVideoRef.current) {
@@ -403,7 +428,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
         qrStream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [isQrScanning, isRealCameraActive]);
+  }, [isQrScanning, isRealCameraActive, qrFacingMode, selectedQrCameraId]);
 
   // QR Linking Simulation Function
   const handleStartQrLink = (hardwareId: string) => {
@@ -824,7 +849,17 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
         speed: 0.04,
         direction: 'right',
         signalStrength: -44,
-        socialProfile: citizenState.privacyLevel === 'none' ? citizenState.socialProfile : undefined
+        socialProfile: citizenState.privacyLevel === 'none'
+          ? (citizenState.decoyPersonaBroadcast 
+              ? {
+                  username: '@anon_citizen_842',
+                  bio: 'Decoy Identity Profile. Enforced by BlurBubble Privacy Shield.',
+                  interests: ['Privacy', 'Stealth', 'Tactical'],
+                  link: '#'
+                }
+              : ((citizenState.adversarialPoisoning || citizenState.rfc9402SocialBlock || citizenState.regulatoryCeaseAndDesist) ? undefined : citizenState.socialProfile)
+            )
+          : undefined
       };
       // Keep alex near the center
       list.push(citizenPed);
@@ -869,13 +904,21 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
       setWebcamError(null);
       setUseVirtualWebcam(false);
       
+      const videoConstraints: any = {
+        width: 640,
+        height: 480,
+        frameRate: { ideal: 240, max: 240 }
+      };
+
+      if (selectedWebcamId) {
+        videoConstraints.deviceId = { exact: selectedWebcamId };
+      } else {
+        videoConstraints.facingMode = webcamFacingMode;
+      }
+
       // Request up to 240Hz/FPS recording device stream constraints
       const constraints: MediaStreamConstraints = {
-        video: {
-          width: 640,
-          height: 480,
-          frameRate: { ideal: 240, max: 240 }
-        }
+        video: videoConstraints
       };
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -943,7 +986,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
       stopWebcam();
     }
     return () => stopWebcam();
-  }, [activeTab]);
+  }, [activeTab, webcamFacingMode, selectedWebcamId]);
 
   // Dynamic Loader for Google TensorFlow.js and BlazeFace Edge AI Models
   useEffect(() => {
@@ -2240,8 +2283,68 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                     ref={videoRef}
                     playsInline
                     muted
-                    className="w-full h-full object-cover scale-x-[-1]"
+                    className={`w-full h-full object-cover ${webcamFacingMode === 'user' && !selectedWebcamId ? 'scale-x-[-1]' : ''}`}
                   />
+
+                  {/* Floating Camera Selector */}
+                  {webcamActive && !hideAllOverlays && (
+                    <div className="absolute top-4 left-4 z-30 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-[80%] select-none">
+                      {/* Facing Mode Toggle */}
+                      <div className="bg-slate-950/90 border border-slate-800 rounded-lg p-1 flex items-center gap-1 shadow-xl">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWebcamFacingMode('user');
+                            setSelectedWebcamId('');
+                          }}
+                          className={`px-2 py-1 rounded text-[9px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                            webcamFacingMode === 'user' && !selectedWebcamId
+                              ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          Front Cam
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWebcamFacingMode('environment');
+                            setSelectedWebcamId('');
+                          }}
+                          className={`px-2 py-1 rounded text-[9px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                            webcamFacingMode === 'environment' && !selectedWebcamId
+                              ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          Back Cam
+                        </button>
+                      </div>
+
+                      {/* Explicit Camera Select dropdown if multiple cameras exist */}
+                      {availableCameras.length > 0 && (
+                        <div className="bg-slate-950/90 border border-slate-800 rounded-lg p-1 shadow-xl flex items-center">
+                          <select
+                            id="webcam-device-select"
+                            value={selectedWebcamId}
+                            onChange={(e) => {
+                              setSelectedWebcamId(e.target.value);
+                            }}
+                            className="bg-transparent text-slate-300 font-mono text-[9px] font-bold border-none outline-none focus:ring-0 max-w-[150px] cursor-pointer"
+                          >
+                            <option value="" className="bg-slate-950 text-slate-300">
+                              Auto ({webcamFacingMode === 'user' ? 'Front' : 'Back'})
+                            </option>
+                            {availableCameras.map((device, i) => (
+                              <option key={device.deviceId} value={device.deviceId} className="bg-slate-950 text-slate-300">
+                                {device.label || `Camera ${i + 1}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Floating Clean View Toggle Button */}
                   <button
@@ -2748,21 +2851,49 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                         )}
 
                         {/* Social discovery view */}
-                        {citizenState.privacyLevel === 'none' && citizenState.socialProfile && (
-                          <div className="absolute top-2 w-max bg-slate-900/95 border border-emerald-500/40 p-3 rounded-xl backdrop-blur shadow-xl text-left pointer-events-none animate-bounce">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                              <span className="font-mono text-xs text-white font-bold">{citizenState.socialProfile.username}</span>
-                            </div>
-                            <p className="text-[10px] text-slate-300 max-w-[160px] leading-snug">{citizenState.socialProfile.bio}</p>
-                            <div className="flex gap-1 mt-1.5">
-                              {citizenState.socialProfile.interests.slice(0, 2).map(tag => (
-                                <span key={tag} className="text-[8px] bg-emerald-950 text-emerald-300 border border-emerald-900/80 px-1 py-0.2 rounded font-semibold">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
+                        {citizenState.privacyLevel === 'none' && (
+                          <>
+                            {citizenState.decoyPersonaBroadcast ? (
+                              <div className="absolute top-2 w-max bg-slate-900/95 border border-cyan-500/40 p-3 rounded-xl backdrop-blur shadow-xl text-left pointer-events-none animate-bounce">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                                  <span className="font-mono text-xs text-white font-bold">@anon_citizen_842</span>
+                                </div>
+                                <p className="text-[10px] text-slate-300 max-w-[160px] leading-snug">Decoy Identity Profile. Enforced by BlurBubble Privacy Shield.</p>
+                                <div className="flex gap-1 mt-1.5">
+                                  <span className="text-[8px] bg-cyan-950 text-cyan-300 border border-cyan-900/80 px-1 py-0.2 rounded font-semibold">Privacy</span>
+                                  <span className="text-[8px] bg-cyan-950 text-cyan-300 border border-cyan-900/80 px-1 py-0.2 rounded font-semibold">Stealth</span>
+                                </div>
+                              </div>
+                            ) : (citizenState.adversarialPoisoning || citizenState.rfc9402SocialBlock || citizenState.regulatoryCeaseAndDesist) ? (
+                              <div className="absolute top-2 w-max bg-slate-950/95 border-2 border-red-500/60 p-3 rounded-xl backdrop-blur shadow-xl text-left pointer-events-none animate-pulse">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Shield className="w-3.5 h-3.5 text-red-400 animate-spin" style={{ animationDuration: '6s' }} />
+                                  <span className="font-mono text-[9px] text-red-400 font-bold uppercase tracking-widest">[ IDENTITY LOCKED ]</span>
+                                </div>
+                                <p className="text-[8px] text-slate-400 max-w-[150px] leading-snug">
+                                  {citizenState.adversarialPoisoning ? "Fawkes Poisoning signature corrupted the facial lookup matrix." :
+                                   citizenState.rfc9402SocialBlock ? "Social linkage blocked under global RFC-9402 headers." :
+                                   "Biometric database search denied under legal CCPA mandate."}
+                                </p>
+                              </div>
+                            ) : citizenState.socialProfile ? (
+                              <div className="absolute top-2 w-max bg-slate-900/95 border border-emerald-500/40 p-3 rounded-xl backdrop-blur shadow-xl text-left pointer-events-none animate-bounce">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                  <span className="font-mono text-xs text-white font-bold">{citizenState.socialProfile.username}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-300 max-w-[160px] leading-snug">{citizenState.socialProfile.bio}</p>
+                                <div className="flex gap-1 mt-1.5">
+                                  {citizenState.socialProfile.interests.slice(0, 2).map(tag => (
+                                    <span key={tag} className="text-[8px] bg-emerald-950 text-emerald-300 border border-emerald-900/80 px-1 py-0.2 rounded font-semibold">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </>
                         )}
 
                         {citizenState.emergencyPrivacyActive && (
@@ -3097,10 +3228,45 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                           transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
                         />
 
+                        {isRealCameraActive && (
+                          <div className="absolute top-4 left-4 z-30 flex flex-col items-start gap-1 select-none">
+                            <div className="bg-slate-950/90 border border-slate-800 rounded-md p-0.5 flex items-center gap-0.5 shadow-xl">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQrFacingMode('user');
+                                  setSelectedQrCameraId('');
+                                }}
+                                className={`px-1 py-0.5 rounded text-[7px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                                  qrFacingMode === 'user' && !selectedQrCameraId
+                                    ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                Front
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQrFacingMode('environment');
+                                  setSelectedQrCameraId('');
+                                }}
+                                className={`px-1 py-0.5 rounded text-[7px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                                  qrFacingMode === 'environment' && !selectedQrCameraId
+                                    ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                Back
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {isRealCameraActive ? (
                           <video 
                             ref={qrVideoRef} 
-                            className="w-full h-full object-cover rounded-lg opacity-85" 
+                            className={`w-full h-full object-cover rounded-lg opacity-85 ${qrFacingMode === 'user' && !selectedQrCameraId ? 'scale-x-[-1]' : ''}`}
                             playsInline 
                             muted 
                           />
@@ -3218,7 +3384,13 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                             onClick={() => {
                               setIsRealCameraActive(!isRealCameraActive);
                               if (!isRealCameraActive) {
-                                navigator.mediaDevices.getUserMedia({ video: true }).catch(() => {});
+                                const videoConstraints: any = {};
+                                if (selectedQrCameraId) {
+                                  videoConstraints.deviceId = { exact: selectedQrCameraId };
+                                } else {
+                                  videoConstraints.facingMode = qrFacingMode;
+                                }
+                                navigator.mediaDevices.getUserMedia({ video: videoConstraints }).catch(() => {});
                               }
                             }}
                             className={`w-full py-1 border rounded-lg text-[8px] font-mono font-bold uppercase transition flex items-center justify-center gap-1.5 ${
@@ -3230,6 +3402,68 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                             <span className={`w-1 h-1 rounded-full ${isRealCameraActive ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
                             Webcam: {isRealCameraActive ? 'CONNECTED' : 'DISCONNECTED (MOCK MODE)'}
                           </button>
+
+                          {/* Dynamic Camera Selector for QR Scanner */}
+                          {isRealCameraActive && (
+                            <div className="space-y-1.5 border border-slate-850 rounded-lg p-2 bg-slate-950/40 font-mono text-[8px] w-full text-left">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-400 uppercase font-bold tracking-wider">Lens Direction:</span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setQrFacingMode('user');
+                                      setSelectedQrCameraId('');
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition cursor-pointer ${
+                                      qrFacingMode === 'user' && !selectedQrCameraId
+                                        ? 'bg-emerald-500 text-slate-950 font-extrabold'
+                                        : 'bg-slate-900 border border-slate-850 text-slate-400 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    Front
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setQrFacingMode('environment');
+                                      setSelectedQrCameraId('');
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition cursor-pointer ${
+                                      qrFacingMode === 'environment' && !selectedQrCameraId
+                                        ? 'bg-emerald-500 text-slate-950 font-extrabold'
+                                        : 'bg-slate-900 border border-slate-850 text-slate-400 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    Back
+                                  </button>
+                                </div>
+                              </div>
+
+                              {availableCameras.length > 0 && (
+                                <div className="flex items-center gap-1 mt-1 justify-between">
+                                  <span className="text-slate-400 uppercase font-bold tracking-wider">Device:</span>
+                                  <select
+                                    id="qr-device-select"
+                                    value={selectedQrCameraId}
+                                    onChange={(e) => {
+                                      setSelectedQrCameraId(e.target.value);
+                                    }}
+                                    className="bg-slate-900 border border-slate-850 text-slate-300 rounded font-mono text-[8px] font-bold py-0.5 px-1 outline-none focus:ring-0 max-w-[130px] cursor-pointer"
+                                  >
+                                    <option value="" className="bg-slate-900 text-slate-300">
+                                      Auto ({qrFacingMode === 'user' ? 'Front' : 'Back'})
+                                    </option>
+                                    {availableCameras.map((device, i) => (
+                                      <option key={device.deviceId} value={device.deviceId} className="bg-slate-950 text-slate-300">
+                                        {device.label || `Camera ${i + 1}`}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

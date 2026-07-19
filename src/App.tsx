@@ -282,7 +282,20 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   showPrivacyImpactScore: false,
   showBatteryWidget: true,
   showSignalMap: true,
-  intelligentBatteryOptimization: true
+  intelligentBatteryOptimization: true,
+  adversarialPoisoning: true,
+  decoyPersonaBroadcast: false,
+  rfc9402SocialBlock: true,
+  regulatoryCeaseAndDesist: true,
+  mobileCamsBlock: true,
+  cctvBlock: true,
+  smartHomeExclusion: true,
+  aerialDroneDisruption: false,
+  gptBotExclusion: true,
+  googleExtendedBlock: true,
+  anthropicBlock: true,
+  commonCrawlOptOut: true,
+  dataBrokersSweep: true
 };
 
 const INITIAL_LOGS: DetectionLog[] = [
@@ -1373,7 +1386,12 @@ export default function App() {
             {/* Wrap statusbar-bubble-indicator button, its radar sweep overlay, and interactive tooltip inside a relative container with hover tracking */}
             <div 
               className="relative"
-              onMouseEnter={() => setIsIndicatorHovered(true)}
+              onMouseEnter={() => {
+                setIsIndicatorHovered(true);
+                if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                  navigator.vibrate(15);
+                }
+              }}
               onMouseLeave={() => setIsIndicatorHovered(false)}
             >
               <button 
@@ -1404,6 +1422,23 @@ export default function App() {
                 }`}
                 title={citizenState.isBroadcasting ? `BlurBubble Broadcast Shield ACTIVE (Integrity: ${shieldIntegrity}%) - Click to open sweep controls` : "BlurBubble Broadcast Shield SILENT - Click to activate"}
               >
+                {/* Subtle Scan-line Effect during Hover State */}
+                {isIndicatorHovered && (
+                  <div className="absolute inset-0 rounded-lg overflow-hidden pointer-events-none z-10">
+                    <motion.div
+                      initial={{ top: '-100%' }}
+                      animate={{ top: '100%' }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 1.8,
+                        ease: 'linear',
+                      }}
+                      className="absolute left-0 right-0 h-[2px] bg-emerald-400/70 shadow-[0_0_6px_#34d399] opacity-90"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/5 to-transparent pointer-events-none opacity-40 animate-pulse" />
+                  </div>
+                )}
+
                 <div className={`relative w-4 h-4 flex items-center justify-center ${
                   isDeflecting ? 'animate-shield-deflect' : ''
                 }`}>
@@ -1473,10 +1508,15 @@ export default function App() {
                 {/* Detailed Hover Telemetry Tooltip */}
                 {isIndicatorHovered && !showRadarSweep && (
                   <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                    initial={{ opacity: 0, y: -20, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    exit={{ opacity: 0, y: -15, scale: 0.95 }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 280,
+                      damping: 22,
+                      mass: 0.8
+                    }}
                     className="absolute right-0 top-full mt-2 w-72 bg-slate-950/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-md p-4 text-slate-200 z-[60] flex flex-col font-sans select-none"
                   >
                     {/* Tooltip Header */}
@@ -1518,6 +1558,19 @@ export default function App() {
                           {citizenState.isBroadcasting ? 'ACTIVE' : 'MUTED'}
                         </span>
                       </div>
+                    </div>
+
+                    {/* Threat Detection Frequency Display */}
+                    <div className="flex items-center justify-between bg-slate-900/60 border border-slate-900 rounded-xl px-3 py-2 mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                        <span className="text-[9px] font-bold font-mono text-slate-300">Threat Detection Frequency</span>
+                      </div>
+                      <span className="text-[10px] font-bold font-mono text-cyan-400">
+                        {citizenState.isBroadcasting 
+                          ? `${(2.4 + (100 - shieldIntegrity) * 0.15).toFixed(2)} GHz` 
+                          : "0.00 GHz"}
+                      </span>
                     </div>
 
                     {/* Active Timer Section */}
