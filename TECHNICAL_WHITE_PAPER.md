@@ -47,6 +47,37 @@ The BlurBubble ecosystem operates as a zero-trust, closed-loop cyber-physical sy
 
 ---
 
+## 1.5 The Universal Privacy Beacon Suite (The 5-Beacon Standard)
+
+To provide multi-layered defense in any physical environment, the BlurBubble protocol is not limited solely to BLE. It establishes a multi-modal **Universal Privacy Beacon Suite** comprising five distinct digital and physical beacon channels:
+
+1. **Bluetooth Low Energy (BLE) Beacon (RFC-9402 / 0xFE69)**:
+   - *Physical Carrier*: 2.4 GHz ISM band.
+   - *Mechanism*: Broadcasts a registered 16-bit Service UUID (`0xFE69` / `0xFD70`) containing a 12-byte payload. The payload is comprised of a Protocol Version (`0x01`), custom priority status Flags (`0x01` for child fobs, `0x02` for emergency shields), a rolling 64-bit Ephemeral token rotating every 300 seconds to prevent passive MAC tracing, and a CRC-16 checksum.
+   - *Use Case*: Continuous hands-free personal boundary protection for wearable keychains and mobile dashboards.
+
+2. **WiFi SSID Beacon (WIFI-OPT-OUT)**:
+   - *Physical Carrier*: 2.4 GHz / 5 GHz Wi-Fi bands.
+   - *Mechanism*: Emits standard IEEE 802.11 beacon frames advertising an ad-hoc SSID pattern (e.g., `BlurBubble_OptOut_XXXX` or `WIFI-OPT-OUT`). 
+   - *Use Case*: Provides fallback protection for older hardware or environments where BLE scanning is restricted, allowing standard consumer smart cameras scanning for local networks to automatically respect the opt-out boundary.
+
+3. **Acoustic / Vocal Beacon (ACOUSTIC-9402)**:
+   - *Physical Carrier*: High-frequency ultrasonic sound waves (18 kHz – 22 kHz).
+   - *Mechanism*: Broadcaster embeds an inaudible digital audio watermark into the local environment. Compliant audio recorders detect this watermark and apply a localized phase-inverting silence filter or vocal blur to the owner's voice footprint, while letting ambient music or bystander voices record completely clearly.
+   - *Use Case*: Secure physical boardrooms, restaurants, and public conversation circles without RF leakage.
+
+4. **Commercial Tag Remapping (COMPAT-TAGS)**:
+   - *Physical Carrier*: Apple FindMy (AirTags), Samsung Galaxy SmartTag, and Tile protocols.
+   - *Mechanism*: Rather than requiring proprietary hardware, users register their existing commercial trackers. The BlurBubble app maps these trackers' public hardware advertiser IDs to the user's localized privacy preferences. Compliant cameras match these public advertiser signatures against the local BlurBubble registry and apply visual blurring.
+   - *Use Case*: Leverages highly dense existing consumer tracking networks for visual opt-out triggers.
+
+5. **Optical Infrared Pulse Beacon (LED-PULSE)**:
+   - *Physical Carrier*: Near-Infrared (IR) spectrum (940 nm wave length).
+   - *Mechanism*: Emits modulated high-frequency infrared pulses (e.g., 38 kHz) from tiny LEDs on glasses frames, baseball caps, or lapel pins.
+   - *Use Case*: Serves as a zero-wireless-transmission optical beacon announcing visual privacy bounds, or physically floods/blinds rolling-shutter camera sensors and LiDAR depth probes directly if the hardware is rogue or non-compliant.
+
+---
+
 ## 2. Advanced Patentable Methods & Technical Innovations
 
 ### Method A: Client-Side Zero-Knowledge Biometric Face Vault

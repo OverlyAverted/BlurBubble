@@ -45,6 +45,15 @@ The protocol is designed to run on existing, off-the-shelf consumer devices. You
 *   **Common key finders** (Apple AirTags, Pebblebee, Tile, Chipolo).
 *   **Custom maker boards** (ESP32-S3, nRF52840, Raspberry Pi) if you like to build your own electronics.
 
+### 7b. Is RFC-9402 BLE the only beacon type we can use? Can we add more?
+**No, BLE is just one part of our Universal Privacy Beacon Suite!**  
+While the Bluetooth Low Energy protocol under **IETF RFC-9402** is the core primary standard for wearable tags and phones, the BlurBubble architecture supports a coordinated **Universal 5-Beacon Suite** to secure your boundaries across different physical channels:
+1.  **BLE Beacon (RFC-9402)**: Standard 2.4GHz low-power radio channel with rotating 64-bit ephemeral privacy tokens.
+2.  **WiFi SSID Beacon**: Emits ad-hoc Wi-Fi beacon frames with an opt-out SSID (e.g. `BlurBubble_OptOut_XXXX`) as a fallback for standard devices scanning local networks.
+3.  **Acoustic Vocal Beacon**: Emits inaudible high-frequency ultrasound (18kHz–22kHz) containing secure tokens to trigger selective voiceprint scrambling on compliant recorders.
+4.  **Commercial Tag Mapper**: Repurposes static public advertisements from pre-owned third-party tracking tags (Apple AirTags, Galaxy SmartTags, or Tile locators) as instant visual opt-out triggers.
+5.  **Optical Infrared Pulse**: Pulses near-infrared light (940nm) to announce boundaries to camera arrays, or physically blind/saturate camera sensors of non-compliant/rogue recording hardware.
+
 *For an exhaustive list of devices and integration details, please check out our **[HARDWARE_ROADMAP.md](./HARDWARE_ROADMAP.md)**.*
 
 ### 8. Does the blur layer make the camera footage look glitchy or slow?

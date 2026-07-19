@@ -8055,6 +8055,377 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
 
                 </div>
 
+                {/* Universal Privacy Beacon Suite (The 5-Beacon Standard) */}
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
+                        <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                        Universal Privacy Beacon Suite (The 5-Beacon Standard)
+                      </h3>
+                      <p className="text-[11px] text-slate-400 font-sans">
+                        Active multi-modal spatial privacy transmitters. Toggle individual channels to customize your protection envelope.
+                      </p>
+                    </div>
+                    
+                    {/* Master Switch */}
+                    <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-mono font-bold uppercase">
+                        Master Switch
+                      </span>
+                      <button
+                        id="btn-master-beacon-toggle"
+                        type="button"
+                        role="switch"
+                        aria-checked={
+                          state.isBroadcasting && 
+                          state.wifiRulesEnabled && 
+                          state.acousticWatermarkingEnabled && 
+                          (state.registeredEntities.every(e => e.isActive)) && 
+                          state.irDisruptionEnabled
+                        }
+                        onClick={() => {
+                          const allActive = 
+                            state.isBroadcasting && 
+                            state.wifiRulesEnabled && 
+                            state.acousticWatermarkingEnabled && 
+                            (state.registeredEntities.every(e => e.isActive)) && 
+                            state.irDisruptionEnabled;
+                          const targetState = !allActive;
+                          const updatedEntities = state.registeredEntities.map(e => ({ ...e, isActive: targetState }));
+                          onChange({
+                            ...state,
+                            isBroadcasting: targetState,
+                            wifiRulesEnabled: targetState,
+                            acousticWatermarkingEnabled: targetState,
+                            irDisruptionEnabled: targetState,
+                            registeredEntities: updatedEntities
+                          });
+                          if (onAddLog) {
+                            onAddLog({
+                              deviceModel: 'COORDINATED_BEACON_SUITE',
+                              action: targetState ? 'broadcast_changed' : 'muted',
+                              shieldApplied: targetState ? 'ALL_BEACONS_ACTIVE' : 'ALL_BEACONS_SUSPENDED',
+                              distance: 0,
+                              rotatedId: 'MASTER_SUITE_SWEEP'
+                            });
+                          }
+                        }}
+                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          (state.isBroadcasting && 
+                           state.wifiRulesEnabled && 
+                           state.acousticWatermarkingEnabled && 
+                           (state.registeredEntities.every(e => e.isActive)) && 
+                           state.irDisruptionEnabled) 
+                            ? 'bg-emerald-500' 
+                            : 'bg-slate-800'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                            (state.isBroadcasting && 
+                             state.wifiRulesEnabled && 
+                             state.acousticWatermarkingEnabled && 
+                             (state.registeredEntities.every(e => e.isActive)) && 
+                             state.irDisruptionEnabled) 
+                              ? 'translate-x-5' 
+                              : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                    {/* Channel 1: BLE (RFC-9402) */}
+                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
+                      state.isBroadcasting 
+                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
+                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
+                    }`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Bluetooth className={`w-4.5 h-4.5 ${state.isBroadcasting ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="text-xs font-bold block text-slate-200">BLE (RFC-9402)</span>
+                          </div>
+                          
+                          {/* Toggle Switch */}
+                          <button
+                            id="btn-beacon-toggle-ble"
+                            type="button"
+                            role="switch"
+                            aria-checked={state.isBroadcasting}
+                            onClick={() => {
+                              onChange({ ...state, isBroadcasting: !state.isBroadcasting });
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'BLE_TRANSMITTER (RFC-9402)',
+                                  action: state.isBroadcasting ? 'muted' : 'broadcast_changed',
+                                  shieldApplied: state.isBroadcasting ? 'BEACON_SUSPENDED' : 'BEACON_ARMED_ROTATING_UUID',
+                                  distance: 0,
+                                  rotatedId: '0xFE69_ACTIVE'
+                                });
+                              }
+                            }}
+                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              state.isBroadcasting ? 'bg-emerald-500' : 'bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                state.isBroadcasting ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Broadcasts 12-byte rotating ephemeral tokens on BLE UUID 0xFE69.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                          state.isBroadcasting ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
+                        }`}>
+                          {state.isBroadcasting ? 'TRANSMITTING' : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Channel 2: WiFi SSID (WIFI-OPT-OUT) */}
+                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
+                      state.wifiRulesEnabled 
+                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
+                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
+                    }`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Wifi className={`w-4.5 h-4.5 ${state.wifiRulesEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="text-xs font-bold block text-slate-200">WiFi SSID Opt-Out</span>
+                          </div>
+
+                          {/* Toggle Switch */}
+                          <button
+                            id="btn-beacon-toggle-wifi"
+                            type="button"
+                            role="switch"
+                            aria-checked={state.wifiRulesEnabled}
+                            onClick={() => {
+                              onChange({ ...state, wifiRulesEnabled: !state.wifiRulesEnabled });
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'WIFI_SSID_BEACON',
+                                  action: state.wifiRulesEnabled ? 'muted' : 'broadcast_changed',
+                                  shieldApplied: state.wifiRulesEnabled ? 'SSID_OPT_OUT_SUSPENDED' : 'SSID_OPT_OUT_BROADCASTING',
+                                  distance: 0,
+                                  rotatedId: 'WIFI-OPT-OUT_ACTIVE'
+                                });
+                              }
+                            }}
+                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              state.wifiRulesEnabled ? 'bg-emerald-500' : 'bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                state.wifiRulesEnabled ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Broadcasts ad-hoc opt-out SSIDs for standard wireless hardware scanning.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                          state.wifiRulesEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
+                        }`}>
+                          {state.wifiRulesEnabled ? 'WIFI OPT-OUT ON' : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Channel 3: Acoustic Watermark (ACOUSTIC-9402) */}
+                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
+                      state.acousticWatermarkingEnabled 
+                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
+                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
+                    }`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Volume2 className={`w-4.5 h-4.5 ${state.acousticWatermarkingEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="text-xs font-bold block text-slate-200">Acoustic Beacon</span>
+                          </div>
+
+                          {/* Toggle Switch */}
+                          <button
+                            id="btn-beacon-toggle-acoustic"
+                            type="button"
+                            role="switch"
+                            aria-checked={state.acousticWatermarkingEnabled}
+                            onClick={() => {
+                              onChange({ ...state, acousticWatermarkingEnabled: !state.acousticWatermarkingEnabled });
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'ULTRASONIC_ACOUSTIC_BEACON',
+                                  action: state.acousticWatermarkingEnabled ? 'muted' : 'broadcast_changed',
+                                  shieldApplied: state.acousticWatermarkingEnabled ? 'ACOUSTIC_WATERMARK_SUSPENDED' : 'ACOUSTIC_WATERMARK_BROADCASTING',
+                                  distance: 0,
+                                  rotatedId: 'ACOUSTIC-9402_ACTIVE'
+                                });
+                              }
+                            }}
+                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              state.acousticWatermarkingEnabled ? 'bg-emerald-500' : 'bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                state.acousticWatermarkingEnabled ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Emits inaudible high-frequency (19.2kHz) audio watermark keys.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                          state.acousticWatermarkingEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
+                        }`}>
+                          {state.acousticWatermarkingEnabled ? 'ULTRASONIC ON' : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Channel 4: Commercial Tags (COMPAT-TAGS) */}
+                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
+                      state.registeredEntities.filter(e => e.isActive).length > 0 
+                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
+                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
+                    }`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Tag className={`w-4.5 h-4.5 ${state.registeredEntities.filter(e => e.isActive).length > 0 ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="text-xs font-bold block text-slate-200">Commercial Mappings</span>
+                          </div>
+
+                          {/* Toggle Switch */}
+                          <button
+                            id="btn-beacon-toggle-commercial"
+                            type="button"
+                            role="switch"
+                            aria-checked={state.registeredEntities.length > 0 && state.registeredEntities.every(e => e.isActive)}
+                            onClick={() => {
+                              const allActive = state.registeredEntities.every(e => e.isActive);
+                              const updated = state.registeredEntities.map(e => ({ ...e, isActive: !allActive }));
+                              onChange({ ...state, registeredEntities: updated });
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'COMMERCIAL_BEACON_MAPPER',
+                                  action: allActive ? 'muted' : 'broadcast_changed',
+                                  shieldApplied: allActive ? 'COMMERCIAL_TRACKER_OPT_OUT_UNMAPPED' : 'COMMERCIAL_TRACKER_OPT_OUT_MAPPED_ACTIVE',
+                                  distance: 0,
+                                  rotatedId: 'COMPAT-TAGS_CYCLE'
+                                });
+                              }
+                            }}
+                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              (state.registeredEntities.length > 0 && state.registeredEntities.every(e => e.isActive)) ? 'bg-emerald-500' : 'bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                (state.registeredEntities.length > 0 && state.registeredEntities.every(e => e.isActive)) ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Maps existing Apple AirTags and Tile signals as opt-out anchors.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                          state.registeredEntities.filter(e => e.isActive).length > 0 ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
+                        }`}>
+                          {state.registeredEntities.filter(e => e.isActive).length > 0 ? `${state.registeredEntities.filter(e => e.isActive).length} ACTIVE` : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Channel 5: Optical IR Pulse (LED-PULSE) */}
+                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
+                      state.irDisruptionEnabled 
+                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
+                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
+                    }`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Zap className={`w-4.5 h-4.5 ${state.irDisruptionEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="text-xs font-bold block text-slate-200">Optical IR Pulse</span>
+                          </div>
+
+                          {/* Toggle Switch */}
+                          <button
+                            id="btn-beacon-toggle-ir"
+                            type="button"
+                            role="switch"
+                            aria-checked={state.irDisruptionEnabled}
+                            onClick={() => {
+                              onChange({ ...state, irDisruptionEnabled: !state.irDisruptionEnabled });
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'OPTICAL_IR_EMITTER',
+                                  action: state.irDisruptionEnabled ? 'muted' : 'broadcast_changed',
+                                  shieldApplied: state.irDisruptionEnabled ? '940nm_IR_LED_PULSER_DEACTIVATED' : '940nm_IR_LED_PULSER_ACTIVE',
+                                  distance: 0,
+                                  rotatedId: 'LED-PULSE_ACTIVE'
+                                });
+                              }
+                            }}
+                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              state.irDisruptionEnabled ? 'bg-emerald-500' : 'bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                state.irDisruptionEnabled ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Emits 940nm pulsed IR light to block or saturate sensors physically.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                          state.irDisruptionEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
+                        }`}>
+                          {state.irDisruptionEnabled ? 'IR PULSING ON' : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
             </div>
           </motion.div>
         )}

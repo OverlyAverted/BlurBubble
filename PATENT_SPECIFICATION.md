@@ -67,6 +67,14 @@ The primary system establishes a connection using low-power GFSK-modulated trans
     *   `0x04`: Anonymized Redaction (Black horizontal eye bar)
     *   `0x05`: Generative Object Removal (Background-matching Generative Inpainting)
 
+### 1.5 Multi-Modal Spatial Opt-Out Beacons (The 5-Channel Coordinated Suite)
+To guarantee spatial opt-out capabilities in any dense visual environment, the system incorporates a coordinated, multi-modal transmitter module capable of broadcasting opt-out instructions across multiple physical layers simultaneously or selectively:
+1.  **RF Bluetooth Low Energy (BLE) Channel**: Transmits a 12-byte payload aligned to RFC-9402 standards, leveraging a 16-bit Service UUID (`0xFE69` / `0xFD70`) for ultra-low power background tracking-prevention.
+2.  **RF Wi-Fi SSID Channel**: Broadcasts ad-hoc 802.11 beacon frames containing a dedicated opt-out identifier in the SSID string (e.g., `BlurBubble_OptOut_XXXX`), allowing devices without active BLE scanning hardware to parse and respect the spatial privacy boundary.
+3.  **Acoustic Ultrasonic Channel**: Modulates an inaudible sub-audible high-frequency audio carrier (18kHz to 22kHz) containing paired cryptographic handshake tokens, signaling compliant audio recorders to filter or redact local voiceprints on-the-fly.
+4.  **Commercial Tag Remapping Channel**: Translates public, static hardware advertisements from existing commercial tag standards (such as Apple AirTags, Samsung Galaxy SmartTags, or Tile locators) into active opt-out triggers, allowing pre-owned third-party hardware to act as spatial privacy shields.
+5.  **Optical Near-Infrared Channel**: Pulses modulated near-infrared LEDs (at 940nm and typically 38kHz) from wearable frames or lapels to directly communicate boundary boundaries to opto-electronic imaging arrays, or physically saturate the rolling-shutter sensors of non-compliant/rogue capturing systems.
+
 ### 2. Rotating Child-Safe Identification Key Generation
 To protect minors without exposing them to physical tracking risks, the beacon controller employs a synchronized Hash-based One-time Token (HOTT) sequence. The child tag computes:
 $$\text{Token}_t = \text{SHA-256}(\text{Secret\_Seed} \mathbin{\Vert} \text{Interval\_Timestamp})$$
@@ -135,6 +143,13 @@ I Claim:
 17. **The system of Claim 1,** further comprising a decentralized, cryptographic consent module utilizing W3C Decentralized Identifiers (DIDs) and Verifiable Credentials (VCs) to authenticate whitelisted family identities and verify biometric opt-out exclusions without disclosing personal metadata or plaintext profiles to third-party streaming servers.
 
 18. **The system of Claim 1,** wherein the host control device initiates connection synchronization and firmware updates with localized physical beacons using an interactive client-side Web Bluetooth API adapter interface.
+
+19. **The system of Claim 1,** further comprising a coordinated, multi-modal transmitter configured to broadcast spatial privacy opt-out instructions across a plurality of physical layers, wherein said physical layers are selected from the group consisting of:
+    *   a Bluetooth Low Energy (BLE) radio frequency channel (conforming to IETF RFC-9402 standard);
+    *   a Wi-Fi SSID beacon frame channel broadcasting a standard visual opt-out SSID string;
+    *   an acoustic ultrasonic channel modulating an inaudible high-frequency audio carrier between 18kHz and 22kHz;
+    *   a commercial tracker remapping channel configured to translate static public advertising identifiers from commercial tags into active visual opt-out triggers; and
+    *   an optical near-infrared (IR) pulse channel configured to transmit boundary limits or directly saturate and blind camera sensors.
 
 ---
 
