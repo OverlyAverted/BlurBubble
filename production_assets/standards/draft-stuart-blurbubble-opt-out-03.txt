@@ -1,0 +1,200 @@
+Internet Engineering Task Force                             M. Stuart, Ed.
+Internet-Draft                                          BlurBubble Org.
+Intended status: Standards Track                           July 5, 2026
+Expires: January 6, 2027
+
+
+           The BLE Opt-Out Protocol for Wearable Smart Cameras
+                    draft-stuart-blurbubble-opt-out-03
+
+Abstract
+
+   This document defines BlurBubble, an open-source, lightweight
+   Bluetooth Low Energy (BLE) broadcast protocol. It permits
+   individuals, smart tags, or localized devices to transmit an
+   explicit, machine-readable visual privacy opt-out signature.
+   Compliant wearable smart cameras (such as smart glasses and action
+   recorders) are required to scan for this signature and apply
+   real-time visual redaction or facial blurring to the associated
+   subjects prior to file storage or streaming.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on January 6, 2027.
+
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info)
+   in effect on the date of publication of this document.  Please review
+   these documents carefully, as they describe your rights and restrictions
+   with respect to this document.  Code Components extracted from this
+   document must include Revised BSD License text as described in Section
+   4.e of the Trust Legal Provisions and are provided without warranty as
+   described in the Revised BSD License.
+
+Table of Contents
+
+   1. Introduction ................................................... 2
+   2. Terminology and Conventions .................................... 3
+   3. Protocol Advertising Payload Specification ...................... 3
+      3.1. Assigned Service UUID ..................................... 3
+      3.2. Binary Packet Layout ...................................... 3
+      3.3. Ephemeral Key Rotation Algorithm .......................... 4
+   4. Recipient Compliance & Real-time Redaction Rules ............... 4
+      4.1. Signal RSSI Analysis & Perimeter Estimation ............... 4
+      4.2. Target Association & Image Processing Pipeline ............. 5
+   5. Security Considerations ........................................ 5
+   6. IANA Considerations ............................................ 6
+   7. References ..................................................... 6
+      7.1. Normative References ...................................... 6
+      7.2. Informative References .................................... 7
+   Author's Address .................................................. 7
+
+1. Introduction
+
+   The proliferation of body-worn cameras, smart glasses, and ambient
+   capturing devices has introduced unprecedented civil privacy concerns.
+   Bystanders find themselves recorded, archived, or streamed to Content
+   Delivery Networks (CDNs) without their explicit consent. Existing
+   post-processing blurs are insufficient, as raw footage remains stored
+   or leaked locally before upload.
+
+   BlurBubble establishes a localized, low-latency, and backward-
+   compatible wireless privacy boundary. By broadcasting a short,
+   unidirectional Bluetooth Low Energy (BLE) advertisement, individuals
+   express their explicit desire to opt out of visual capture. Compliant
+   capturing systems detect this broadcast and apply real-time shader-
+   level redaction overlays to the subject's visual frame, ensuring no
+   raw face data is ever committed to persistent media or networked feeds.
+
+2. Terminology and Conventions
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+   * Opt-Out Beacon: A hardware device (smart tag, smartphone, key fob)
+     transmitting the BLE advertisement specified in this document.
+   * Smart Camera: Any image/video recording device capable of scanning
+     wireless frequencies (BLE) and processing visual frames.
+   * Visual Redaction: The application of a Gaussian blur, mosaic, or
+     solid mask rendering the subject's face unidentifiable.
+
+3. Protocol Advertising Payload Specification
+
+3.1. Assigned Service UUID
+
+   The BlurBubble opt-out protocol utilizes a 16-bit Service UUID
+   registered through the Bluetooth Special Interest Group (SIG) and
+   IANA. The assigned Service UUID is 0xFE69.
+
+3.2. Binary Packet Layout
+
+   The BLE advertisement packet payload MUST reside within the standard
+   Manufacturer-Specific Data structure AD type. The binary payload structure
+   MUST occupy exactly 12 bytes, formatted as follows:
+
+   +----------------+----------------+--------------------------+----------------+
+   | Version (1B)   |   Flags (1B)   | Ephemeral Token (8B)     | Checksum (2B)  |
+   +----------------+----------------+--------------------------+----------------+
+   |     Byte 0     |     Byte 1     |       Bytes 2-9          |  Bytes 10-11   |
+   +----------------+----------------+--------------------------+----------------+
+
+   * Version (Byte 0): Identifies the protocol version. For this document,
+     the value MUST be 0x01.
+   * Flags (Byte 1): Specifies beacon operational modes:
+     - Bit 0: Emergency Privacy Mode. When set (1), signals maximum power and
+       strict opt-out.
+     - Bit 1: Child Protection Status. Indicates the beacon is worn by a minor.
+     - Bits 2-7: Reserved for future extensions. Must be initialized to 0.
+   * Ephemeral Token (Bytes 2-9): A rolling 64-bit cryptographic slice
+     representing the anonymous identifier of the beacon.
+   * Checksum (Bytes 10-11): CRC-16 integrity verification value protecting
+     the previous 10 bytes of payload.
+
+3.3. Ephemeral Key Rotation Algorithm
+
+   To prevent static MAC address tracking and malicious profiling of
+   bystanders, the beacon MUST utilize a random-resolvable private MAC address
+   and rotate its 64-bit Ephemeral Token every 300 seconds.
+
+   The Ephemeral Token is derived as follows:
+
+         Token = Slice(HMAC_SHA256(Root_Secret, Current_Epoch_Time), 0, 8)
+
+   Where:
+   * Root_Secret: A 128-bit key stored inside the beacon.
+   * Current_Epoch_Time: Coordinated Universal Time (UTC) timestamp truncated
+     to 300-second intervals (Epoch / 300).
+   * Slice(data, start, len): Retrieves the specified byte block.
+
+4. Recipient Compliance & Real-time Redaction Rules
+
+4.1. Signal RSSI Analysis & Perimeter Estimation
+
+   When a smart camera intercepts a 0xFE69 BLE packet, it MUST evaluate the
+   Received Signal Strength Indicator (RSSI) to determine subject proximity.
+   The smart camera SHALL apply visual redaction if the signal strength is
+   above the compliance threshold:
+
+                         Compliance_RSSI >= -70 dBm
+
+   This threshold corresponds to an active 12-meter protective perimeter in
+   standard line-of-sight environments.
+
+4.2. Target Association & Image Processing Pipeline
+
+   Prior to encoding, streaming, or storing visual content, the smart
+   camera's local graphics processor (GPU) or neural core MUST map the spatial
+   proximity of the target.
+
+   1. Spatial Target Isolation: Identify human skeletal nodes or facial outlines within the current FOV.
+   2. Association check: Link the nearest unblurred visual targets to the active opt-out beacon.
+   3. Shader application: Inject a rendering shader applying a Gaussian blur
+      (minimum kernel radius: 30 pixels) over the face boundaries.
+
+5. Security Considerations
+
+   Because advertisements are public, adversaries could theoretically replay stale packets. Since compliant smart cameras verify time-synchronized epoch steps, replay packets containing expired tokens MUST be silently discarded.
+
+6. IANA Considerations
+
+   This document requests IANA to register the 16-bit BLE Service UUID
+   0xFE69 in the "Assigned Numbers" registry of the Bluetooth SIG.
+
+7. References
+
+7.1. Normative References
+
+   [RFC2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement
+             Levels", BCP 14, RFC 2119, March 1997.
+   [RFC8174] Leiba, B., "Ambiguity of Uppercase % Conventions in RFC 2119", BCP 14, RFC 8174, May 2017.
+
+7.2. Informative References
+
+   [BLE_CORE] Bluetooth SIG, "Bluetooth Core Specification v5.3", July 2021.
+
+Author's Address
+
+   Matthew Stuart, Editor
+   BlurBubble Organization
+   Email: standards@blurbubble.org

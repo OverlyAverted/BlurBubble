@@ -1,0 +1,324 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-emerald: #10b981;
+  --color-slate-850: #1e293b;
+}
+
+/* Base resets & scrollbars for a premium minimalist experience */
+html {
+  font-family: var(--font-sans);
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar for Sleek Interfaces */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.4);
+}
+
+/* Glassmorphism effects for cards */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.glass-panel-light {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Micro-interaction: Active glowing elements */
+.glow-emerald {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+/* Smooth Focus states */
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+/* -------------------------------------------------------------
+   High Visibility Mode (Light Theme Override Stylesheet)
+   ------------------------------------------------------------- */
+
+/* Main Wrapper Override */
+.theme-visibility {
+  background-color: #fafafa !important;
+  color: #18181b !important;
+}
+
+/* Header & Footer Panels */
+.theme-visibility header,
+.theme-visibility footer,
+.theme-visibility header bg-slate-950,
+.theme-visibility .bg-slate-950\/80,
+.theme-visibility .bg-slate-950\/90,
+.theme-visibility .bg-slate-950\/95,
+.theme-visibility .bg-slate-950\/60 {
+  background-color: #ffffff !important;
+  border-color: #e4e4e7 !important;
+}
+
+/* Camouflage toolbar background override */
+.theme-visibility .bg-slate-900\/60 {
+  background-color: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+}
+
+/* General Card Backgrounds */
+.theme-visibility .bg-slate-900,
+.theme-visibility .bg-slate-900\/40,
+.theme-visibility .bg-slate-900\/80,
+.theme-visibility .bg-slate-900\/20,
+.theme-visibility .bg-slate-950,
+.theme-visibility .bg-slate-950\/40,
+.theme-visibility .bg-slate-950\/20,
+.theme-visibility .bg-slate-950\/70 {
+  background-color: #ffffff !important;
+  border-color: #e4e4e7 !important;
+}
+
+/* Intermediate elements / buttons / active list items */
+.theme-visibility .bg-slate-850,
+.theme-visibility .bg-slate-800,
+.theme-visibility .bg-slate-800\/80,
+.theme-visibility .bg-slate-800\/60,
+.theme-visibility .bg-slate-800\/20 {
+  background-color: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+}
+
+/* High Contrast Active buttons & tabs overrides */
+.theme-visibility .bg-slate-800.text-white,
+.theme-visibility .bg-slate-800.text-slate-100 {
+  background-color: #e4e4e7 !important;
+  color: #09090b !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Non-active buttons/tabs in high visibility mode */
+.theme-visibility button.text-slate-400:hover,
+.theme-visibility button.text-slate-400 {
+  color: #52525b !important;
+}
+
+/* Global Border overrides */
+.theme-visibility *,
+.theme-visibility .border-slate-900,
+.theme-visibility .border-slate-850,
+.theme-visibility .border-slate-800,
+.theme-visibility .border-slate-800\/80,
+.theme-visibility .border-slate-750,
+.theme-visibility .border-slate-700,
+.theme-visibility .border-slate-700\/60 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Text color high-contrast overrides */
+.theme-visibility .text-white {
+  color: #09090b !important;
+}
+.theme-visibility .text-slate-100 {
+  color: #18181b !important;
+}
+.theme-visibility .text-slate-200 {
+  color: #27272a !important;
+}
+.theme-visibility .text-slate-300 {
+  color: #27272a !important;
+}
+.theme-visibility .text-slate-400 {
+  color: #4b5563 !important; /* deeper slate gray for high legibility */
+}
+.theme-visibility .text-slate-500 {
+  color: #6b7280 !important;
+}
+.theme-visibility .text-slate-600 {
+  color: #8b949e !important;
+}
+
+/* Specialized badge styles in high vis */
+.theme-visibility .bg-emerald-500\/15 {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #a7f3d0 !important;
+}
+.theme-visibility .text-emerald-400 {
+  color: #047857 !important;
+}
+.theme-visibility .bg-emerald-500\/10 {
+  background-color: #ecfdf5 !important;
+  color: #047857 !important;
+  border-color: #d1fae5 !important;
+}
+.theme-visibility .bg-emerald-500 {
+  background-color: #059669 !important;
+  color: #ffffff !important;
+}
+.theme-visibility .text-emerald-500 {
+  color: #059669 !important;
+}
+
+/* Other color pills */
+.theme-visibility .bg-blue-500\/15,
+.theme-visibility .bg-blue-500\/10 {
+  background-color: #dbeafe !important;
+  color: #1e40af !important;
+  border-color: #bfdbfe !important;
+}
+.theme-visibility .text-blue-400 {
+  color: #1d4ed8 !important;
+}
+
+.theme-visibility .bg-purple-500\/15,
+.theme-visibility .bg-purple-500\/10 {
+  background-color: #f3e8ff !important;
+  color: #6b21a8 !important;
+  border-color: #e9d5ff !important;
+}
+.theme-visibility .text-purple-400 {
+  color: #7e22ce !important;
+}
+
+.theme-visibility .bg-red-500\/15,
+.theme-visibility .bg-red-500\/10,
+.theme-visibility .bg-red-500\/20 {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
+  border-color: #fca5a5 !important;
+}
+.theme-visibility .text-red-400 {
+  color: #b91c1c !important;
+}
+
+.theme-visibility .bg-amber-500\/15,
+.theme-visibility .bg-amber-500\/10 {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #fde68a !important;
+}
+.theme-visibility .text-amber-400 {
+  color: #b45309 !important;
+}
+
+/* Section specific metrics layout in light theme */
+.theme-visibility section.bg-slate-900\/20 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* User Profile settings details */
+.theme-visibility input,
+.theme-visibility select,
+.theme-visibility textarea {
+  background-color: #ffffff !important;
+  color: #09090b !important;
+  border-color: #cbd5e1 !important;
+}
+.theme-visibility input::placeholder,
+.theme-visibility textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Log rows adjustments */
+.theme-visibility .divide-slate-900 > * + *,
+.theme-visibility .divide-slate-800 > * + * {
+  border-color: #e4e4e7 !important;
+}
+
+/* Glasses viewfinder HUD canvas styling overrides for contrast */
+.theme-visibility .bg-slate-950\/90,
+.theme-visibility .bg-slate-950\/95 {
+  background-color: #ffffff !important;
+  color: #18181b !important;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1) !important;
+}
+
+/* Ensure radar scanner grid lines are dark in high visibility */
+.theme-visibility .border-slate-800\/40 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Custom Active Shield Deflection Animations */
+@keyframes shieldDeflect {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    filter: brightness(1);
+  }
+  20% {
+    transform: scale(1.4) rotate(12deg);
+    box-shadow: 0 0 18px 6px rgba(16, 185, 129, 0.6);
+    filter: brightness(1.7);
+  }
+  40% {
+    transform: scale(1.05) rotate(-12deg);
+    box-shadow: 0 0 28px 10px rgba(16, 185, 129, 0.85);
+    filter: brightness(1.9) saturate(150%);
+  }
+  60% {
+    transform: scale(1.3) rotate(6deg);
+    box-shadow: 0 0 22px 7px rgba(16, 185, 129, 0.65);
+    filter: brightness(1.6);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    filter: brightness(1);
+  }
+}
+
+.animate-shield-deflect {
+  animation: shieldDeflect 0.75s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes shieldGlowRing {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+.animate-shield-glow-ring {
+  animation: shieldGlowRing 0.75s cubic-bezier(0.1, 0.8, 0.3, 1) both;
+}
+

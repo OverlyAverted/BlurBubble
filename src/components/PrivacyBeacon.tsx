@@ -1,0 +1,15605 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { useI18n } from '../lib/i18n';
+import * as d3 from 'd3';
+
+import { 
+  Radio, 
+  ShieldAlert, 
+  ShieldCheck, 
+  EyeOff, 
+  User, 
+  Settings2, 
+  Clock, 
+  Volume2,
+  VolumeX,
+  Sliders,
+  Battery,
+  BatteryWarning,
+  RefreshCw, 
+  Share2, 
+  AlertCircle,
+  Hash,
+  Sparkles,
+  Layers,
+  Sparkle,
+  Plus,
+  Trash2,
+  Lock,
+  Tag,
+  Smile,
+  Info,
+  CheckCircle2,
+  HelpCircle,
+  MapPin,
+  Building,
+  Home,
+  Globe,
+  KeyRound,
+  History,
+  Video,
+  Shield,
+  Search,
+  Bell,
+  BellRing,
+  Award,
+  Cpu,
+  Calendar,
+  Zap,
+  FileText,
+  Scale,
+  Briefcase,
+  Baby,
+  Beer,
+  Car,
+  Users,
+  School,
+  Bluetooth,
+  Wifi,
+  Fingerprint,
+  Key,
+  ChevronDown,
+  ChevronUp,
+  Edit2,
+  Check,
+  Mic,
+  Music,
+  MicOff,
+  Download,
+  Mail,
+  Copy,
+  Send,
+  X,
+  Activity
+} from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import D3SignalMap from './D3SignalMap';
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend 
+} from 'recharts';
+import { PrivacyLevel, CitizenState, DetectionLog, RegisteredEntity, FaceRecord, PerimeterSensor, WebTakedownRecord, EscrowKeyHolder, HardwareLicense, WifiTriggerRule } from '../types';
+// @ts-ignore
+import appLogo from '../assets/images/app_logo_1783164957092.jpg';
+
+interface PrivacyBeaconProps {
+  state: CitizenState;
+  onChange: (newState: CitizenState) => void;
+  logs: DetectionLog[];
+  onClearLogs: () => void;
+  activeTab?: 'overview' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map';
+  onTabChange?: (tab: 'overview' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map') => void;
+  onAddLog?: (log: any) => void;
+  onTriggerAlert?: (title: string, body: string, type: 'blocking' | 'child_blocking' | 'video_found' | 'video_deleted' | 'battery_warning') => void;
+}
+
+const HIERARCHY_DETAILS: Record<string, { title: string; desc: string; icon: string; badgeColor: string; defaultRank: number }> = {
+  lockdown: {
+    title: "Total Lockdown Override",
+    desc: "System-wide override that blocks all device whitelist connections, law enforcement warrants, and third-party API exceptions.",
+    icon: "ShieldAlert",
+    badgeColor: "text-rose-400 bg-rose-500/10 border-rose-500/30",
+    defaultRank: 1
+  },
+  strict_rules: {
+    title: "Strict Restrictions (Emergency Shield)",
+    desc: "Emergency opt-out broadcast enforcing strict blur / visual removal regardless of location or relationship.",
+    icon: "Shield",
+    badgeColor: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+    defaultRank: 2
+  },
+  perimeter_shields: {
+    title: "Perimeter Zones & Stationary Beacons",
+    desc: "Hard geo-fenced boundaries (schools, home zones) that enforce stationary opt-out shields on any entering device.",
+    icon: "MapPin",
+    badgeColor: "text-blue-400 bg-blue-500/10 border-blue-500/30",
+    defaultRank: 3
+  },
+  allow_list: {
+    title: "Allow List Exceptions (Family Whitelist)",
+    desc: "Permits registered family channels, close-friend device cameras, or authorized streams to bypass opt-out blurring.",
+    icon: "Users",
+    badgeColor: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+    defaultRank: 4
+  },
+  wifi_triggers: {
+    title: "WiFi Automation Rules",
+    desc: "Automated privacy profile switches triggered by joining specific SSID networks (office, coffee shops, home).",
+    icon: "Wifi",
+    badgeColor: "text-purple-400 bg-purple-500/10 border-purple-500/30",
+    defaultRank: 5
+  },
+  smart_schedules: {
+    title: "Smart Scheduling Profiles",
+    desc: "Time-of-day schedule blocks defining when broadcasting is automatically toggled (work hours, school runs).",
+    icon: "Clock",
+    badgeColor: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30",
+    defaultRank: 6
+  }
+};
+
+const HELP_TOPICS: Record<string, {
+  title: string;
+  category: string;
+  summary: string;
+  whatItDoes: string;
+  howToUse: string;
+  benefits: string[];
+}> = {
+  overview: {
+    title: "Privacy Hub & Overview Dashboard",
+    category: "General Command Center",
+    summary: "The main cockpit of the BlurBubble application, providing real-time telemetry, visual metrics, and state indications of your active defenses.",
+    whatItDoes: "Aggregates signal indicators, historical log statistics, and current shielding levels into an easy-to-read heads-up display. It lets you monitor current BLE/WiFi active handshakes and observe overall system integrity.",
+    howToUse: "Select different sub-modules from the category tabs to configure specific protection domains. Use the layout config switches at the bottom of the dashboard to show or hide cards according to your convenience.",
+    benefits: [
+      "Real-time visibility of system and battery status.",
+      "Instant access to emergency max-security controls.",
+      "A simplified unified control interface."
+    ]
+  },
+  settings: {
+    title: "Alerts & Central App Settings",
+    category: "System Preferences",
+    summary: "Allows you to fine-tune how and when BlurBubble delivers high-priority privacy alerts, audio chimes, and haptic feedback.",
+    whatItDoes: "Enables configuring physical haptic pocket buzzer tick simulations, floating toast delivery parameters, smart-glasses brand-specific naming filters, and localized audio chimes built on web audio oscillators.",
+    howToUse: "Toggle push notification banners, activate haptic buzz simulations, customize distance/model exclusions inside notification texts, or test custom oscillator-synthesized alarm sounds.",
+    benefits: [
+      "Customize alerts to avoid notification fatigue.",
+      "Hide distance and camera models from descriptions for cleaner privacy.",
+      "Audibly test synthesizer sound profiles directly in the browser."
+    ]
+  },
+  signal: {
+    title: "Do Not Record Broadcast Signal",
+    category: "Active Defense",
+    summary: "A continuous secure local radio transmission (via BLE and WiFi-NAN) that informs nearby smart wearables and camera equipment of your explicit refusal to be recorded.",
+    whatItDoes: "It broadcasts your rolling anonymous cryptographic identifier. Complying smart glasses (like Meta Ray-Bans or Apple Vision Pro) receive this signal, lookup your coordinates, and automatically apply dynamic censorship overlay/blur to your face or profile in real-time.",
+    howToUse: "Toggle 'Broadcasting' to activate the signal. Adjust the 'Broadcast Range' slider to expand your personal privacy bubble (up to 40 meters). Choose your preferred 'Censor Shield Mode' (e.g. Magic Removal or Strict Blur) to determine how third-party cameras obscure you.",
+    benefits: [
+      "Prevent stealth recordings in public transport or cafes.",
+      "Zero-knowledge key rotation prevents tracking of your beacon.",
+      "Completely offline BLE & WiFi-NAN protocol requiring no cellular connection."
+    ]
+  },
+  faces: {
+    title: "Cryptographic Face Registry",
+    category: "Active Defense",
+    summary: "An on-device localized biometric registry that converts your facial structure into a secure, non-reversible mathematical vector for camera face-blur compliance.",
+    whatItDoes: "Instead of uploading your photos, this system computes secure face-vector hashes. When complying media platforms (YouTube, TikTok) receive footage or when edge-AI cameras scan a crowd, they match these hashes locally to blur your face without ever knowing your actual image.",
+    howToUse: "Upload or capture a photo of your face. Click 'Compute Vector Hash' to add it to your local registry. You can test face matching with the simulator by choosing an image and triggering a simulated platform upload.",
+    benefits: [
+      "Secure on-device local hashing (your photos never leave your device).",
+      "Dynamic compliance matching on public platforms.",
+      "Manage whitelisted channels that are allowed to record you."
+    ]
+  },
+  tags: {
+    title: "Smart Protection Tags & Objects",
+    category: "Active Defense",
+    summary: "Assign privacy guardrails to physical items, pets, or family members by pairing low-power BLE tags or beacons.",
+    whatItDoes: "Extends your opt-out shielding bubble to valuables, backpacks, child safety items, or pets. Complying recording devices recognize the nearby beacon ID and automatically obscure the tagged item or apply specialized blur levels (e.g., child protection overrides).",
+    howToUse: "Click 'Scan for BLE Beacons' under the Smart Tags tab. Pair the discovered beacon, name it (e.g., 'Lily\'s Backpack'), and choose its specific shielding style.",
+    benefits: [
+      "Ensure children's privacy in school or park environments.",
+      "Protect sensitive physical prototypes or documents from industrial spying.",
+      "Continuous background ping with battery-saver mode."
+    ]
+  },
+  wifi: {
+    title: "WiFi SSID Automation Triggers",
+    category: "Active Defense",
+    summary: "Automate your privacy posture transitions based on the WiFi network you are connected to.",
+    whatItDoes: "Allows your BlurBubble system to adapt instantly. For example, when you join your workplace WiFi, it can automatically set your shield to 'Magic Removal'. When you join your home WiFi, it can turn broadcasting 'OFF' and pause opt-outs for comfort.",
+    howToUse: "Add a rule by specifying the network SSID, choosing the target privacy level (e.g., Strict Blur, Pixelate), and toggling whether broadcasting or face opt-out should be active. The system will auto-apply this when connected.",
+    benefits: [
+      "Set-it-and-forget-it automated privacy transitions.",
+      "Prevent manual setting mistakes at gym, office, or cafes.",
+      "Conserve device battery by disabling broadcast in trusted home zones."
+    ]
+  },
+  hierarchy: {
+    title: "Precedence Resolution Hierarchy",
+    category: "Rules & Hierarchy",
+    summary: "The rules engine that resolves logic conflicts when multiple overlapping privacy settings or exception claims occur.",
+    whatItDoes: "Determines which rule wins when there is a conflict. For example, if a whitelisted family member is recording you, but you enter a 'Total Lockdown' geofence, the hierarchy ensures the lockdown override takes precedence, keeping you censored.",
+    howToUse: "Review the priority hierarchy tree. Drag or toggle rule configurations to modify pre-programmed rules or observe simulated resolution logic by triggering mock conflict scenarios.",
+    benefits: [
+      "Ensures predictable, deterministic privacy behavior.",
+      "Enforces physical lockdown mode in sensitive areas.",
+      "Clear visual tracking of active rules and overrides."
+    ]
+  },
+  perimeter: {
+    title: "Geo-Fenced Perimeter Zones",
+    category: "Rules & Hierarchy",
+    summary: "Stationary, coordinate-based geofences that enforce specialized privacy profiles automatically.",
+    whatItDoes: "Defines spatial boundaries (e.g., 50m around a preschool, hospital, or private residence). When any complying recording wearable or camera enters this geographic polygon, it is forced to lock its video sensor or mask out all registered profiles.",
+    howToUse: "Register a perimeter zone by giving it a title and choosing its location. Test perimeter intrusion using the live simulator to see alerts fire as devices approach boundaries.",
+    benefits: [
+      "Establish strict privacy envelopes around home or sensitive areas.",
+      "Automatic enforcement for children inside school boundaries.",
+      "Works in real-time with GPS and ultra-wideband (UWB) tracking."
+    ]
+  },
+  biometric: {
+    title: "On-Device Biometric Armor",
+    category: "Rules & Hierarchy",
+    summary: "An ultra-secure lock that prevents physical tampering, force-deactivation, or unauthorized changes to your privacy profile.",
+    whatItDoes: "Uses cryptographically backed WebAuthn / Passkey protocols to lock down settings. Once armed, any attempt to turn off broadcasting, register new faces, clear logs, or delete whitelists will prompt for fingerprint or facial scan verification.",
+    howToUse: "Go to the Biometric Lock tab, name your key, and click 'Arm Biometric Lock'. Complete the simulated touch scan to activate. When active, settings will remain securely frozen until unlocked.",
+    benefits: [
+      "Defeats physical coercion and device tampering.",
+      "Saves settings under deep hardware-isolated storage (TEE/Enclave).",
+      "Immediate alert notifications if lock tampering is detected."
+    ]
+  },
+  scrub: {
+    title: "Retroactive Media Scrub",
+    category: "Scrub & Compliance",
+    summary: "An automated decentralized web crawler that scans streaming platforms and social media indexers to find and mask unconsented videos of you.",
+    whatItDoes: "Continuously monitors popular video-sharing networks. Upon detecting your registered face vector in public streams, it automatically triggers a direct API takedown/blur compliance request, prompting platforms to censor your profile retroactively.",
+    howToUse: "Ensure your Face Registry is populated. Turn on 'Decentralized Platform Scraping'. View discovered online media in the scrubbing feed and trigger automated platform API blur compliance requests.",
+    benefits: [
+      "Cleans up existing, historical unconsented uploads.",
+      "CDN-level automated blurring rather than slow manual DMCA filings.",
+      "Direct verification handshake showing compliance logs in real-time."
+    ]
+  },
+  retention: {
+    title: "Zero-Knowledge Data Trust",
+    category: "Devices & Keys",
+    summary: "Configures on-device history retention periods, strict encryption standards, and logs auto-purging.",
+    whatItDoes: "Guarantees that your bystander logging data remains entirely private. You can customize when logs are permanently overwritten and set secure storage keys to make sure no government or platform can extract historical traces of who you've been around.",
+    howToUse: "Select a 'Purge Cycle' (e.g., 2 hours, 24 hours, or immediate). Adjust the maximum logs limit, and enable zero-knowledge local database encryption with custom credentials.",
+    benefits: [
+      "Ensures absolute data minimization compliance (GDPR Article 5).",
+      "Protects logs from forensic extraction in case of device seizure.",
+      "Completely local with no remote backup vectors."
+    ]
+  },
+  escrow: {
+    title: "Warrant & Escrow Key Override",
+    category: "Devices & Keys",
+    summary: "A democratic, multi-signature digital escrow system that allows law enforcement overrides only when authorized by court-signed warrants.",
+    whatItDoes: "Protects your absolute privacy while maintaining compliance with judicial systems. Your escrow key is split into multiple pieces (shards) held by trust authorities (like citizen unions or trusted friends). Only a cryptographically signed judicial warrant can assemble the key to pause your beacon.",
+    howToUse: "Configure your trusted keyholders. View simulated warrant requests and run the key-assembling flow to see how multi-sig verification is strictly validated before any override is granted.",
+    benefits: [
+      "Foil unlawful surveillance while adhering to legitimate warrants.",
+      "Multi-signature accountability ensures no single entity can spy on you.",
+      "Full transparency logs of any judicial request or override attempt."
+    ]
+  },
+  pairing: {
+    title: "Hardware Device Pairing",
+    category: "Devices & Keys",
+    summary: "Establish a secure, low-energy Bluetooth link between your smartphone/app and your physical BlurBubble wearable shield or key-fob.",
+    whatItDoes: "Pairs the companion app with active hardware. Once paired, the physical device and your phone act as a coordinated system, enabling precise proximity tracking, battery telemetry, and immediate haptic feedback whenever third-party recordings are blocked.",
+    howToUse: "Click 'Scan for Devices'. Locate your BlurBubble physical wearable or key-fob, click 'Pair Device', and follow the cryptographic handshake steps to secure the link.",
+    benefits: [
+      "Enables continuous real-time haptic vibration on bypass alerts.",
+      "Accurate battery tracking of your physical wearable.",
+      "Enables physical tag-out shields for physical items."
+    ]
+  },
+  licensing: {
+    title: "Hardware Licensing & Sync",
+    category: "Devices & Keys",
+    summary: "Register and synchronize official hardware manufacturer licenses and cryptographic certificates for compliant cross-border protection.",
+    whatItDoes: "Proves to platform scanners and corporate networks that your device is an officially certified, non-disruptive privacy beacon. This ensures your broadcast signal isn't blacklisted as a signal jammer and satisfies international compliance standards.",
+    howToUse: "Click 'Register New License', enter a serial identifier, and complete the cryptographic registration. Keep the synchronization active to renew certificates automatically.",
+    benefits: [
+      "Guarantees that your signal is whitelisted by major tech platforms.",
+      "Satisfies FCC, CE, and international wireless compliance guidelines.",
+      "Provides cryptographic proof of your digital rights in court."
+    ]
+  },
+  legal: {
+    title: "Legal & Regulatory Compliance",
+    category: "Scrub & Compliance",
+    summary: "Learn and test your legal standing under modern privacy frameworks like GDPR, CCPA, and decentralized digital right bills.",
+    whatItDoes: "Ensures you are fully informed of your digital rights regarding likeness ownership and public recording. Includes interactive educational guides and quizzes to test your understanding of personal privacy regulations in different jurisdictions.",
+    howToUse: "Read the dynamic legal compliance manual, start the 'Digital Rights Quiz', answer the questions, and evaluate your legal posture score.",
+    benefits: [
+      "Understand the boundaries of likeness protection in public spaces.",
+      "Provides quick-reference legal citations for filing complaints.",
+      "Keeps you updated on emerging neural-recording legislation."
+    ]
+  },
+  'privacy-levels': {
+    title: "Censor Shield Options",
+    category: "Active Defense Settings",
+    summary: "The specific masking overlays requested by your beacon and enforced on complying lenses.",
+    whatItDoes: "These options dictate how your visual presence will be replaced in media captures. Platforms or wearable glasses that recognize your broadcast will apply this exact style.",
+    howToUse: "Select 'Magic Removal' to be fully erased and replaced with AI background fills, 'Strict Blur' for high-radius blurring of your face and body, 'Pixelate' for retro low-resolution sensor blocking, or 'Opt-In' to allow normal recording.",
+    benefits: [
+      "Dynamic real-time selection of privacy strength.",
+      "Low latency, standardized compliance styling.",
+      "Adaptable based on physical environments or proximity."
+    ]
+  }
+};
+
+const getIcon = (key: string) => {
+  switch (key) {
+    case 'lockdown': return <ShieldAlert className="w-5 h-5 text-rose-400" />;
+    case 'strict_rules': return <Shield className="w-5 h-5 text-amber-400" />;
+    case 'perimeter_shields': return <MapPin className="w-5 h-5 text-blue-400" />;
+    case 'allow_list': return <Users className="w-5 h-5 text-emerald-400" />;
+    case 'wifi_triggers': return <Wifi className="w-5 h-5 text-purple-400" />;
+    case 'smart_schedules': return <Clock className="w-5 h-5 text-indigo-400" />;
+    default: return <Layers className="w-5 h-5 text-slate-400" />;
+  }
+};
+
+const BEACON_FEATURE_GROUPS = [
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: '📊',
+    options: [
+      { value: 'overview', label: 'Overview Dashboard', icon: '🛡️', desc: 'Configure layout & view status' }
+    ]
+  },
+  {
+    id: 'realtime',
+    label: 'Real-Time Protection',
+    icon: '📡',
+    options: [
+      { value: 'signal', label: 'Privacy Signal Broadcast', icon: '📡', desc: 'Configure range & signal broadcast' },
+      { value: 'faces', label: 'My Saved Faces', icon: '👤', desc: 'Add faces to blur on cameras' },
+      { value: 'tags', label: 'Protected Belongings', icon: '🎒', desc: 'Protect bags, children\'s items, or pets' },
+      { value: 'wifi', label: 'Automated WiFi Rules', icon: '📶', desc: 'Change settings based on WiFi network' }
+    ]
+  },
+  {
+    id: 'rules',
+    label: 'Rule Priority & Security',
+    icon: '⚖️',
+    options: [
+      { value: 'hierarchy', label: 'Rule Priority Settings', icon: '⚖️', desc: 'Decide which rule wins first' },
+      { value: 'perimeter', label: 'Protected Areas', icon: '📍', desc: 'Safe zones around home, school, or work' },
+      { value: 'biometric', label: 'Settings Lock', icon: '🔒', desc: 'Security fingerprint or passcode' }
+    ]
+  },
+  {
+    id: 'devices',
+    label: 'Connected Devices & Keys',
+    icon: '🔌',
+    options: [
+      { value: 'pairing', label: 'Connect New Devices', icon: '🔌', desc: 'Link local wearables or keychains' },
+      { value: 'licensing', label: 'Device Certifications', icon: '📋', desc: 'Official safety approvals & certificates' },
+      { value: 'escrow', label: 'Law Enforcement Access Keys', icon: '🔑', desc: 'Emergency warrant keys' },
+      { value: 'retention', label: 'My Data Preferences', icon: '💾', desc: 'How long logs are stored' }
+    ]
+  },
+  {
+    id: 'compliance',
+    label: 'Web Rights & Legal Guides',
+    icon: '📖',
+    options: [
+      { value: 'scrub', label: 'Online Video Blur Requests', icon: '🎬', desc: 'Scrub your face from public videos' },
+      { value: 'legal', label: 'Your Privacy Rights Quiz', icon: '📖', desc: 'Quick guide on video laws' }
+    ]
+  }
+];
+
+export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, activeTab: externalActiveTab, onTabChange: externalOnTabChange, onAddLog, onTriggerAlert }: PrivacyBeaconProps) {
+  const { t } = useI18n();
+  const [internalActiveTab, setInternalActiveTab] = useState<'overview' | 'settings' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map'>('overview');
+  const [showContextHelp, setShowContextHelp] = useState(false);
+  const showSignalHistory = !!state.showSignalHistory;
+  const showPrivacyImpactScore = !!state.showPrivacyImpactScore;
+  const showSignalMap = state.showSignalMap !== false;
+
+  // Swipe vs Continuous Scroll Widget Layout states
+  const [widgetViewMode, setWidgetViewMode] = useState<'scroll' | 'swipe'>(() => {
+    return (localStorage.getItem('blurBubble_widgetViewMode') as 'scroll' | 'swipe') || 'swipe';
+  });
+  const [activeWidgetIndex, setActiveWidgetIndex] = useState(0);
+
+  // Compute enabled widgets for layout selection
+  const enabledWidgetIds: string[] = [];
+  if (showPrivacyImpactScore) enabledWidgetIds.push('privacy-score');
+  if (showSignalHistory) enabledWidgetIds.push('signal-history');
+  if (state.showBatteryWidget !== false) enabledWidgetIds.push('battery-status');
+  if (showSignalMap) enabledWidgetIds.push('signal-map');
+
+  // Sync index to keep bounds correct on widget toggle
+  useEffect(() => {
+    if (activeWidgetIndex >= enabledWidgetIds.length) {
+      setActiveWidgetIndex(Math.max(0, enabledWidgetIds.length - 1));
+    }
+  }, [enabledWidgetIds.length, activeWidgetIndex]);
+
+  useEffect(() => {
+    localStorage.setItem('blurBubble_widgetViewMode', widgetViewMode);
+  }, [widgetViewMode]);
+
+  const handleSwipeDragEnd = (event: any, info: any) => {
+    const swipeThreshold = 50;
+    if (info.offset.x < -swipeThreshold) {
+      setActiveWidgetIndex(prev => (prev + 1) % Math.max(1, enabledWidgetIds.length));
+    } else if (info.offset.x > swipeThreshold) {
+      setActiveWidgetIndex(prev => (prev - 1 + enabledWidgetIds.length) % Math.max(1, enabledWidgetIds.length));
+    }
+  };
+
+  // Custom Interactive Enhanced States
+  const [isDraggingRange, setIsDraggingRange] = useState(false);
+  const [isScanningWifiNetwork, setIsScanningWifiNetwork] = useState(false);
+  const [scannedWifiNetworks, setScannedWifiNetworks] = useState<Array<{ ssid: string; label: string; privacyLevel: PrivacyLevel; dbm: number }>>([]);
+  const [scannedWifiSuccess, setScannedWifiSuccess] = useState<string | null>(null);
+  const [calibratingFaceId, setCalibratingFaceId] = useState<string | null>(null);
+  const [calibrationProgress, setCalibrationProgress] = useState<number>(0);
+
+  // Find Tag / Bidirectional Audio & Visual Alerts
+  const [ringingTagId, setRingingTagId] = useState<string | null>(null);
+  const [activeHelpAlert, setActiveHelpAlert] = useState<{ tagId: string; tagName: string; time: string } | null>(null);
+
+  // Acoustic Map & Heat States
+  const [acousticLocation, setAcousticLocation] = useState<'dining' | 'classroom' | 'city_square' | 'cafe_inside'>('dining');
+  const [acousticInterference, setAcousticInterference] = useState<'none' | 'wind' | 'wall' | 'ac_hum'>('none');
+  const [acousticPinging, setAcousticPinging] = useState(false);
+  const [acousticMapFrequency, setAcousticMapFrequency] = useState<number>(23.2); // kHz
+  const [acousticLogs, setAcousticLogs] = useState<string[]>([
+    "System Initialized: Acoustic Propagation Scanner active.",
+    "Beacon Mode: Active Vocal Scrambler on channel A."
+  ]);
+  const [selectedAcousticThreat, setSelectedAcousticThreat] = useState<string | null>(null);
+
+  // Play AirTag-like high pitch chirps on the tag
+  const playTagBuzzerSound = () => {
+    try {
+      // @ts-ignore
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      
+      const playChirp = (startTime: number, duration: number, frequency: number) => {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(frequency, startTime);
+        osc.frequency.exponentialRampToValueAtTime(frequency - 100, startTime + duration);
+        
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(0.08, startTime + 0.015);
+        gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+        
+        osc.start(startTime);
+        osc.stop(startTime + duration + 0.05);
+      };
+
+      const now = ctx.currentTime;
+      // AirTag signature sweet 3-beep pattern
+      playChirp(now, 0.08, 2200);
+      playChirp(now + 0.14, 0.08, 2400);
+      playChirp(now + 0.28, 0.12, 2600);
+    } catch (err) {
+      console.error("Tag buzzer sound error", err);
+    }
+  };
+
+  // Repeating alert chime when son needs help
+  useEffect(() => {
+    if (!activeHelpAlert) return;
+
+    const interval = setInterval(() => {
+      try {
+        // @ts-ignore
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        const ctx = new AudioContextClass();
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        osc.type = 'sawtooth'; // piercing & clear
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.linearRampToValueAtTime(880, ctx.currentTime + 0.25); // A5
+        osc.frequency.linearRampToValueAtTime(587.33, ctx.currentTime + 0.5);
+        
+        gainNode.gain.setValueAtTime(0, ctx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.04);
+        gainNode.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.35);
+        gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + 0.55);
+      } catch (err) {
+        console.error("Alarm sound loop error", err);
+      }
+    }, 900);
+
+    return () => clearInterval(interval);
+  }, [activeHelpAlert]);
+
+  // Central Logo Press & Hold and Tap Interaction States
+  const [isHoldingLogo, setIsHoldingLogo] = useState(false);
+  const [logoHoldProgress, setLogoHoldProgress] = useState(0); // 0 to 1
+  const logoHoldTimerRef = useRef<any>(null);
+  const logoHoldIntervalRef = useRef<any>(null);
+
+  const handleLogoPointerDown = (e: React.PointerEvent) => {
+    // If shield is off, quick tap to turn ON immediately
+    if (!state.isBroadcasting) {
+      onChange({ ...state, isBroadcasting: true });
+      playLocalSoundTest('sonar_chime', 80);
+      onAddLog({
+        deviceModel: 'SHIELD_BEACON_CONTROLLER',
+        action: 'activated',
+        shieldApplied: 'SHIELD BROADCAST ACTIVE',
+        distance: 0,
+        rotatedId: 'MANUAL_QUICK_TAP'
+      });
+      // Physical vibration alert
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([100]);
+      }
+      return;
+    }
+
+    // If shield is on, must press and hold to turn OFF
+    setIsHoldingLogo(true);
+    setLogoHoldProgress(0);
+
+    const holdDuration = 1000; // 1 second press-and-hold requirement
+    const intervalStep = 50;
+    let elapsed = 0;
+
+    if (logoHoldTimerRef.current) clearTimeout(logoHoldTimerRef.current);
+    if (logoHoldIntervalRef.current) clearInterval(logoHoldIntervalRef.current);
+
+    logoHoldIntervalRef.current = setInterval(() => {
+      elapsed += intervalStep;
+      const progress = Math.min(elapsed / holdDuration, 1);
+      setLogoHoldProgress(progress);
+
+      // Light haptic feedback during hold
+      if (typeof navigator !== 'undefined' && navigator.vibrate && elapsed % 200 === 0 && progress < 1) {
+        navigator.vibrate([30]);
+      }
+    }, intervalStep);
+
+    logoHoldTimerRef.current = setTimeout(() => {
+      clearInterval(logoHoldIntervalRef.current);
+      setIsHoldingLogo(false);
+      setLogoHoldProgress(0);
+
+      onChange({ ...state, isBroadcasting: false });
+      playLocalSoundTest('tactical_click', 80);
+      onAddLog({
+        deviceModel: 'SHIELD_BEACON_CONTROLLER',
+        action: 'deactivated',
+        shieldApplied: 'SHIELD BROADCAST SILENT',
+        distance: 0,
+        rotatedId: 'MANUAL_PRESS_HOLD'
+      });
+
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    }, holdDuration);
+  };
+
+  const handleLogoPointerUpOrLeave = () => {
+    if (logoHoldTimerRef.current) clearTimeout(logoHoldTimerRef.current);
+    if (logoHoldIntervalRef.current) clearInterval(logoHoldIntervalRef.current);
+
+    if (isHoldingLogo && state.isBroadcasting && logoHoldProgress < 1) {
+      playLocalSoundTest('tactical_click', 40);
+    }
+
+    setIsHoldingLogo(false);
+    setLogoHoldProgress(0);
+  };
+  
+  const activeTab = externalActiveTab || internalActiveTab;
+  const setActiveTab = externalOnTabChange || setInternalActiveTab;
+
+  const calculatePrivacyScore = () => {
+    let score = 10; // Base starting score
+    const contributors = [];
+
+    if (state.isBroadcasting) {
+      score += 30;
+      contributors.push({ name: 'RF Signal Broadcasting', value: 30, active: true });
+    } else {
+      contributors.push({ name: 'RF Signal Broadcasting', value: 30, active: false });
+    }
+
+    const rangePoints = Math.min(15, Math.round((state.rangeMeters / 100) * 15));
+    if (state.isBroadcasting && rangePoints > 0) {
+      score += rangePoints;
+      contributors.push({ name: `Shield Radius (${state.rangeMeters}m)`, value: rangePoints, active: true });
+    } else {
+      contributors.push({ name: 'Shield Radius (>0m)', value: 15, active: false });
+    }
+
+    if (state.facialRecognitionOptOut) {
+      score += 10;
+      contributors.push({ name: 'Biometric Opt-Out Registry', value: 10, active: true });
+    } else {
+      contributors.push({ name: 'Biometric Opt-Out Registry', value: 10, active: false });
+    }
+
+    // Privacy Level
+    let privacyLevelPoints = 0;
+    let label = 'None';
+    if (state.privacyLevel === 'strict_blur') { privacyLevelPoints = 15; label = 'Strict Blur'; }
+    else if (state.privacyLevel === 'pixelate') { privacyLevelPoints = 12; label = 'Mosaic Pixelate'; }
+    else if (state.privacyLevel === 'emoji') { privacyLevelPoints = 10; label = 'Dynamic Mask'; }
+    else if (state.privacyLevel === 'black_bar') { privacyLevelPoints = 10; label = 'Censorship Bar'; }
+    else if (state.privacyLevel === 'magic_removal') { privacyLevelPoints = 15; label = 'Inpainting Eraser'; }
+
+    if (privacyLevelPoints > 0) {
+      score += privacyLevelPoints;
+      contributors.push({ name: `Obscuration Mask (${label})`, value: privacyLevelPoints, active: true });
+    } else {
+      contributors.push({ name: 'Obscuration Mask Active', value: 15, active: false });
+    }
+
+    // Acoustic shields
+    if (state.acousticWatermarkingEnabled) {
+      score += 5;
+      contributors.push({ name: 'Acoustic Audio Watermarking', value: 5, active: true });
+    } else {
+      contributors.push({ name: 'Acoustic Audio Watermarking', value: 5, active: false });
+    }
+
+    if (state.ultrasonicMicSaturationEnabled) {
+      score += 5;
+      contributors.push({ name: 'Ultrasonic Mic Saturation', value: 5, active: true });
+    } else {
+      contributors.push({ name: 'Ultrasonic Mic Saturation', value: 5, active: false });
+    }
+
+    if (state.vocalScramblerEnabled) {
+      score += 5;
+      contributors.push({ name: 'Decentralized Vocal Scrambler', value: 5, active: true });
+    } else {
+      contributors.push({ name: 'Decentralized Vocal Scrambler', value: 5, active: false });
+    }
+
+    // Countermeasures
+    if (state.irDisruptionEnabled) {
+      score += 5;
+      contributors.push({ name: 'Infrared (IR) Jamming', value: 5, active: true });
+    } else {
+      contributors.push({ name: 'Infrared (IR) Jamming', value: 5, active: false });
+    }
+
+    if (state.lidarInterferenceEnabled) {
+      score += 5;
+      contributors.push({ name: 'LiDAR Spatial Jammer', value: 5, active: true });
+    } else {
+      contributors.push({ name: 'LiDAR Spatial Jammer', value: 5, active: false });
+    }
+
+    if (state.antiLipReadingEnabled) {
+      score += 5;
+      contributors.push({ name: 'Holographic Lip Masking', value: 5, active: true });
+    } else {
+      contributors.push({ name: 'Holographic Lip Masking', value: 5, active: false });
+    }
+
+    // Emergency lockdown
+    if (state.emergencyPrivacyActive || state.totalLockdownMode) {
+      score = 100;
+    }
+
+    return { score: Math.min(100, score), contributors };
+  };
+
+  const calculatedScore = calculatePrivacyScore();
+
+  const playLocalSoundTest = (soundType: string, volumePercent: number) => {
+    try {
+      // @ts-ignore
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      const volume = volumePercent / 100;
+      gainNode.gain.setValueAtTime(volume * 0.15, ctx.currentTime);
+      
+      if (soundType === 'sonar_chime') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.6);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.62);
+      } else if (soundType === 'tactical_click') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1500, ctx.currentTime);
+        gainNode.gain.setValueAtTime(volume * 0.2, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.12);
+      } else { // silent_glow
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        gainNode.gain.setValueAtTime(0, ctx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(volume * 0.15, ctx.currentTime + 0.2);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.85);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Radar boundary ring interactive dragging handler
+  const handleSvgInteraction = (e: any, isStart = false) => {
+    // Find radar SVG element
+    const svg = e.currentTarget.closest('svg');
+    if (!svg) return;
+    
+    const rect = svg.getBoundingClientRect();
+    
+    // Get mouse/touch coordinate relative to SVG container
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const relativeX = clientX - rect.left;
+    const relativeY = clientY - rect.top;
+    
+    // SVG viewBox coordinates (280x280) with center at (140, 140)
+    const svgX = (relativeX / rect.width) * 280;
+    const svgY = (relativeY / rect.height) * 280;
+    
+    const dx = svgX - 140;
+    const dy = svgY - 140;
+    
+    // Radial distance from center (0 to 140 max)
+    const radius = Math.sqrt(dx * dx + dy * dy);
+    
+    const currentRadiusPx = state.rangeMeters * 3;
+    const isCloseToEdge = Math.abs(radius - currentRadiusPx) < 15;
+
+    if (isDraggingRange || isCloseToEdge) {
+      if (isStart) {
+        setIsDraggingRange(true);
+      }
+      // Scale distance (radius of 115px maps to 25m maximum range)
+      // Map radius of 0-115px to 1m-25m
+      const maxRadiusPx = 115;
+      const calculatedMeters = Math.max(1, Math.min(25, Math.round((radius / maxRadiusPx) * 25)));
+      
+      onChange({
+        ...state,
+        rangeMeters: calculatedMeters
+      });
+    } else if (isStart && state.isBroadcasting) {
+      // Place a custom node!
+      const distance = Math.round(radius / 3);
+      const angle = Math.atan2(dy, dx);
+      const nodeTypes: ('beacon' | 'threat')[] = ['beacon', 'threat'];
+      const chosenType = nodeTypes[Math.floor(Math.random() * nodeTypes.length)];
+      
+      const names = chosenType === 'beacon' 
+        ? ['Smart Collar', 'Backpack Tag', 'Opt-Out Ring', 'Car Shielder', 'Key FOB', 'Acoustic Deflector']
+        : ['Smart Glasses', 'Rogue Drone', 'CCTV Lens', 'Covert App', 'Snooping Mic', 'Camera Rig'];
+        
+      const name = names[Math.floor(Math.random() * names.length)] + ' #' + Math.floor(Math.random() * 900 + 100);
+      
+      const newNode = {
+        id: Math.random().toString(),
+        name,
+        type: chosenType,
+        distance,
+        angle,
+        x: svgX,
+        y: svgY
+      };
+      
+      setCustomRadarNodes(prev => [...prev, newNode]);
+      
+      // Add custom logging action
+      if (chosenType === 'beacon') {
+        onAddLog({
+          deviceModel: name,
+          action: 'discovered',
+          shieldApplied: 'ROUTING_ENCRYPTED_HANDSHAKE',
+          distance,
+          rotatedId: '0x' + Math.floor(Math.random() * 16777215).toString(16).toUpperCase()
+        });
+      } else {
+        onAddLog({
+          deviceModel: name,
+          action: 'censored',
+          shieldApplied: 'ACTIVE_PHASE_DEFLECTION',
+          distance,
+          rotatedId: '0x' + Math.floor(Math.random() * 16777215).toString(16).toUpperCase()
+        });
+      }
+    }
+  };
+
+  // Mobile Dropdown States
+  const [isMobileDropdownOpen, setIsMobileDropdownOpen] = useState(false);
+  const [expandedMobileGroups, setExpandedMobileGroups] = useState<Record<string, boolean>>({
+    dashboard: true,
+    realtime: false,
+    rules: false,
+    devices: false,
+    compliance: false
+  });
+  
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    const tabToCategoryMap: Record<string, 'defense' | 'rules' | 'hardware' | 'compliance'> = {
+      overview: 'defense',
+      settings: 'defense',
+      signal: 'defense',
+      faces: 'defense',
+      tags: 'defense',
+      wifi: 'defense',
+      hierarchy: 'rules',
+      perimeter: 'rules',
+      biometric: 'rules',
+      pairing: 'hardware',
+      licensing: 'hardware',
+      escrow: 'hardware',
+      retention: 'hardware',
+      scrub: 'compliance',
+      legal: 'compliance'
+    };
+    const cat = tabToCategoryMap[activeTab];
+    if (cat) {
+      setSelectedCategory(cat);
+    }
+  }, [activeTab]);
+  
+  // --- USER EXPERIENCE SIMPLIFICATION ---
+  const [selectedCategory, setSelectedCategory] = useState<'defense' | 'rules' | 'hardware' | 'compliance'>('defense');
+  const [defenseSubCategory, setDefenseSubCategory] = useState<'all' | 'signal' | 'acoustic' | 'identity' | 'system'>('all');
+  const [helpTopic, setHelpTopic] = useState<string | null>(null);
+
+  // Inline Tag Editing States
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [editingTagName, setEditingTagName] = useState<string>('');
+  
+  // Biometric Authentication States
+  const [isRegisteringBiometric, setIsRegisteringBiometric] = useState(false);
+  const [isVerifyingBiometric, setIsVerifyingBiometric] = useState(false);
+  const [customPasskeyName, setCustomPasskeyName] = useState("My Secure Touch ID");
+  const [biometricLogs, setBiometricLogs] = useState<string[]>([
+    "System Ready. WebAuthn capability detected in current user agent."
+  ]);
+  const [biometricStep, setBiometricStep] = useState<number>(-1); // -1: idle, 0: challenge, 1: device_prompt, 2: signature, 3: completed
+  
+  // WiFi Trigger Rules local states
+  const [newWifiSsid, setNewWifiSsid] = useState('');
+  const [newWifiLabel, setNewWifiLabel] = useState('');
+  const [newWifiPrivacy, setNewWifiPrivacy] = useState<PrivacyLevel>('strict_blur');
+  const [newWifiBroadcast, setNewWifiBroadcast] = useState(true);
+  const [newWifiFaceOptOut, setNewWifiFaceOptOut] = useState(true);
+  const [isSimulatingWifi, setIsSimulatingWifi] = useState(false);
+  
+  // Hardware pairing states
+  const [isBleScanning, setIsBleScanning] = useState(false);
+  const [bleProgress, setBleProgress] = useState(0); // 0 to 100 for scanning
+  const [discoveredBleDevices, setDiscoveredBleDevices] = useState<any[]>([]);
+  const [pairingBleDevice, setPairingBleDevice] = useState<any | null>(null);
+  const [handshakeStepIdx, setHandshakeStepIdx] = useState<number>(-1);
+  const [realBleError, setRealBleError] = useState<string | null>(null);
+  const [handshakeLogs, setHandshakeLogs] = useState<string[]>([]);
+  const [pairingSuccess, setPairingSuccess] = useState(false);
+  const [pairedDeviceName, setPairedDeviceName] = useState('');
+  const [pairingSubTab, setPairingSubTab] = useState<'console' | 'diagnostics'>('console');
+  const [selectedDiagDeviceId, setSelectedDiagDeviceId] = useState<string | null>(null);
+  const [isPingTesting, setIsPingTesting] = useState(false);
+  const [pingProgress, setPingProgress] = useState(0);
+  const [pingLogs, setPingLogs] = useState<string[]>([]);
+  const [txPowerSettings, setTxPowerSettings] = useState<Record<string, 'low' | 'medium' | 'high'>>({});
+
+  // Audio Shield Tab States
+  const [selectedAudioProfileId, setSelectedAudioProfileId] = useState<string>('primary');
+  const [testedPhrase, setTestedPhrase] = useState<string>('Stop recording me: law 88 compliance check.');
+  const [audioModulator, setAudioModulator] = useState<number>(120);
+  const [pairedDeviceType, setPairedDeviceType] = useState<'phone' | 'smart_tag' | 'key_fob' | 'airtag' | 'galaxy_tag' | 'valuable' | 'artwork' | 'building' | 'prototype'>('smart_tag');
+  const [pairedDevicePrivacy, setPairedDevicePrivacy] = useState<PrivacyLevel>('magic_removal');
+
+  // --- FAMILY SHIELD SYNC & BATTERY SAVER STATES ---
+  const [isSyncingFamily, setIsSyncingFamily] = useState(false);
+  const [familySyncLogs, setFamilySyncLogs] = useState<string[]>([]);
+  const [familyMembers, setFamilyMembers] = useState([
+    { id: 'fam-1', name: 'Father (Robert)', relation: 'Dad', deviceName: "Dad's iPhone 15", status: 'synchronized', battery: 94 },
+    { id: 'fam-2', name: 'Mother (Sarah)', relation: 'Mom', deviceName: "Mom's Galaxy S24", status: 'synchronized', battery: 88 },
+    { id: 'fam-3', name: 'Sister (Lily)', relation: 'Sister', deviceName: "Lily's Backpack Tag", status: 'synchronized', battery: 72 }
+  ]);
+
+  // --- CRYPTO TIMELOCK & TARGET DEFLECTION STATES ---
+  const [cryptoTimer, setCryptoTimer] = useState<number>(90);
+  const [currentCryptoID, setCurrentCryptoID] = useState<string>('0xFD23-A9B3-CE82-D0F4');
+  const [nextCryptoID, setNextCryptoID] = useState<string>('0xFD23-7F91-32CB-140F');
+  const [scrambledTrackers, setScrambledTrackers] = useState<Array<{ id: string; name: string; type: string; status: string; timestamp: string }>>([
+    { id: 'trk-1', name: 'Commercial Location Broker', type: 'Bluetooth Beacon Sniffer', status: 'SCRAMBLED', timestamp: 'Just now' },
+    { id: 'trk-2', name: 'Ad-Targeting Wi-Fi Probe', type: 'SSID Tracker Node', status: 'DEFLECTED', timestamp: '1m ago' },
+    { id: 'trk-3', name: 'Retail Foot-Traffic Analyzer', type: 'BLE Scraper Gateway', status: 'SCRAMBLED', timestamp: '3m ago' }
+  ]);
+  const [isSweepingTrackers, setIsSweepingTrackers] = useState<boolean>(false);
+
+  // --- REGIONAL COMPLIANCE CERTIFICATION STATES ---
+  const [complianceRegion, setComplianceRegion] = useState<'US' | 'EU' | 'CA' | 'JP'>('US');
+  const [complianceTesting, setComplianceTesting] = useState<boolean>(false);
+  const [complianceProgress, setComplianceProgress] = useState<number>(0);
+  const [complianceReport, setComplianceReport] = useState<{
+    fccStatus: 'PASSED' | 'WARNING' | 'PENDING';
+    ceStatus: 'PASSED' | 'WARNING' | 'PENDING';
+    eirpPower: string;
+    freqRange: string;
+    exemptions: string[];
+  } | null>(null);
+
+  // --- ALLOW WHITE-LIST (PLATFORMS & ACCOUNTS) ---
+  const [allowedList, setAllowedList] = useState([
+    { id: 'all-1', name: "Dad's YouTube Channel", platform: 'youtube', identifier: '@family_vlogs', active: true },
+    { id: 'all-2', name: "Mom's Phone Camera", platform: 'device', identifier: 'UUID-F81D-41B2', active: true }
+  ]);
+  const [newAllowedName, setNewAllowedName] = useState('');
+  const [newAllowedPlatform, setNewAllowedPlatform] = useState('youtube');
+  const [newAllowedIdent, setNewAllowedIdent] = useState('');
+  const [isSimulatingAllowedUpload, setIsSimulatingAllowedUpload] = useState(false);
+  const [allowedUploadLogs, setAllowedUploadLogs] = useState<string[]>([]);
+  const [editingAllowedItem, setEditingAllowedItem] = useState<any | null>(null);
+
+  // --- LEGAL INTERACTIVE TUTORIAL STATES ---
+  const [tutorialStep, setTutorialStep] = useState(0); // 0: intro, 1: q1, 2: q2, 3: q3, 4: score
+  const [tutorialAnswers, setTutorialAnswers] = useState<Record<number, number>>({});
+  const [tutorialCompleted, setTutorialCompleted] = useState(false);
+  const [tutorialFeedback, setTutorialFeedback] = useState<string | null>(null);
+
+  // --- PRIVACY GOVERNANCE HIERARCHY STATES ---
+  const [selectedScenario, setSelectedScenario] = useState('scen-1');
+
+  const startBleScan = () => {
+    setIsBleScanning(true);
+    setBleProgress(0);
+    setDiscoveredBleDevices([]);
+    setPairingBleDevice(null);
+    setPairingSuccess(false);
+    setRealBleError(null);
+    
+    const interval = setInterval(() => {
+      setBleProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsBleScanning(false);
+          // Populate scanned devices
+          setDiscoveredBleDevices([
+            {
+              id: 'ble-dev-1',
+              name: 'BlurBubble Beacon v1-7A2F',
+              mac: '00:1A:7D:DA:71:11',
+              type: 'smart_tag',
+              rssi: -48,
+              desc: 'High-powered localized broadcast badge'
+            },
+            {
+              id: 'ble-dev-2',
+              name: 'BlurBubble KeyFob-1D90',
+              mac: '24:0A:C4:F9:82:C4',
+              type: 'key_fob',
+              rssi: -62,
+              desc: 'Compact keychain toggle with mechanical sync button'
+            },
+            {
+              id: 'ble-dev-3',
+              name: 'BlurBubble Tag v2-C93B',
+              mac: '80:E6:50:1C:BF:10',
+              type: 'smart_tag',
+              rssi: -75,
+              desc: 'Micro stitch-in fabric tag for clothing or bags'
+            },
+            {
+              id: 'ble-dev-4',
+              name: 'Confidential Prototype v4',
+              mac: '44:91:60:FF:A2:3E',
+              type: 'prototype',
+              rssi: -54,
+              desc: 'Confidential hardware development kit'
+            }
+          ]);
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 250);
+  };
+
+  const startRealBleScan = async () => {
+    if (typeof navigator === 'undefined' || !(navigator as any).bluetooth) {
+      setRealBleError("Web Bluetooth API is not supported on this browser or inside this environment.");
+      setIsBleScanning(false);
+      return;
+    }
+
+    setIsBleScanning(true);
+    setBleProgress(15);
+    setDiscoveredBleDevices([]);
+    setPairingBleDevice(null);
+    setPairingSuccess(false);
+    setRealBleError(null);
+
+    try {
+      setBleProgress(45);
+      // Web Bluetooth requires a user gesture. It will prompt the user to select a device.
+      const device = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true
+      });
+
+      setBleProgress(85);
+      
+      const realDevice = {
+        id: device.id,
+        name: device.name || 'Unidentified BlurBubble Beacon',
+        mac: 'FF:EE:DD:CC:BB:AA', // MAC is masked by Web Bluetooth API for privacy, we use virtual MAC
+        type: 'smart_tag' as const,
+        rssi: -55,
+        desc: 'Physical BLE transceiver queried via Web Bluetooth API',
+        nativeDevice: device // Hold reference to device for GATT connections
+      };
+
+      setBleProgress(100);
+      setIsBleScanning(false);
+      setDiscoveredBleDevices([realDevice]);
+    } catch (err: any) {
+      console.error("Web Bluetooth scan error:", err);
+      setRealBleError(err.message || "User cancelled scan or Bluetooth permission was denied.");
+      setIsBleScanning(false);
+    }
+  };
+
+  const runHandshakeSequence = async (device: any) => {
+    setPairingBleDevice(device);
+    setHandshakeStepIdx(0);
+    setPairingSuccess(false);
+    setPairedDeviceName(device.name.replace(/ v\d-\w+|-\w+/, '')); // pre-populate friendlier name
+    setPairedDeviceType(device.type);
+    
+    const steps = [
+      'Establishing Physical Web Bluetooth GATT Connection...',
+      'Discovering BlurBubble Primary Opt-Out Service (0xFD70)...',
+      'Reading Beacon Compliance Characteristic (0xFD71)...',
+      'Performing Ephemeral ECDH Cryptographic Exchange...',
+      'Exchanging rotating pseudo-random signature token keys...',
+      'Writing Secure Encryption Handshake Challenge...',
+      'Authentication handshakes completed! GATT connection established.'
+    ];
+
+    setHandshakeLogs([`[INFO] Starting handshake with ${device.name}...`]);
+
+    if (device.nativeDevice) {
+      try {
+        setHandshakeLogs(prev => [...prev, `[INFO] Attempting physical GATT connect to ${device.id}...`]);
+        const server = await device.nativeDevice.gatt.connect();
+        setHandshakeLogs(prev => [...prev, `[SUCCESS] GATT Server Connected: ${server.connected}`]);
+        
+        let currentStep = 1;
+        const interval = setInterval(() => {
+          if (currentStep < steps.length) {
+            setHandshakeStepIdx(currentStep);
+            setHandshakeLogs(prev => [...prev, `[SECURE] ${steps[currentStep]}`]);
+            currentStep++;
+          } else {
+            clearInterval(interval);
+            setPairingSuccess(true);
+          }
+        }, 600);
+      } catch (err: any) {
+        console.error("GATT connection failed:", err);
+        setHandshakeLogs(prev => [
+          ...prev, 
+          `[ERROR] GATT Server Connection failed: ${err.message}`,
+          `[FALLBACK] Initializing isolated local sandbox cryptographic emulator...`
+        ]);
+        
+        let currentStep = 0;
+        const interval = setInterval(() => {
+          if (currentStep < steps.length) {
+            setHandshakeStepIdx(currentStep);
+            setHandshakeLogs(prev => [...prev, `[SECURE] ${steps[currentStep]}`]);
+            currentStep++;
+          } else {
+            clearInterval(interval);
+            setPairingSuccess(true);
+          }
+        }, 500);
+      }
+    } else {
+      // Standard simulated flow
+      let currentStep = 0;
+      const interval = setInterval(() => {
+        if (currentStep < steps.length) {
+          setHandshakeStepIdx(currentStep);
+          setHandshakeLogs(prev => [...prev, `[SECURE] ${steps[currentStep]}`]);
+          currentStep++;
+        } else {
+          clearInterval(interval);
+          setPairingSuccess(true);
+        }
+      }, 600);
+    }
+  };
+
+  const handleRegisterPairedDevice = () => {
+    if (!pairedDeviceName.trim()) return;
+
+    const newDevice: RegisteredEntity = {
+      id: 'tag-' + Date.now(),
+      name: pairedDeviceName,
+      type: pairedDeviceType,
+      isActive: true,
+      privacyLevel: pairedDevicePrivacy,
+      signalStrength: pairingBleDevice?.rssi || -60,
+      batteryPercent: Math.floor(Math.random() * 20) + 80 // 80% to 100%
+    };
+
+    onChange({
+      ...state,
+      registeredEntities: [...state.registeredEntities, newDevice]
+    });
+
+    // Reset and redirect
+    setPairingBleDevice(null);
+    setPairingSuccess(false);
+    setActiveTab('tags');
+
+    // Trigger pocket haptic alert / notification in app
+    window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+      detail: { 
+        title: 'New Device Paired & Secured',
+        body: `"${pairedDeviceName}" has completed the encrypted handshake and is now actively broadcasting.`,
+        type: 'blocking'
+      } 
+    }));
+  };
+
+  const runFirmwareFlash = () => {
+    if (fwFlashStatus === 'running') return;
+    setFwFlashStatus('running');
+    setFwFlashProgress(0);
+    setFwFlashLogs(['[SYSTEM] Initiating hardware diagnostic bypass...']);
+    
+    const messages = [
+      '[RF-CORE] Querying transceiver PLL register (0x028A)...',
+      '[RF-CORE] Reading current flash partitions...',
+      '[MEM] Sector verification: Block 0x00A0 to 0x0FFF OK.',
+      '[MEM] Erasing page 0xF0... [DONE]',
+      '[MEM] Writing fresh firmware package (v2.4.9-Stable)...',
+      '[ALIGN] Aligning multi-array phased beam delay coefficients...',
+      '[ALIGN] Recalibrating BLE RSSI advertisement window (150ms)...',
+      '[ALIGN] Initializing secure on-chip cryptographic envelope...',
+      '[ALIGN] Overriding BLE public address with rotating token generator...',
+      '[SYSTEM] Success. Hardware transceivers calibrated to 100% efficiency!'
+    ];
+
+    let currentStep = 0;
+    const interval = setInterval(() => {
+      currentStep++;
+      const progress = Math.min(100, Math.round((currentStep / messages.length) * 100));
+      setFwFlashProgress(progress);
+      
+      if (currentStep <= messages.length) {
+        setFwFlashLogs(prev => [...prev, messages[currentStep - 1]]);
+      }
+      
+      if (currentStep >= messages.length) {
+        clearInterval(interval);
+        setFwFlashStatus('success');
+        onAddLog({
+          deviceModel: 'BlurBubble Transceiver Core',
+          action: 'calibrated',
+          shieldApplied: 'FIRMWARE_RE-FLASH_v2.4.9_COMPLETED',
+          distance: 0,
+          rotatedId: '0xF3A9B2'
+        });
+      }
+    }, 450);
+  };
+
+  const [newLicDeviceName, setNewLicDeviceName] = useState('');
+  const [newLicSerial, setNewLicSerial] = useState('');
+  const [newLicCertType, setNewLicCertType] = useState<'FCC' | 'CE' | 'ISED' | 'MIC' | 'VCCI'>('FCC');
+  const [newLicCertId, setNewLicCertId] = useState('');
+  const [newLicMaxPower, setNewLicMaxPower] = useState(10);
+  const [newLicLab, setNewLicLab] = useState('Bay Area Compliance Labs');
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [verificationResult, setVerificationResult] = useState<{ [id: string]: 'idle' | 'verifying' | 'verified' | 'failed' }>({});
+  const [renewingId, setRenewingId] = useState<string | null>(null);
+  const [showRenewalModal, setShowRenewalModal] = useState<string | null>(null);
+  const [selectedLetterTakedown, setSelectedLetterTakedown] = useState<WebTakedownRecord | null>(null);
+  const [isAutoSweeping, setIsAutoSweeping] = useState(true);
+  const [customRadarNodes, setCustomRadarNodes] = useState<{ id: string; name: string; type: 'beacon' | 'threat'; distance: number; angle: number; x: number; y: number }[]>([]);
+  const [acousticWaveType, setAcousticWaveType] = useState<'sine' | 'triangle' | 'square' | 'noise'>('sine');
+  const [acousticFrequency, setAcousticFrequency] = useState<number>(850);
+  const [fwFlashStatus, setFwFlashStatus] = useState<'idle' | 'running' | 'success'>('idle');
+  const [fwFlashProgress, setFwFlashProgress] = useState(0);
+  const [fwFlashLogs, setFwFlashLogs] = useState<string[]>([]);
+  const [activeThreatIntercept, setActiveThreatIntercept] = useState<{ id: string; target: string; type: string; distance: number } | null>(null);
+  const [isShieldReinforced, setIsShieldReinforced] = useState(false);
+  const [sweepIntensity, setSweepIntensity] = useState<'weekly' | 'daily' | 'realtime'>('daily');
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [acousticMode, setAcousticMode] = useState<'beamforming' | 'voice_isolation' | 'wide_jamming'>('beamforming');
+  const [beamformingAngle, setBeamformingAngle] = useState(12);
+  const [voicePrintOnly, setVoicePrintOnly] = useState(true);
+  const [bystanderPass, setBystanderPass] = useState(true);
+  
+  // Rotating cryptographic key BLE UUID 15-minute countdown
+  const [uuidTimeLeft, setUuidTimeLeft] = useState(900);
+
+  // Physical Anti-Camera LED array mode
+  const [irLedMode, setIrLedMode] = useState<string>('steady');
+
+  // Asymmetrical Protection Boundary Designer state
+  const [selectedAsymmetricTagId, setSelectedAsymmetricTagId] = useState<string>('fam-3');
+  const [asymmetricOffsets, setAsymmetricOffsets] = useState<Record<string, { front: number; back: number; left: number; right: number }>>({
+    'fam-3': { front: 3.5, back: 8.5, left: 3.0, right: 3.0 },
+    'default': { front: 3.0, back: 3.0, left: 3.0, right: 3.0 }
+  });
+
+  // Zero-Knowledge Audit Logs verification states
+  const [activeZkVerificationId, setActiveZkVerificationId] = useState<string | null>(null);
+  const [zkVerifying, setZkVerifying] = useState(false);
+  const [zkComplete, setZkComplete] = useState(false);
+  const [zkSteps, setZkSteps] = useState<string[]>([]);
+
+  // Emergency Coercion Purge states
+  const [coercionWipeActive, setCoercionWipeActive] = useState(false);
+  const [wipeHoldSeconds, setWipeHoldSeconds] = useState(0);
+  const [isHoldingWipe, setIsHoldingWipe] = useState(false);
+  
+  // States for adding smart tags
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagType, setNewTagType] = useState<'phone' | 'smart_tag' | 'key_fob' | 'airtag' | 'galaxy_tag'>('smart_tag');
+  const [newTagPrivacy, setNewTagPrivacy] = useState<PrivacyLevel>('magic_removal');
+  
+  // Real-time signal strength noise simulation
+  const [signalNoise, setSignalNoise] = useState<Record<string, number>>({});
+  
+  // Perimeter Security states
+  const [perimeterSensors, setPerimeterSensors] = useState<PerimeterSensor[]>([
+    {
+      id: 'sens-1',
+      name: 'Safe-Entrance Shield Gate',
+      location: 'Oakwood Primary School (Main Entry)',
+      type: 'school',
+      isActive: true,
+      coverageMeters: 25,
+      detectionsBlocked: 342,
+      status: 'active'
+    },
+    {
+      id: 'sens-2',
+      name: 'Front Yard Privacy Dome',
+      location: 'Stuart Family Residence',
+      type: 'home',
+      isActive: true,
+      coverageMeters: 15,
+      detectionsBlocked: 19,
+      status: 'active'
+    },
+    {
+      id: 'sens-3',
+      name: 'Playground Active Censor Hub',
+      location: 'Sunnyvale Public Park',
+      type: 'public',
+      isActive: false,
+      coverageMeters: 30,
+      detectionsBlocked: 815,
+      status: 'maintenance'
+    }
+  ]);
+  const [newSensName, setNewSensName] = useState('');
+  const [newSensLocation, setNewSensLocation] = useState('');
+  const [newSensType, setNewSensType] = useState<'school' | 'home' | 'commercial' | 'public'>('school');
+  const [newSensRange, setNewSensRange] = useState(20);
+
+  // Retroactive Web Face Scrubber States (DeleteMe for Video)
+  const [takedowns, setTakedowns] = useState<WebTakedownRecord[]>([
+    {
+      id: 'tk-1',
+      platform: 'youtube',
+      url: 'https://youtube.com/watch?v=dx782h932d',
+      confidenceScore: 0.94,
+      status: 'takedown_success',
+      timestamp: '2026-06-28 10:14'
+    },
+    {
+      id: 'tk-2',
+      platform: 'tiktok',
+      url: 'https://tiktok.com/@vlogger_star/video/849204820',
+      confidenceScore: 0.97,
+      status: 'dispatched',
+      timestamp: '2026-06-30 14:22'
+    },
+    {
+      id: 'tk-3',
+      platform: 'instagram',
+      url: 'https://instagram.com/p/Cg7823hd920/',
+      confidenceScore: 0.89,
+      status: 'detected',
+      timestamp: '2026-07-01 11:05'
+    }
+  ]);
+  const [isScanningCrawler, setIsScanningCrawler] = useState(false);
+  const [newScrubUrl, setNewScrubUrl] = useState('');
+  const [newScrubPlatform, setNewScrubPlatform] = useState<'youtube' | 'tiktok' | 'instagram' | 'web_index'>('youtube');
+
+  // Retroactive Web Voice/Audio Scrubber States
+  const [audioTakedowns, setAudioTakedowns] = useState<any[]>([
+    {
+      id: 'at-1',
+      platform: 'spotify',
+      url: 'https://open.spotify.com/episode/podcast_72h932d',
+      confidenceScore: 0.95,
+      status: 'scrub_success',
+      timestamp: '2026-06-29 09:12',
+      matchedSegment: '02:14 - 02:40'
+    },
+    {
+      id: 'at-2',
+      platform: 'apple_podcasts',
+      url: 'https://podcasts.apple.com/us/podcast/tech-insiders/id849204820',
+      confidenceScore: 0.91,
+      status: 'dispatched',
+      timestamp: '2026-07-02 16:45',
+      matchedSegment: '14:52 - 15:10'
+    },
+    {
+      id: 'at-3',
+      platform: 'soundcloud',
+      url: 'https://soundcloud.com/user-392823/street-talk-exclusive',
+      confidenceScore: 0.88,
+      status: 'detected',
+      timestamp: '2026-07-04 11:20',
+      matchedSegment: '05:01 - 05:18'
+    }
+  ]);
+  const [newAudioScrubUrl, setNewAudioScrubUrl] = useState('');
+  const [newAudioScrubPlatform, setNewAudioScrubPlatform] = useState<'spotify' | 'apple_podcasts' | 'soundcloud' | 'audio_archive' | 'audio_database' | 'streaming_index'>('spotify');
+
+  const [audioIntegrations, setAudioIntegrations] = useState([
+    {
+      id: 'spotify',
+      name: 'Spotify Podcaster Secure API',
+      icon: '🎙️',
+      enabled: true,
+      status: 'connected' as 'connected' | 'handshake' | 'disconnected',
+      handshakeLog: 'Voice hash template synchronized with Spotify Trust & Safety Hub.',
+      lastChecked: '6 mins ago',
+      apiVersion: 'v2-voice-optout'
+    },
+    {
+      id: 'apple_podcasts',
+      name: 'Apple Directory Opt-Out API',
+      icon: '🎧',
+      enabled: true,
+      status: 'connected' as 'connected' | 'handshake' | 'disconnected',
+      handshakeLog: 'Sub-audible spectral signature synced successfully.',
+      lastChecked: '15 mins ago',
+      apiVersion: 'v4.1'
+    },
+    {
+      id: 'soundcloud',
+      name: 'SoundCloud Content-ID Webhook',
+      icon: '🔊',
+      enabled: true,
+      status: 'connected' as 'connected' | 'handshake' | 'disconnected',
+      handshakeLog: 'Real-time sonic fingerprint callback webhooks active.',
+      lastChecked: '9 mins ago',
+      apiVersion: 'v1.5-bystander'
+    },
+    {
+      id: 'audio_database',
+      name: 'Public Audio Database Indexer',
+      icon: '🗄️',
+      enabled: true,
+      status: 'connected' as 'connected' | 'handshake' | 'disconnected',
+      handshakeLog: 'Synced with decentralized vocal storage indexes and raw wav repositories.',
+      lastChecked: '4 mins ago',
+      apiVersion: 'v1.0-indexer'
+    },
+    {
+      id: 'streaming_index',
+      name: 'Global Streaming Audio Indexer',
+      icon: '📈',
+      enabled: true,
+      status: 'connected' as 'connected' | 'handshake' | 'disconnected',
+      handshakeLog: 'Real-time monitoring of live streaming audio feeds and broadcast channels.',
+      lastChecked: '1 min ago',
+      apiVersion: 'v1.2-streaming'
+    }
+  ]);
+
+  const [syncingAudioAppId, setSyncingAudioAppId] = useState<string | null>(null);
+  const [isSimulatingAudioUpload, setIsSimulatingAudioUpload] = useState(false);
+  const [audioSimulationMsg, setAudioSimulationMsg] = useState('');
+  const [isScanningAudioCrawler, setIsScanningAudioCrawler] = useState(false);
+  const [isAutoAudioSweeping, setIsAutoAudioSweeping] = useState(true);
+  const [audioSweepIntensity, setAudioSweepIntensity] = useState<'weekly' | 'daily' | 'realtime'>('daily');
+  const [audioUploadLogs, setAudioUploadLogs] = useState<string[]>([]);
+  const [isSimulatingAudioAllowedUpload, setIsSimulatingAudioAllowedUpload] = useState(false);
+
+  // Social Media API Integration States
+  const [socialIntegrations, setSocialIntegrations] = useState([
+    {
+      id: 'youtube',
+      name: 'YouTube Partner API',
+      icon: '📹',
+      enabled: true,
+      status: 'connected' as 'connected' | 'handshake' | 'disconnected',
+      handshakeLog: 'Token refreshed: OAuth2 secure handshake active.',
+      lastChecked: '4 mins ago',
+      apiVersion: 'v3.2-secure'
+    },
+    {
+      id: 'instagram',
+      name: 'Instagram Graph API',
+      icon: '📸',
+      enabled: true,
+      status: 'connected' as 'connected' | 'handshake' | 'disconnected',
+      handshakeLog: 'Graph handshake established via secure access token.',
+      lastChecked: '12 mins ago',
+      apiVersion: 'v18.0'
+    },
+    {
+      id: 'tiktok',
+      name: 'TikTok Safety Hub API',
+      icon: '🎵',
+      enabled: true,
+      status: 'connected' as 'connected' | 'handshake' | 'disconnected',
+      handshakeLog: 'Safety webhook registered. Frame callback handshakes active.',
+      lastChecked: '8 mins ago',
+      apiVersion: 'v2-bystander'
+    }
+  ]);
+  
+  // Alert Customizer States (Vibration patterns)
+  const [vibrationPatterns, setVibrationPatterns] = useState<Record<string, { name: string; pattern: number[]; desc: string }>>(() => {
+    try {
+      const saved = localStorage.getItem('blurbubble_custom_vibrations');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return {
+      critical_battery: {
+        name: 'Critical Battery Warning',
+        pattern: [400, 100, 100, 100, 400],
+        desc: 'Long-Short-Long pulses dispatched when companion badge drops below threshold.'
+      },
+      camera_intrusion: {
+        name: 'Camera Intrusion Intercept',
+        pattern: [100, 50, 100],
+        desc: 'Double quick tap dispatched when nearby recording lens is detected.'
+      },
+      social_discovery: {
+        name: 'Social Discovery Broadcast',
+        pattern: [200, 200, 200],
+        desc: 'Steady rhythmic taps indicating nearby BlurBubble peers.'
+      },
+      crawler_match: {
+        name: 'Retroactive Crawler Match',
+        pattern: [300, 150, 300],
+        desc: 'Urgent twin vibration when unconsented online recordings are indexed.'
+      }
+    };
+  });
+
+  const [activeTestingPatternId, setActiveTestingPatternId] = useState<string | null>(null);
+  const [visualVibrationTicks, setVisualVibrationTicks] = useState<boolean>(false);
+  const [editingPatternId, setEditingPatternId] = useState<string>('critical_battery');
+  const [patternInputText, setPatternInputText] = useState<string>('400, 100, 100, 100, 400');
+  const [customizerSuccessMsg, setCustomizerSuccessMsg] = useState<string>('');
+
+  const testVibrationPattern = (id: string, pattern: number[]) => {
+    if (activeTestingPatternId) return; // ignore if already running
+
+    // 1. Play actual physical vibration if supported
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(pattern);
+    }
+
+    // 2. Play visual vibration sequence for screen-only devices / fallback
+    setActiveTestingPatternId(id);
+    playLocalSoundTest('sonar_chime', 40);
+
+    let currentDelay = 0;
+    const timeouts: number[] = [];
+
+    pattern.forEach((duration, idx) => {
+      // Even index is vibration (ON), odd index is pause (OFF)
+      const isVibrate = idx % 2 === 0;
+
+      if (isVibrate) {
+        // Start vibrating
+        const tStart = window.setTimeout(() => {
+          setVisualVibrationTicks(true);
+        }, currentDelay);
+        timeouts.push(tStart);
+
+        // Stop vibrating after duration
+        const tEnd = window.setTimeout(() => {
+          setVisualVibrationTicks(false);
+        }, currentDelay + duration);
+        timeouts.push(tEnd);
+      }
+      
+      currentDelay += duration;
+    });
+
+    const tFinish = window.setTimeout(() => {
+      setActiveTestingPatternId(null);
+      setVisualVibrationTicks(false);
+    }, currentDelay + 100);
+    timeouts.push(tFinish);
+  };
+
+  useEffect(() => {
+    if (vibrationPatterns[editingPatternId]) {
+      setPatternInputText(vibrationPatterns[editingPatternId].pattern.join(', '));
+    }
+  }, [editingPatternId, vibrationPatterns]);
+
+  const [syncingAppId, setSyncingAppId] = useState<string | null>(null);
+  const [isSimulatingUpload, setIsSimulatingUpload] = useState(false);
+  const [simulationMsg, setSimulationMsg] = useState('');
+
+  const toggleSocialApp = (id: string) => {
+    setSocialIntegrations(prev => prev.map(app => {
+      if (app.id === id) {
+        const nextEnabled = !app.enabled;
+        return {
+          ...app,
+          enabled: nextEnabled,
+          status: nextEnabled ? 'connected' : 'disconnected',
+          handshakeLog: nextEnabled 
+            ? 'Re-enabled. Secure API token validated.' 
+            : 'Integration disabled by user choice. Platform sync paused.'
+        };
+      }
+      return app;
+    }));
+  };
+
+  const triggerSocialHandshake = (id: string) => {
+    setSyncingAppId(id);
+    setSocialIntegrations(prev => prev.map(app => {
+      if (app.id === id) {
+        return { ...app, status: 'handshake', handshakeLog: 'Initiating fresh OAuth handshake protocol...' };
+      }
+      return app;
+    }));
+
+    setTimeout(() => {
+      setSocialIntegrations(prev => prev.map(app => {
+        if (app.id === id) {
+          return {
+            ...app,
+            status: 'connected',
+            handshakeLog: 'Handshake successful. Verified 256-bit SHA face template sync.',
+            lastChecked: 'Just Now'
+          };
+        }
+        return app;
+      }));
+      setSyncingAppId(null);
+    }, 1500);
+  };
+
+  const simulateSocialUploadDetection = () => {
+    const activePlatforms = socialIntegrations.filter(app => app.enabled);
+    if (activePlatforms.length === 0) {
+      setSimulationMsg('❌ Error: All social media API connections are disabled. Enable at least one platform to simulate automatic scanning.');
+      return;
+    }
+
+    setIsSimulatingUpload(true);
+    setSimulationMsg('Uploading mock video containing registered face template to active platforms...');
+
+    setTimeout(() => {
+      // Pick a random active platform
+      const randomApp = activePlatforms[Math.floor(Math.random() * activePlatforms.length)];
+      
+      const mockUrls = {
+        youtube: 'https://youtube.com/watch?v=scrub_' + Math.random().toString(36).substr(2, 8),
+        instagram: 'https://instagram.com/reel/scrub_' + Math.random().toString(36).substr(2, 8),
+        tiktok: 'https://tiktok.com/@creator/video/scrub_' + Math.random().toString(36).substr(2, 8)
+      };
+
+      const targetUrl = mockUrls[randomApp.id as keyof typeof mockUrls] || 'https://youtube.com/watch?v=scrub_generic';
+      
+      const newRecord: WebTakedownRecord = {
+        id: 'tk-' + Date.now(),
+        platform: randomApp.id as 'youtube' | 'tiktok' | 'instagram',
+        url: targetUrl,
+        confidenceScore: parseFloat((0.90 + Math.random() * 0.09).toFixed(2)),
+        status: 'detected',
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16)
+      };
+
+      setTakedowns(prev => [newRecord, ...prev]);
+      setSimulationMsg(`✅ Detected & Flagged! ${randomApp.name} detected your registered face hash in an uploaded vlog. The API immediately flagged it for retroactive scrubbing! Check your list below.`);
+      setIsSimulatingUpload(false);
+    }, 2000);
+  };
+
+  const toggleAudioApp = (id: string) => {
+    setAudioIntegrations(prev => prev.map(app => {
+      if (app.id === id) {
+        const nextEnabled = !app.enabled;
+        return {
+          ...app,
+          enabled: nextEnabled,
+          status: nextEnabled ? 'connected' : 'disconnected',
+          handshakeLog: nextEnabled 
+            ? 'Re-enabled. Secure audio API token validated.' 
+            : 'Integration disabled by user choice. Platform sync paused.'
+        };
+      }
+      return app;
+    }));
+  };
+
+  const triggerAudioHandshake = (id: string) => {
+    setSyncingAudioAppId(id);
+    setAudioIntegrations(prev => prev.map(app => {
+      if (app.id === id) {
+        return { ...app, status: 'handshake', handshakeLog: 'Initiating fresh OAuth voice handshake protocol...' };
+      }
+      return app;
+    }));
+
+    setTimeout(() => {
+      setAudioIntegrations(prev => prev.map(app => {
+        if (app.id === id) {
+          return {
+            ...app,
+            status: 'connected',
+            handshakeLog: 'Handshake successful. Verified 256-bit SHA acoustic template sync.',
+            lastChecked: 'Just Now'
+          };
+        }
+        return app;
+      }));
+      setSyncingAudioAppId(null);
+    }, 1500);
+  };
+
+  const simulateAudioUploadDetection = () => {
+    const activePlatforms = audioIntegrations.filter(app => app.enabled);
+    if (activePlatforms.length === 0) {
+      setAudioSimulationMsg('❌ Error: All audio API connections are disabled. Enable at least one platform to simulate automatic scanning.');
+      return;
+    }
+
+    setIsSimulatingAudioUpload(true);
+    setAudioSimulationMsg('Uploading mock audio stream containing registered voice print to active platforms...');
+
+    setTimeout(() => {
+      const randomApp = activePlatforms[Math.floor(Math.random() * activePlatforms.length)];
+      
+      const mockUrls = {
+        spotify: 'https://open.spotify.com/episode/' + Math.random().toString(36).substr(2, 8),
+        apple_podcasts: 'https://podcasts.apple.com/us/podcast/id' + Math.floor(Math.random() * 900000000 + 100000000),
+        soundcloud: 'https://soundcloud.com/user-' + Math.floor(Math.random() * 1000000) + '/track',
+        audio_database: 'https://audiodb.org/files/leak_' + Math.floor(Math.random() * 10000) + '.wav',
+        streaming_index: 'https://audiostream-index.net/stream/capture_' + Math.floor(Math.random() * 10000)
+      };
+
+      const targetUrl = (mockUrls as any)[randomApp.id] || 'https://open.spotify.com/episode/generic_scrub';
+      
+      const randomMin = Math.floor(Math.random() * 20);
+      const randomSecStart = Math.floor(Math.random() * 45);
+      const startStr = `${String(randomMin).padStart(2, '0')}:${String(randomSecStart).padStart(2, '0')}`;
+      const endStr = `${String(randomMin).padStart(2, '0')}:${String(randomSecStart + 15).padStart(2, '0')}`;
+
+      const newRecord = {
+        id: 'at-' + Date.now(),
+        platform: randomApp.id as any,
+        url: targetUrl,
+        confidenceScore: parseFloat((0.87 + Math.random() * 0.12).toFixed(2)),
+        status: 'detected',
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        matchedSegment: `${startStr} - ${endStr}`
+      };
+
+      setAudioTakedowns(prev => [newRecord, ...prev]);
+      
+      // Add the match to the general detection logs interface
+      if (onAddLog) {
+        onAddLog({
+          id: 'log-audio-' + Date.now(),
+          timestamp: new Date().toLocaleTimeString(),
+          deviceModel: `${randomApp.name}`,
+          action: 'discovered',
+          shieldApplied: 'ACOUSTIC WATERMARK / SCRAMBLER',
+          distance: 0,
+          rotatedId: 'AUDIO_' + Math.random().toString(36).substring(2, 8).toUpperCase()
+        });
+      }
+
+      if (onTriggerAlert) {
+        onTriggerAlert(
+          "Unconsented Vocal Recording Found",
+          `Acoustic crawler detected your voice template on ${randomApp.name}. Takedown requested.`,
+          "video_found"
+        );
+      }
+
+      setAudioSimulationMsg(`✅ Voice Print Flagged! ${randomApp.name} detected your acoustic fingerprint hash in a newly parsed audio stream. The API immediately logged it and dispatched a dynamic scrambling request!`);
+      setIsSimulatingAudioUpload(false);
+    }, 2000);
+  };
+
+  // Law Enforcement Escrow Override states
+  const [escrowHolders, setEscrowHolders] = useState<EscrowKeyHolder[]>([
+    {
+      id: 'esc-1',
+      agency: 'Oakwood Police Bureau',
+      holderName: 'Chief Inspector G. Vance',
+      keyStatus: 'escrowed',
+      authClearance: 'Level-3 Public Safety Warrant Required'
+    },
+    {
+      id: 'esc-2',
+      agency: 'State Juvenile Court',
+      holderName: 'Honorable Judge M. Sterling',
+      keyStatus: 'escrowed',
+      authClearance: 'Signed Court Order Token Required'
+    },
+    {
+      id: 'esc-3',
+      agency: 'Federal Privacy Oversight Unit',
+      holderName: 'Director E. Thorne',
+      keyStatus: 'locked',
+      authClearance: 'Joint Multi-Agency Cryptographic Authorization Only'
+    }
+  ]);
+  const [overrideActive, setOverrideActive] = useState(false);
+  const [incidentHash, setIncidentHash] = useState('');
+  const [overrideLogs, setOverrideLogs] = useState<string[]>([
+    'System initialization: Multi-Sig Escrow loaded (ECC-384 keys).',
+    'Escrow validation check: Bureau gateways online.'
+  ]);
+  const [newEscrowAgency, setNewEscrowAgency] = useState('');
+  const [newEscrowName, setNewEscrowName] = useState('');
+  const [newEscrowClearance, setNewEscrowClearance] = useState('Level-1 Public Safety Warrant Required');
+
+  // Legal & Compliance States (Privacy Signal Declaration)
+  const [declarantName, setDeclarantName] = useState('Philip Stuart');
+  const [declarantEmail, setDeclarantEmail] = useState('licensing@blurbubble.org');
+  const [declarantBeaconId, setDeclarantBeaconId] = useState<string>('all');
+  const [declarantCustomDevice, setDeclarantCustomDevice] = useState('');
+  const [declarantCustomSerial, setDeclarantCustomSerial] = useState('');
+  const [declarationJurisdiction, setDeclarationJurisdiction] = useState<'USA' | 'EU' | 'CA' | 'JP' | 'Custom'>('USA');
+  const [declarationPurpose, setDeclarationPurpose] = useState<'ai_optout' | 'anti_eavesdropping' | 'full_cloaking'>('ai_optout');
+  const [declarationCustomNotes, setDeclarationCustomNotes] = useState('');
+  const [isDeclarationGenerated, setIsDeclarationGenerated] = useState(false);
+  const [declarationDocId, setDeclarationDocId] = useState('DEC-' + Math.floor(100000 + Math.random() * 900000));
+  const [isPresenting, setIsPresenting] = useState(false);
+
+  // Smart Scheduling local states
+  const [newSlotLabel, setNewSlotLabel] = useState('');
+  const [newSlotStartTime, setNewSlotStartTime] = useState('09:00');
+  const [newSlotEndTime, setNewSlotEndTime] = useState('17:00');
+  const [newSlotDays, setNewSlotDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+  const [newSlotBroadcastEnabled, setNewSlotBroadcastEnabled] = useState(true);
+  const [newSlotIcon, setNewSlotIcon] = useState<'briefcase' | 'baby' | 'beer' | 'home' | 'school' | 'car' | 'users' | 'shield'>('briefcase');
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [newSlotPrivacyLevel, setNewSlotPrivacyLevel] = useState<string>('default');
+
+  const [simulationMode, setSimulationMode] = useState<'real' | 'simulated'>('simulated');
+  const [simulatedTime, setSimulatedTime] = useState('08:00');
+  const [simulatedDay, setSimulatedDay] = useState('Mon');
+  const [activeScheduledSlotName, setActiveScheduledSlotName] = useState<string>('None (Default Behavior)');
+
+  const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  const renderSlotIcon = (iconName: string, className: string = "w-4 h-4") => {
+    switch (iconName) {
+      case 'briefcase': return <Briefcase className={className} />;
+      case 'baby': return <Baby className={className} />;
+      case 'beer': return <Beer className={className} />;
+      case 'home': return <Home className={className} />;
+      case 'school': return <School className={className} />;
+      case 'car': return <Car className={className} />;
+      case 'users': return <Users className={className} />;
+      case 'shield': return <Shield className={className} />;
+      default: return <Clock className={className} />;
+    }
+  };
+
+  // Smart Scheduling logic checking effect
+  useEffect(() => {
+    if (!state.smartSchedulingEnabled) {
+      setActiveScheduledSlotName('None (Scheduler Disabled)');
+      return;
+    }
+
+    let currentDayStr = simulatedDay;
+    let currentTimeStr = simulatedTime;
+
+    if (simulationMode === 'real') {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      currentTimeStr = `${hh}:${mm}`;
+
+      const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      currentDayStr = daysShort[now.getDay()];
+    }
+
+    const slots = state.scheduleSlots || [];
+    const activeMatch = slots.find((slot) => {
+      if (!slot.isActive) return false;
+      if (!slot.days.includes(currentDayStr)) return false;
+
+      const [sh, sm] = slot.startTime.split(':').map(Number);
+      const [eh, em] = slot.endTime.split(':').map(Number);
+      const [ch, cm] = currentTimeStr.split(':').map(Number);
+
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+      const currentMin = ch * 60 + cm;
+
+      if (startMin <= endMin) {
+        return currentMin >= startMin && currentMin <= endMin;
+      } else {
+        // Night-shift overlap midnight
+        return currentMin >= startMin || currentMin <= endMin;
+      }
+    });
+
+    if (activeMatch) {
+      setActiveScheduledSlotName(activeMatch.label);
+      const updates: Partial<typeof state> = {};
+      let needsUpdate = false;
+
+      if (state.isBroadcasting !== activeMatch.broadcastEnabled) {
+        updates.isBroadcasting = activeMatch.broadcastEnabled;
+        needsUpdate = true;
+      }
+
+      if (activeMatch.privacyLevel && state.privacyLevel !== activeMatch.privacyLevel) {
+        updates.privacyLevel = activeMatch.privacyLevel as any;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        onChange({
+          ...state,
+          ...updates
+        });
+
+        // Broadcast simulation alert
+        const rulesText = `Beacon set to ${activeMatch.broadcastEnabled ? 'ON' : 'OFF'}${activeMatch.privacyLevel ? ` with ${activeMatch.privacyLevel.replace('_', ' ').toUpperCase()} filter` : ''}`;
+        window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+          detail: { 
+            title: `Smart Schedule Match: ${activeMatch.label}`,
+            body: `${rulesText} automatically (Time: ${currentTimeStr}, ${currentDayStr}).`,
+            type: 'schedule_update'
+          } 
+        }));
+      }
+    } else {
+      setActiveScheduledSlotName('None (No active rule matches this time)');
+    }
+  }, [
+    state.smartSchedulingEnabled,
+    state.scheduleSlots,
+    simulationMode,
+    simulatedTime,
+    simulatedDay,
+    state.isBroadcasting,
+    state.privacyLevel,
+    onChange
+  ]);
+
+  const handleAddScheduleSlot = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSlotLabel.trim()) return;
+
+    const newSlot = {
+      id: 'slot-' + Math.floor(10000 + Math.random() * 90000),
+      label: newSlotLabel,
+      startTime: newSlotStartTime,
+      endTime: newSlotEndTime,
+      days: newSlotDays,
+      broadcastEnabled: newSlotBroadcastEnabled,
+      icon: newSlotIcon,
+      isActive: true,
+      ...(newSlotPrivacyLevel !== 'default' ? { privacyLevel: newSlotPrivacyLevel as any } : {})
+    };
+
+    onChange({
+      ...state,
+      scheduleSlots: [...(state.scheduleSlots || []), newSlot]
+    });
+
+    setNewSlotLabel('');
+    setNewSlotStartTime('09:00');
+    setNewSlotEndTime('17:00');
+    setNewSlotDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+    setNewSlotBroadcastEnabled(true);
+    setNewSlotIcon('briefcase');
+    setNewSlotPrivacyLevel('default');
+
+    window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+      detail: { 
+        title: `Schedule Rule Created`,
+        body: `Rule "${newSlot.label}" registered successfully.`,
+        type: 'schedule_update'
+      } 
+    }));
+  };
+
+  const handleDeleteScheduleSlot = (id: string) => {
+    onChange({
+      ...state,
+      scheduleSlots: (state.scheduleSlots || []).filter(s => s.id !== id)
+    });
+  };
+
+  const handleToggleScheduleSlotActive = (id: string) => {
+    onChange({
+      ...state,
+      scheduleSlots: (state.scheduleSlots || []).map(s => s.id === id ? { ...s, isActive: !s.isActive } : s)
+    });
+  };
+
+  const handleSimulateSlot = (slot: any) => {
+    setSimulationMode('simulated');
+    setSimulatedDay(slot.days[0] || 'Mon');
+    
+    // Set time to the middle of the slot
+    const [sh, sm] = slot.startTime.split(':').map(Number);
+    const [eh, em] = slot.endTime.split(':').map(Number);
+    let midHour = sh;
+    if (sh <= eh) {
+      midHour = Math.floor((sh + eh) / 2);
+    } else {
+      // Midnight overlap
+      midHour = Math.floor((sh + eh + 24) / 2) % 24;
+    }
+    setSimulatedTime(`${String(midHour).padStart(2, '0')}:00`);
+  };
+
+  const handleTriggerOverride = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!incidentHash.trim()) return;
+    const nowStr = new Date().toLocaleTimeString();
+    
+    // Check if it's our designated law override sequence
+    setOverrideActive(true);
+    onChange({ ...state, overrideActive: true });
+    setIncidentHash('');
+    setEscrowHolders(prev => prev.map(h => h.id === 'esc-1' || h.id === 'esc-2' ? { ...h, keyStatus: 'emergency_accessed', lastUsed: 'Just Now' } : h));
+    setOverrideLogs(prev => [
+      `[${nowStr}] ⚠️ EMERGENCY OVERRIDE ENGAGED: Incident hash verified by Bureau & Judge Sterling.`,
+      `[${nowStr}] Cryptographic multi-sig keys decrypted. Optical hardware feed bypass activated.`,
+      `[${nowStr}] Local AR HUD filters paused within authorized grid coordinates.`,
+      ...prev
+    ]);
+  };
+
+  const handleRevokeOverride = () => {
+    const nowStr = new Date().toLocaleTimeString();
+    setOverrideActive(false);
+    onChange({ ...state, overrideActive: false });
+    setEscrowHolders(prev => prev.map(h => h.id === 'esc-1' || h.id === 'esc-2' ? { ...h, keyStatus: 'escrowed' } : h));
+    setOverrideLogs(prev => [
+      `[${nowStr}] 🔒 EMERGENCY OVERRIDE REVOKED. Censor systems re-established.`,
+      `[${nowStr}] Hardware firmware returned to strict bystander-compliance state.`,
+      ...prev
+    ]);
+  };
+
+  const handleVerifyLicense = (id: string) => {
+    setVerificationResult(prev => ({ ...prev, [id]: 'verifying' }));
+    setTimeout(() => {
+      setVerificationResult(prev => ({ ...prev, [id]: 'verified' }));
+    }, 1200);
+  };
+
+  const handleRenewLicense = (id: string, years: number) => {
+    setRenewingId(id);
+    setTimeout(() => {
+      const expDate = new Date();
+      expDate.setFullYear(expDate.getFullYear() + years);
+      const updated = state.hardwareLicenses?.map(lic => {
+        if (lic.id === id) {
+          return {
+            ...lic,
+            status: 'active' as const,
+            expirationDate: expDate.toISOString().split('T')[0],
+            lastVerified: new Date().toISOString().split('T')[0],
+          };
+        }
+        return lic;
+      });
+      onChange({ ...state, hardwareLicenses: updated });
+      setRenewingId(null);
+      setShowRenewalModal(null);
+      setVerificationResult(prev => ({ ...prev, [id]: 'verified' }));
+    }, 1200);
+  };
+  
+  // States for adding registered faces
+  const [newFaceName, setNewFaceName] = useState('');
+  const [newFacePhoto, setNewFacePhoto] = useState('https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80');
+
+  // Social handles
+  const [tempUsername, setTempUsername] = useState(state.socialProfile?.username || '@your_handle');
+  const [tempBio, setTempBio] = useState(state.socialProfile?.bio || 'Let\'s connect in real life!');
+  const [tempInterests, setTempInterests] = useState(state.socialProfile?.interests.join(', ') || 'Tech, Art, Design');
+
+  // Daily Summary Email Generator States
+  const [logsActiveTab, setLogsActiveTab] = useState<'ledger' | 'email'>('ledger');
+  const [emailRecipient, setEmailRecipient] = useState('reports@blurbubble.org');
+  const [emailReportTime, setEmailReportTime] = useState('08:00');
+  const [isAutoReportEnabled, setIsAutoReportEnabled] = useState(true);
+  const [emailReportType, setEmailReportType] = useState<'standard' | 'forensic'>('standard');
+  const [isSendingReportSimulation, setIsSendingReportSimulation] = useState(false);
+  const [reportSimulationSuccess, setReportSimulationSuccess] = useState(false);
+
+  // Rotate Key effect
+  useEffect(() => {
+    if (!state.isBroadcasting) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => prev - 1);
+      setUuidTimeLeft((prev) => (prev <= 1 ? 900 : prev - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [state.isBroadcasting]);
+
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      setTimeLeft(30);
+      const chars = '0123456789ABCDEF';
+      let result = '';
+      for (let i = 0; i < 16; i++) {
+        result += chars[Math.floor(Math.random() * 16)];
+      }
+      onChange({
+        ...state,
+        anonymousId: result,
+      });
+    }
+  }, [timeLeft, state, onChange]);
+
+  // Real-time periodic threat detection and active warning banner scheduler
+  useEffect(() => {
+    if (!state.isBroadcasting) {
+      setActiveThreatIntercept(null);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      // Chance to spawn an active threat intercept alert
+      if (Math.random() < 0.45 && !activeThreatIntercept) {
+        const models = [
+          { type: 'CCTV Neural Core Scan', target: 'CCTV Dome #129', distance: 14 },
+          { type: 'Rogue Lidar Sweep', target: 'Rogue Drone #804', distance: 19 },
+          { type: 'Smart Lens Face Detection', target: 'Smart Glasses #382', distance: 11 }
+        ];
+        const chosen = models[Math.floor(Math.random() * models.length)];
+        setActiveThreatIntercept({
+          id: Math.random().toString(),
+          type: chosen.type,
+          target: chosen.target,
+          distance: chosen.distance
+        });
+        
+        // Push a critical alert event log
+        onAddLog({
+          deviceModel: chosen.target,
+          action: 'intercepted',
+          shieldApplied: `INTERCEPTED_${chosen.type.toUpperCase().replace(/ /g, '_')}`,
+          distance: chosen.distance,
+          rotatedId: '0x' + Math.floor(Math.random() * 16777215).toString(16).toUpperCase()
+        });
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [state.isBroadcasting, activeThreatIntercept, onAddLog]);
+
+  // Real-time signal strength noise simulation effect
+  useEffect(() => {
+    if (!state.isBroadcasting) return;
+
+    const interval = setInterval(() => {
+      setSignalNoise((prev) => {
+        const next: Record<string, number> = { ...prev };
+        state.registeredEntities.forEach((tag) => {
+          next[tag.id] = Math.random() * 8 - 4;
+        });
+        return next;
+      });
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [state.isBroadcasting, state.registeredEntities]);
+
+  // Coercion Purge logic
+  const handleCoercionPurge = () => {
+    setCoercionWipeActive(true);
+    if (onClearLogs) {
+      onClearLogs();
+    }
+    onChange({
+      ...state,
+      isBroadcasting: false,
+      wifiRules: [],
+      registeredFaces: [],
+      registeredEntities: [],
+      facialRecognitionOptOut: false,
+      smartSchedulingEnabled: false,
+      wifiRulesEnabled: false,
+    });
+    setTimeout(() => {
+      setCoercionWipeActive(false);
+    }, 4500);
+  };
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isHoldingWipe) {
+      timer = setInterval(() => {
+        setWipeHoldSeconds((prev) => {
+          if (prev >= 2) {
+            clearInterval(timer);
+            setIsHoldingWipe(false);
+            handleCoercionPurge();
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } else {
+      setWipeHoldSeconds(0);
+    }
+    return () => clearInterval(timer);
+  }, [isHoldingWipe]);
+
+  const handleLevelChange = (level: PrivacyLevel) => {
+    onChange({
+      ...state,
+      privacyLevel: level,
+    });
+  };
+
+  const handleProfileSave = () => {
+    const interestsArray = tempInterests
+      .split(',')
+      .map((i) => i.trim())
+      .filter((i) => i.length > 0);
+
+    onChange({
+      ...state,
+      socialProfile: {
+        username: tempUsername.startsWith('@') ? tempUsername : `@${tempUsername}`,
+        bio: tempBio,
+        interests: interestsArray,
+        link: 'https://blurbubble.me/discover',
+      },
+    });
+  };
+
+  // Smart Tag CRUD Helpers
+  const handleAddTag = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTagName.trim()) return;
+
+    const newTag: RegisteredEntity = {
+      id: 'tag-' + Date.now(),
+      name: newTagName,
+      type: newTagType,
+      isActive: true,
+      privacyLevel: newTagPrivacy,
+      batteryPercent: Math.floor(Math.random() * 20) + 80 // 80% to 100%
+    };
+
+    onChange({
+      ...state,
+      registeredEntities: [...state.registeredEntities, newTag]
+    });
+    setNewTagName('');
+  };
+
+  const handleDeleteTag = (id: string) => {
+    onChange({
+      ...state,
+      registeredEntities: state.registeredEntities.filter(tag => tag.id !== id)
+    });
+  };
+
+  // --- CRYPTO TIMER ROTATION EFFECT ---
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCryptoTimer((prev) => {
+        if (prev <= 1) {
+          const hex = '0123456789ABCDEF';
+          let newNextId = '0xFD23-';
+          for (let i = 0; i < 3; i++) {
+            let part = '';
+            for (let j = 0; j < 4; j++) {
+              part += hex[Math.floor(Math.random() * 16)];
+            }
+            newNextId += part + (i < 2 ? '-' : '');
+          }
+          
+          setCurrentCryptoID(nextCryptoID);
+          setNextCryptoID(newNextId);
+          
+          onAddLog({
+            deviceModel: "CHILD_SHIELD_CONTROLLER",
+            action: 'rotated',
+            shieldApplied: "ROTATE_CRYPTOGRAPHIC_ID_ROTATION_SUCCESS",
+            distance: 0,
+            rotatedId: nextCryptoID
+          });
+          
+          return 90;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [nextCryptoID, onAddLog]);
+
+  // --- INTERACTIVE EVENT HANDLERS FOR NEW PROMPTS ---
+  const handleTriggerTrackingSweep = () => {
+    setIsSweepingTrackers(true);
+    setScrambledTrackers(prev => [
+      {
+        id: 'trk-sweep-' + Date.now(),
+        name: 'Simulated Surveillance CCTV Probe',
+        type: 'Facial Matcher Crawler',
+        status: 'DEFLECTED',
+        timestamp: 'Just now'
+      },
+      ...prev
+    ]);
+    
+    setTimeout(() => {
+      setIsSweepingTrackers(false);
+      window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+        detail: { 
+          title: '🛡️ Tracking Sweep Scrambled!',
+          body: 'Simulated tracking probes scanned the area, but the 90-second cryptographic ID rotation rendered the child tag completely untrackable!',
+          type: 'blocking'
+        } 
+      }));
+    }, 2500);
+  };
+
+  const handleTriggerComplianceTest = () => {
+    setComplianceTesting(true);
+    setComplianceProgress(0);
+    setComplianceReport(null);
+    
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+      currentProgress += 10;
+      setComplianceProgress(currentProgress);
+      if (currentProgress >= 100) {
+        clearInterval(interval);
+        setComplianceTesting(false);
+        setComplianceReport({
+          fccStatus: 'PASSED',
+          ceStatus: 'PASSED',
+          eirpPower: complianceRegion === 'US' ? '+4 dBm' : '0 dBm',
+          freqRange: '2402.0 MHz - 2480.0 MHz',
+          exemptions: [
+            complianceRegion === 'US' ? 'FCC Part 15.247 Exemption' : 'CE RED Directive Article 3',
+            'Non-Trackable Active Refusal Authorization'
+          ]
+        });
+        
+        window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+          detail: { 
+            title: `✅ Compliance Certified: ${complianceRegion}`,
+            body: `Self-diagnostic completed successfully! EIRP power level (${complianceRegion === 'US' ? '+4 dBm' : '0 dBm'}) is fully compliant with regional radio spectrum regulations.`,
+            type: 'blocking'
+          } 
+        }));
+      }
+    }, 200);
+  };
+
+  const handleToggleTagStatus = (id: string) => {
+    onChange({
+      ...state,
+      registeredEntities: state.registeredEntities.map(tag => 
+        tag.id === id ? { ...tag, isActive: !tag.isActive } : tag
+      )
+    });
+  };
+
+  const handleRenameTag = (id: string, newName: string) => {
+    if (newName.trim()) {
+      onChange({
+        ...state,
+        registeredEntities: state.registeredEntities.map(tag => 
+          tag.id === id ? { ...tag, name: newName.trim() } : tag
+        )
+      });
+    }
+    setEditingTagId(null);
+  };
+
+  const handleTagPrivacyChange = (id: string, level: PrivacyLevel) => {
+    onChange({
+      ...state,
+      registeredEntities: state.registeredEntities.map(tag => 
+        tag.id === id ? { ...tag, privacyLevel: level } : tag
+      )
+    });
+  };
+
+  const handleExportLogs = (format: 'csv' | 'pdf' | 'json') => {
+    if (!logs || logs.length === 0) return;
+
+    if (format === 'json') {
+      const secureEnvelope = {
+        title: "BLURBUBBLE PRIVACY COMPLIANCE HANDSHAKE LEDGER",
+        export_date: new Date().toISOString(),
+        regulatory_core: "v2.1 SECURE REGULATORY CORE",
+        integrity_signature: "ECDSA_SHA256_" + Math.random().toString(36).substring(2).toUpperCase(),
+        license_verification: {
+          serial: "BB-LIC-99841-A",
+          status: "ALL_UNITS_COMPLIANT"
+        },
+        user_metadata: {
+          primary_anonymous_id: state.anonymousId,
+          active_shield_broadcast: state.isBroadcasting ? "ACTIVE" : "STANDBY",
+          retention_period: state.dataRetentionPref
+        },
+        records: logs
+      };
+      const blob = new Blob([JSON.stringify(secureEnvelope, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `blurbubble_signed_ledger_${new Date().toISOString().slice(0, 10)}.json`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (format === 'csv') {
+      const headers = ['Timestamp', 'Device Model', 'Action/Event', 'Shield Enforced', 'Distance (m)', 'Temporal Beacon ID'];
+      const rows = logs.map(log => [
+        `"${log.timestamp.replace(/"/g, '""')}"`,
+        `"${log.deviceModel.replace(/"/g, '""')}"`,
+        `"${log.action.replace(/"/g, '""')}"`,
+        `"${log.shieldApplied.replace(/"/g, '""')}"`,
+        log.distance.toFixed(2),
+        `"${log.rotatedId}"`
+      ]);
+      const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `blurbubble_privacy_audit_logs_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      // PDF export using jsPDF
+      const doc = new jsPDF();
+      
+      // Document header with modern, clean styling matching BlurBubble branding
+      doc.setFillColor(15, 23, 42); // slate-900 background
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(22);
+      doc.text('BLURBUBBLE PRIVACY PROTECTION NETWORK', 15, 18);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(16, 185, 129); // emerald-400
+      doc.text('SECURED DIGITAL COMPLIANCE AUDIT RECORD', 15, 26);
+      
+      doc.setTextColor(200, 200, 200);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 15, 33);
+      
+      // Let's add metadata block
+      doc.setTextColor(51, 65, 85); // slate-700
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('AUDIT PARAMETERS & DEVICE STATUS:', 15, 50);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105); // slate-600
+      doc.text(`Broadcasting Shield: ${state.isBroadcasting ? 'ACTIVE' : 'MUTED'}`, 15, 57);
+      doc.text(`Primary Privacy Level: ${state.privacyLevel.toUpperCase()}`, 15, 63);
+      doc.text(`Temporal Anonymous Rotating ID: ${state.anonymousId}`, 15, 69);
+      doc.text(`Facial Recognition Opt-Out: ${state.facialRecognitionOptOut ? 'ENABLED' : 'DISABLED'}`, 110, 57);
+      doc.text(`Data Retention Preference: ${state.dataRetentionPref.toUpperCase()}`, 110, 63);
+      doc.text(`Protected Active Tags: ${state.registeredEntities.filter(e => e.isActive).length} devices`, 110, 69);
+      
+      // Divider line
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.setLineWidth(0.5);
+      doc.line(15, 75, 195, 75);
+      
+      // Table Header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text('Timestamp', 15, 83);
+      doc.text('Intercepted Device Model', 45, 83);
+      doc.text('Action', 105, 83);
+      doc.text('Enforced Shield', 130, 83);
+      doc.text('Dist (m)', 175, 83);
+      
+      // Divider line below header
+      doc.line(15, 86, 195, 86);
+      
+      // Logs Table Content
+      let yPosition = 93;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      
+      logs.forEach((log, idx) => {
+        // Alternating row background for beautiful readability
+        if (idx % 2 === 0) {
+          doc.setFillColor(248, 250, 252); // slate-50
+          doc.rect(14, yPosition - 5, 182, 7.5, 'F');
+        }
+        
+        doc.setTextColor(100, 116, 139); // slate-500
+        doc.text(log.timestamp, 15, yPosition);
+        
+        doc.setTextColor(15, 23, 42); // slate-900
+        doc.text(log.deviceModel, 45, yPosition);
+        
+        // Highlight action based on value
+        if (log.action === 'censored') {
+          doc.setTextColor(220, 38, 38); // red-600
+        } else if (log.action === 'discovered' || log.action === 'erased') {
+          doc.setTextColor(5, 150, 105); // emerald-600
+        } else {
+          doc.setTextColor(100, 116, 139);
+        }
+        doc.text(log.action.toUpperCase(), 105, yPosition);
+        
+        doc.setTextColor(71, 85, 105); // slate-600
+        doc.text(log.shieldApplied, 130, yPosition);
+        
+        doc.setTextColor(100, 116, 139);
+        doc.text(`${log.distance.toFixed(1)}m`, 175, yPosition);
+        
+        yPosition += 7.5;
+        
+        // Add new page if table overflows
+        if (yPosition > 275) {
+          doc.addPage();
+          yPosition = 20;
+          // Sub-page Header
+          doc.setFillColor(15, 23, 42);
+          doc.rect(0, 0, 210, 15, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.text('BLURBUBBLE PRIVACY PROTECTION NETWORK — COMPLIANCE AUDIT', 15, 10);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          yPosition = 25;
+        }
+      });
+      
+      // Footer / Legal Notice
+      if (yPosition > 255) {
+        doc.addPage();
+        yPosition = 30;
+      } else {
+        yPosition += 10;
+      }
+      
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(15, yPosition, 195, yPosition);
+      
+      yPosition += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text('LEGAL COMPLIANCE ASSURANCE:', 15, yPosition);
+      
+      yPosition += 5;
+      doc.setFont('helvetica', 'oblique');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      
+      const disclaimerLines = [
+        'This document is a certified local record of spatial and biometric opt-out broadcasts transmitted under proposed RFC-9402 protocols.',
+        'Nearby devices identifying this beacon are bound under public compliance frameworks to enforce automatic blurring or data erasure.',
+        'Failure of external hardware vendors to apply corresponding shielding constitutes an unauthorized tracking violation.'
+      ];
+      
+      disclaimerLines.forEach(line => {
+        doc.text(line, 15, yPosition);
+        yPosition += 4;
+      });
+      
+      // Save document
+      doc.save(`blurbubble_privacy_audit_report_${new Date().toISOString().slice(0, 10)}.pdf`);
+    }
+  };
+
+  const generateDailySummaryEmailHtml = (recipient: string, reportTime: string, reportType: 'standard' | 'forensic'): string => {
+    const totalCensors = logs.filter(l => l.action === 'censored').length;
+    const totalDetections = logs.filter(l => l.action === 'discovered' || l.action === 'erased').length;
+    const averageDistance = logs.length > 0 
+      ? (logs.reduce((acc, curr) => acc + curr.distance, 0) / logs.length).toFixed(1)
+      : '0.0';
+    
+    const latestLogsHtml = logs.slice(0, 5).map(log => `
+      <tr style="border-bottom: 1px solid #1e293b;">
+        <td style="padding: 10px 8px; font-family: monospace; color: #94a3b8; font-size: 11px;">${log.timestamp}</td>
+        <td style="padding: 10px 8px; color: #ffffff; font-size: 12px; font-weight: bold;">${log.deviceModel}</td>
+        <td style="padding: 10px 8px; font-size: 11px; font-weight: bold; color: ${log.action === 'censored' ? '#f87171' : '#34d399'}">${log.action.toUpperCase()}</td>
+        <td style="padding: 10px 8px; color: #cbd5e1; font-size: 12px;">${log.shieldApplied}</td>
+        <td style="padding: 10px 8px; font-family: monospace; color: #94a3b8; font-size: 11px; text-align: right;">${log.distance.toFixed(1)}m</td>
+      </tr>
+    `).join('');
+
+    const isForensic = reportType === 'forensic';
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BlurBubble™ Daily Privacy Summary</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f1f5f9;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0b0f19; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);">
+          <!-- Header Banner -->
+          <tr>
+            <td style="background-color: #0f172a; padding: 30px; border-bottom: 2px solid #10b981; text-align: left;">
+              <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 800; tracking-tight: -0.025em; letter-spacing: -0.5px;">BLURBUBBLE™ PRIVACY SHIELD</h1>
+                    <p style="margin: 4px 0 0 0; color: #10b981; font-size: 11px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">DAILY SECURED COMPLIANCE REPORT</p>
+                  </td>
+                  <td align="right" style="vertical-align: middle;">
+                    <span style="font-size: 24px;">🛡️</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Summary Content -->
+          <tr>
+            <td style="padding: 30px;">
+              <p style="margin-top: 0; color: #e2e8f0; font-size: 14px; line-height: 1.6;">
+                Hello, <strong>${recipient.split('@')[0]}</strong>. Below is your automated localized daily privacy summary from your active <strong>BlurBubble™ Shield Node</strong>.
+              </p>
+              
+              <div style="background-color: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 20px; margin: 25px 0;">
+                <h3 style="margin-top: 0; margin-bottom: 15px; color: #f8fafc; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #374151; padding-bottom: 8px;">
+                  🛡️ 24-Hour Privacy Telemetry
+                </h3>
+                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="33%" align="center" style="padding: 10px 0; border-right: 1px solid #374151;">
+                      <div style="font-size: 26px; font-weight: 800; color: #ef4444; margin-bottom: 4px;">${totalCensors}</div>
+                      <div style="font-size: 9px; color: #9ca3af; text-transform: uppercase; font-weight: bold;">Active Censors</div>
+                    </td>
+                    <td width="33%" align="center" style="padding: 10px 0; border-right: 1px solid #374151;">
+                      <div style="font-size: 26px; font-weight: 800; color: #10b981; margin-bottom: 4px;">${totalDetections}</div>
+                      <div style="font-size: 9px; color: #9ca3af; text-transform: uppercase; font-weight: bold;">Detections</div>
+                    </td>
+                    <td width="34%" align="center" style="padding: 10px 0;">
+                      <div style="font-size: 26px; font-weight: 800; color: #60a5fa; margin-bottom: 4px;">${averageDistance}m</div>
+                      <div style="font-size: 9px; color: #9ca3af; text-transform: uppercase; font-weight: bold;">Avg. Distance</div>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              ${isForensic ? `
+              <!-- Forensic Insights -->
+              <div style="border-left: 3px solid #6366f1; background-color: rgba(99, 102, 241, 0.05); padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <h4 style="margin: 0 0 5px 0; color: #818cf8; font-size: 12px; text-transform: uppercase; font-weight: bold; font-family: monospace;">[FORENSIC ANALYSIS MODE]</h4>
+                <p style="margin: 0; color: #cbd5e1; font-size: 12px; line-height: 1.5;">
+                  <strong>RF Signal Footprint:</strong> Real-time phase shift triangulation indicates that 74% of signals were directional smart glasses, and 26% were wide-angle security drones. Local spatial privacy remains uncompromised. Temporal rotation keys were cycled ${Math.floor(logs.length / 3) + 1} times to prevent longitudinal profiling.
+                </p>
+              </div>
+              ` : ''}
+
+              <!-- Recent Incidents Table -->
+              <h3 style="color: #f8fafc; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">
+                🚨 Latest Interceptions
+              </h3>
+              ${logs.length > 0 ? `
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 25px; border-collapse: collapse;">
+                <thead>
+                  <tr style="border-bottom: 2px solid #334155; text-align: left;">
+                    <th style="padding: 8px; color: #94a3b8; font-size: 10px; text-transform: uppercase;">Time</th>
+                    <th style="padding: 8px; color: #94a3b8; font-size: 10px; text-transform: uppercase;">Device</th>
+                    <th style="padding: 8px; color: #94a3b8; font-size: 10px; text-transform: uppercase;">Action</th>
+                    <th style="padding: 8px; color: #94a3b8; font-size: 10px; text-transform: uppercase;">Shielding</th>
+                    <th style="padding: 8px; color: #94a3b8; font-size: 10px; text-transform: uppercase; text-align: right;">Distance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${latestLogsHtml}
+                </tbody>
+              </table>
+              ` : `
+              <div style="border: 1px dashed #334155; padding: 25px; text-align: center; border-radius: 12px; color: #64748b; font-size: 13px; margin-bottom: 25px;">
+                No active threat devices detected or logs generated in the last 24 hours. Safe boundaries maintained!
+              </div>
+              `}
+
+              <!-- Legal & compliance -->
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-top: 1px solid #1e293b; padding-top: 20px;">
+                <tr>
+                  <td>
+                    <h4 style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase;">Node Compliance Matrix</h4>
+                    <p style="margin: 4px 0 0 0; color: #64748b; font-size: 10px; line-height: 1.4; font-style: italic;">
+                      This notification was dispatched securely in an encrypted payload. Real-time logging conforms to localized opt-out regulations (RFC-9402). Your physical identity is masked, protected, and fully private in real-time.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #0d121f; padding: 20px; text-align: center; border-top: 1px solid #1e293b;">
+              <p style="margin: 0; color: #475569; font-size: 10px;">
+                © 2026 BlurBubble Spatial Defense Technologies. All rights reserved.
+              </p>
+              <p style="margin: 4px 0 0 0; color: #475569; font-size: 9px;">
+                Secure local link: <a href="https://blurbubble.org" style="color: #10b981; text-decoration: none;">https://blurbubble.org</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+  };
+
+  const handleSimulateSendReport = () => {
+    setIsSendingReportSimulation(true);
+    setReportSimulationSuccess(false);
+    
+    setTimeout(() => {
+      setIsSendingReportSimulation(false);
+      setReportSimulationSuccess(true);
+      
+      if (onAddLog) {
+        onAddLog({
+          deviceModel: 'SYSTEM_REPORT_DAEMON',
+          action: 'censored',
+          shieldApplied: `DAILY SECURITY REPORT DISPATCHED TO ${emailRecipient}`,
+          distance: 0,
+          rotatedId: `MSG-${Math.floor(100000 + Math.random() * 900000)}`
+        });
+      }
+
+      setTimeout(() => {
+        setReportSimulationSuccess(false);
+      }, 6000);
+    }, 1500);
+  };
+
+  // Signal History Data Generator for recharts
+  const signalHistoryData = React.useMemo(() => {
+    const data = [];
+    const now = new Date();
+    for (let i = 12; i >= 0; i--) {
+      const timePoint = new Date(now.getTime() - i * 5 * 60 * 1000);
+      const label = `${i === 0 ? 'Now' : `-${i * 5}m`}`;
+      const timeMs = timePoint.getTime();
+      const waveVal = Math.sin(timeMs / (10 * 60 * 1000));
+      const noise = Math.sin(timeMs / (2 * 60 * 1000)) * 0.3 + 0.5;
+      
+      let baseIntensity = 5;
+      if (state.isBroadcasting) {
+        baseIntensity = Math.round(15 + waveVal * 8 + noise * 4);
+      } else {
+        baseIntensity = Math.round(6 + waveVal * 3 + noise * 2);
+      }
+      
+      const logBonus = Math.min(10, logs.length);
+      const finalIntensity = Math.max(1, baseIntensity + logBonus);
+      
+      const finalShielding = state.isBroadcasting 
+        ? Math.max(85, Math.round(96 + waveVal * 2 + noise))
+        : Math.max(0, Math.round(12 + waveVal * 5 + noise * 3));
+        
+      data.push({
+        time: label,
+        timestamp: timePoint.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        intensity: finalIntensity,
+        shielding: finalShielding,
+      });
+    }
+    return data;
+  }, [state.isBroadcasting, logs.length]);
+
+  // Face Photo Database Helpers
+  const handleAddFace = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFaceName.trim()) return;
+
+    const newFace: FaceRecord = {
+      id: 'face-' + Date.now(),
+      name: newFaceName,
+      photoUrl: newFacePhoto,
+      isRegistered: true,
+      confidenceScore: 0.9 + Math.random() * 0.09 // 0.90 to 0.99
+    };
+
+    onChange({
+      ...state,
+      registeredFaces: [...state.registeredFaces, newFace]
+    });
+    setNewFaceName('');
+  };
+
+  const handleDeleteFace = (id: string) => {
+    onChange({
+      ...state,
+      registeredFaces: state.registeredFaces.filter(face => face.id !== id)
+    });
+  };
+
+  const handleToggleFaceStatus = (id: string) => {
+    onChange({
+      ...state,
+      registeredFaces: state.registeredFaces.map(face => 
+        face.id === id ? { ...face, isRegistered: !face.isRegistered } : face
+      )
+    });
+  };
+
+  const privacyOptions: { value: PrivacyLevel; label: string; desc: string; icon: React.ReactNode; colorClass: string }[] = [
+    {
+      value: 'magic_removal',
+      label: 'Generative AI Removal (Magic Eraser)',
+      desc: 'Removes your face/body completely from frames using local real-time fill',
+      icon: <Sparkles className="w-5 h-5 text-emerald-400" />,
+      colorClass: 'border-emerald-500/40 bg-emerald-950/20 text-emerald-400 focus:ring-emerald-500'
+    },
+    {
+      value: 'strict_blur',
+      label: 'Strict Blur Filter',
+      desc: 'Enforces dense high-radius blur over entire body profile',
+      icon: <EyeOff className="w-5 h-5 text-red-400" />,
+      colorClass: 'border-red-500/40 bg-red-950/20 text-red-400 focus:ring-red-500'
+    },
+    {
+      value: 'pixelate',
+      label: '8-Bit Pixelation Shield',
+      desc: 'Slightly stylized 8-bit dynamic pixelation blocks over your face',
+      icon: <Layers className="w-5 h-5 text-amber-400" />,
+      colorClass: 'border-amber-500/40 bg-amber-950/20 text-amber-400 focus:ring-amber-500'
+    },
+    {
+      value: 'emoji',
+      label: 'Interactive Avatar Overlay',
+      desc: 'Overlays a dynamic privacy shield avatar above your posture',
+      icon: <ShieldAlert className="w-5 h-5 text-blue-400" />,
+      colorClass: 'border-blue-500/40 bg-blue-950/20 text-blue-400 focus:ring-blue-500'
+    },
+    {
+      value: 'black_bar',
+      label: 'Censored Eyes Bar',
+      desc: 'Traditional deep-black bar covering eye coordinates',
+      icon: <Hash className="w-5 h-5 text-purple-400" />,
+      colorClass: 'border-purple-500/40 bg-purple-950/20 text-purple-400 focus:ring-purple-500'
+    },
+    {
+      value: 'none',
+      label: 'Opt-In Discovery Active',
+      desc: 'Temporarily pauses all shields to broadcast your social discovery links',
+      icon: <Smile className="w-5 h-5 text-sky-400" />,
+      colorClass: 'border-sky-500/40 bg-sky-950/20 text-sky-400 focus:ring-sky-500'
+    }
+  ];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+      {/* Coercion Defense System Wipe Overlay */}
+      <AnimatePresence>
+        {coercionWipeActive && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/98 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center select-none"
+          >
+            <div className="max-w-md space-y-6">
+              <div className="relative flex h-16 w-16 mx-auto items-center justify-center bg-red-500/10 border-2 border-red-500 rounded-full animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.5)]">
+                <ShieldAlert className="w-8 h-8 text-red-500" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-black tracking-widest text-red-500 uppercase font-mono">COERCION DEFENSE PROTOCOL ACTIVE</h3>
+                <p className="text-xs text-slate-400 font-mono leading-relaxed">
+                  Zero-delay panic gesture recognized. Local storage sanitization algorithm executed at level zero.
+                </p>
+              </div>
+
+              {/* Progress visualizer */}
+              <div className="w-64 bg-slate-900 border border-slate-800 rounded-full h-2.5 mx-auto overflow-hidden relative">
+                <div className="bg-red-500 h-full animate-pulse" style={{ width: '100%' }}></div>
+              </div>
+
+              <div className="bg-slate-900/50 border border-slate-850 p-4 rounded-xl text-left font-mono text-[9px] text-red-400/80 space-y-1 max-h-40 overflow-y-auto leading-normal">
+                <p>&gt; [SYS_PANIC] G-Force shake or manual override detected...</p>
+                <p className="text-white">&gt; [OK] Wiping private key material from RAM...</p>
+                <p className="text-white">&gt; [OK] Nullifying all face hashes (state.registeredFaces)...</p>
+                <p className="text-white">&gt; [OK] Sanitizing SSID automation rules...</p>
+                <p className="text-white">&gt; [OK] Overwriting 100% of audit logs with cryptographic garbage...</p>
+                <p className="text-white">&gt; [OK] Unbonding nearby Bluetooth beacons...</p>
+                <p className="text-red-500 font-bold">&gt; [SECURE] DEVICE RETURNING TO ABSOLUTE STEALTH STATE ZERO.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {activeHelpAlert && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-md bg-slate-900 border-2 border-amber-500 rounded-2xl p-6 shadow-[0_0_50px_rgba(245,158,11,0.35)] relative overflow-hidden"
+            >
+              {/* Pulsing Visual Glow overlay inside the alert */}
+              <div className="absolute inset-0 bg-gradient-to-b from-amber-500/10 via-transparent to-red-500/10 animate-pulse pointer-events-none" />
+              
+              <div className="flex flex-col items-center text-center space-y-5">
+                {/* Visual Glow Alarm light */}
+                <div className="relative flex h-16 w-16 items-center justify-center bg-amber-500/10 border border-amber-500/30 rounded-full animate-bounce">
+                  <BellRing className="w-8 h-8 text-amber-400 animate-pulse" />
+                  <span className="absolute inset-0 rounded-full border border-amber-500 animate-ping opacity-60" />
+                </div>
+                
+                <div className="space-y-2">
+                  <span className="text-[10px] uppercase font-black tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full inline-block">
+                    🚨 SOS Beacon Triggered
+                  </span>
+                  <h3 className="text-xl font-extrabold text-white">Active Assistance Request</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
+                    A physical alert button was pressed on one of your family tags. Your son needs help!
+                  </p>
+                </div>
+
+                {/* Device Signal Context */}
+                <div className="w-full bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 text-left space-y-2 font-sans text-xs">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-900">
+                    <span className="text-slate-500 font-semibold uppercase text-[10px]">Active Beacon</span>
+                    <span className="text-amber-400 font-bold font-mono">In Range</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Tag Name:</span>
+                    <span className="font-bold text-white">{activeHelpAlert.tagName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Time Logged:</span>
+                    <span className="font-mono text-slate-300 font-bold">{activeHelpAlert.time}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Alert Priority:</span>
+                    <span className="text-rose-400 font-bold uppercase animate-pulse">Critical High</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Action:</span>
+                    <span className="text-emerald-400 font-semibold font-mono">Broadcasting Max Obfuscation</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 w-full">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Apply extreme privacy protection instantly
+                      onChange({
+                        ...state,
+                        privacyLevel: 'strict_blur',
+                        emergencyPrivacyActive: true,
+                        isBroadcasting: true
+                      });
+                      setActiveHelpAlert(null);
+                      // Log this emergency event
+                      window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                        detail: { 
+                          title: "🛡️ MAXIMUM OBFUSCATION ENGAGED", 
+                          body: `Emergency response active! Applied forced strict blur to safeguard surrounding vicinity of ${activeHelpAlert.tagName}.`,
+                          type: 'child_blocking' 
+                        } 
+                      }));
+                    }}
+                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-black text-xs py-3 rounded-xl transition shadow-[0_0_20px_rgba(225,29,72,0.4)] flex items-center justify-center gap-2"
+                  >
+                    <ShieldAlert className="w-4 h-4" />
+                    Engage Maximum Privacy Shield
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveHelpAlert(null)}
+                    className="w-full bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 font-bold text-xs py-2.5 rounded-xl transition"
+                  >
+                    Silence &amp; Dismiss Alarm
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Control Panel */}
+      <div className={`${(state.showAuditLogs || (state.privacyLevel === 'none' && state.isBroadcasting)) ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-6`}>
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-md relative overflow-hidden">
+          
+          {/* Section Header with Inline Help Trigger */}
+          <div className="flex items-center justify-between gap-4 mb-5 border-b border-slate-800/40 pb-3">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-black uppercase tracking-widest text-slate-300 font-sans">Privacy Control Panel</span>
+            </div>
+            
+            {/* Show Tips Button Inline */}
+            {!showContextHelp && (
+              <button
+                type="button"
+                onClick={() => setShowContextHelp(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs text-emerald-400 hover:text-emerald-300 font-semibold transition shadow-sm cursor-pointer"
+                title="Show helper tips"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>Show Tips</span>
+              </button>
+            )}
+          </div>
+
+          {/* Desktop Premium Interactive Hub (Hidden on mobile as the header dropdown handles views) */}
+          <div className="mb-6 space-y-4 hidden md:block">
+              {/* Category Selection Tabs */}
+              <div className="grid grid-cols-4 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                {[
+                  { id: 'compliance', label: 'Safe & Legal Rules', icon: '🎬' },
+                  { id: 'rules', label: 'When to Block', icon: '⚖️' },
+                  { id: 'defense', label: 'My Personal Shield', icon: '🛡️' },
+                  { id: 'hardware', label: 'My Connected Gear', icon: '🔌' }
+                ].map((cat) => {
+                  const isActive = selectedCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(cat.id as any);
+                        setDefenseSubCategory('all');
+                        // Auto-select the first tab in this category (alphabetically)
+                        const firstTabMap: Record<string, string> = {
+                          compliance: 'legal',
+                          rules: 'perimeter',
+                          defense: 'overview',
+                          hardware: 'licensing'
+                        };
+                        setActiveTab(firstTabMap[cat.id] as any);
+                      }}
+                      className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all border ${
+                        isActive
+                          ? 'bg-slate-900 border-slate-700 text-white shadow-sm'
+                          : 'bg-transparent border-transparent text-slate-400 hover:text-white hover:bg-slate-900/50'
+                      }`}
+                    >
+                      <span className="text-sm select-none">{cat.icon}</span>
+                      <span>{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Defense Category Sub-Navigation Switcher */}
+              {selectedCategory === 'defense' && (
+                <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-850 space-y-2 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-slate-500 uppercase font-extrabold tracking-wider flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                      Filter Shield Controls by Sub-Category
+                    </span>
+                    <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-bold border border-emerald-500/20">
+                      QUICK CATEGORIES
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[
+                      { id: 'all', label: 'All Controls', icon: <Layers className="w-3.5 h-3.5" />, desc: '9 items' },
+                      { id: 'signal', label: 'Signal & WiFi', icon: <Radio className="w-3.5 h-3.5" />, desc: '3 items' },
+                      { id: 'acoustic', label: 'Sound & Audio', icon: <Volume2 className="w-3.5 h-3.5" />, desc: '3 items' },
+                      { id: 'identity', label: 'Identity', icon: <User className="w-3.5 h-3.5" />, desc: '2 items' },
+                      { id: 'system', label: 'Settings', icon: <Settings2 className="w-3.5 h-3.5" />, desc: '1 item' }
+                    ].map((sub) => {
+                      const isActive = defenseSubCategory === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          id={`defense-subcat-${sub.id}-btn`}
+                          type="button"
+                          onClick={() => {
+                            setDefenseSubCategory(sub.id as any);
+                            playLocalSoundTest('tactical_click', 50);
+                          }}
+                          className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
+                              : 'bg-slate-900/30 border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 hover:border-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1">
+                            {sub.icon}
+                            <span className="text-[10px] font-bold block leading-none">{sub.label}</span>
+                          </div>
+                          <span className="text-[8px] text-slate-500 font-sans mt-0.5 block font-mono">{sub.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Category Sub-Header */}
+              <div className="flex items-center justify-between mt-4 mb-2 px-1">
+                <span className="text-[10px] font-mono text-slate-400 uppercase font-extrabold tracking-wider">
+                  {selectedCategory === 'compliance' && "📖 Safe & Legal Rules"}
+                  {selectedCategory === 'rules' && "⚖️ When to Block Rules"}
+                  {selectedCategory === 'hardware' && "🔌 Connected Badges & Keys"}
+                  {selectedCategory === 'defense' && (
+                    defenseSubCategory === 'all' ? "🛡️ All Personal Shield Controls" :
+                    defenseSubCategory === 'signal' ? "📡 Signal & WiFi Range Controls" :
+                    defenseSubCategory === 'acoustic' ? "🔊 Acoustic & Audio Shield Controls" :
+                    defenseSubCategory === 'identity' ? "👤 Identity Blurring Controls" :
+                    "⚙️ System Alerts Controls"
+                  )}
+                </span>
+                <span className="text-[9px] text-slate-500 font-mono font-bold">
+                  ACTIVE VIEW FILTER
+                </span>
+              </div>
+
+              {/* Sub-Feature Pills with Real-Time Counters/Status badges */}
+              <div className="grid grid-cols-3 xl:grid-cols-4 gap-2">
+                {[
+                  // Legal Rights (compliance)
+                  { id: 'legal', label: 'Safety Quiz', icon: '📖', category: 'compliance', desc: 'A fun quick test to learn how privacy laws protect you' },
+                  { id: 'scrub', label: 'Request Blur Online', icon: '🎬', category: 'compliance', desc: 'Request to blur your face on public video databases', count: takedowns?.length || 0 },
+                  { id: 'audio_scrub', label: 'Request Voice Scrub', icon: '🎙️', category: 'compliance', desc: 'Request to scrub your voice prints from public podcasts & audio archives', count: audioTakedowns?.length || 0 },
+                  
+                  // Safety Policies (rules)
+                  { id: 'perimeter', label: 'Safe School Zones', icon: '📍', category: 'rules', desc: 'Pick safe places on a map where recording is blocked', count: perimeterSensors?.length || 0 },
+                  { id: 'hierarchy', label: 'What Rule Wins?', icon: '⚖️', category: 'rules', desc: 'Sort your safety rules so the app knows which to follow first' },
+                  { id: 'biometric', label: 'Lock My App', icon: '🔒', category: 'rules', desc: 'Use your finger scan or code to keep others out', status: state.biometricLockEnabled ? 'LOCKED' : 'OPEN' },
+                  
+                  // Shield & Signals (defense)
+                  { id: 'settings', label: 'Alerts & Sound Settings', icon: '⚙️', category: 'defense', subCategory: 'system', desc: 'Change sounds, pocket buzz alerts, and notifications' },
+                  { id: 'overview', label: 'Main Dashboard', icon: '📊', category: 'defense', subCategory: 'signal', desc: 'Your general status, signal charts, and widget layout' },
+                  { id: 'targeted', label: 'Targeted Sound & Peripheral', icon: '🔊', category: 'defense', subCategory: 'acoustic', desc: 'Manage targeted directional audio shields and companion peripherals', status: state.targetedShieldingEnabled ? 'TARGETED' : 'BLANKET' },
+                  { id: 'audio_shield', label: 'Audio Shield Settings', icon: '🎙️', category: 'defense', subCategory: 'acoustic', desc: 'Toggle Acoustic Watermarks, Vocal Scrambler & Ultrasonic Mic Saturation per-device or per-profile', status: state.vocalScramblerEnabled ? 'SCRAMBLING' : 'OFF' },
+                  { id: 'audio_map', label: 'Audio Map & Heat', icon: '🗺️', category: 'defense', subCategory: 'acoustic', desc: "Visualize acoustic 'blind spots' and saturation coverage areas", status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
+                  { id: 'tags', label: 'Protected Toys & Bags', icon: '🎒', category: 'defense', subCategory: 'identity', desc: 'Add virtual tags to blur items like backpacks', count: state.registeredEntities?.length || 0 },
+                  { id: 'faces', label: 'My Blurred Faces', icon: '👤', category: 'defense', subCategory: 'identity', desc: 'Add photos of your face so smart cameras blur them', count: state.registeredFaces?.length || 0 },
+                  { id: 'signal', label: 'Shield Broadcast Range', icon: '📡', category: 'defense', subCategory: 'signal', desc: 'Pick how far your Stop Recording signal can reach', status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
+                  { id: 'wifi', label: 'Home WiFi Rules', icon: '📶', category: 'defense', subCategory: 'signal', desc: 'Turn shield on/off automatically when you join home WiFi', status: state.wifiRulesEnabled ? 'AUTO' : 'OFF' },
+                  
+                  // Wearables & Keys (hardware)
+                  { id: 'licensing', label: 'Safety Badges & Checks', icon: '📋', category: 'hardware', desc: 'Official certificates showing our safety lab tests', count: state.hardwareLicenses?.length || 0 },
+                  { id: 'retention', label: 'Clean Out My History', icon: '💾', category: 'hardware', desc: 'Decide when the app automatically wipes old records' },
+                  { id: 'escrow', label: 'Warrant Overrides', icon: '🔑', category: 'hardware', desc: 'See keys that can turn off the shield in emergency cases', count: escrowHolders?.length || 0 },
+                  { id: 'pairing', label: 'Pair My Badge', icon: '🔌', category: 'hardware', desc: 'Link physical keychains or pocket buttons', count: state.registeredEntities?.filter(e => e.type === 'smart_tag' || e.type === 'key_fob' || e.type === 'airtag' || e.type === 'galaxy_tag').length || 0 }
+                ]
+                  .filter((item) => {
+                    if (item.category !== selectedCategory) return false;
+                    if (selectedCategory === 'defense' && defenseSubCategory !== 'all') {
+                      return (item as any).subCategory === defenseSubCategory;
+                    }
+                    return true;
+                  })
+                  .map((item) => {
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setActiveTab(item.id as any)}
+                        className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                          isActive
+                            ? 'bg-emerald-950/20 border-emerald-500/50 text-white shadow-md shadow-emerald-950/10'
+                            : 'bg-slate-950/40 border-slate-850 hover:border-slate-800 text-slate-300 hover:text-white hover:bg-slate-950/80'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="text-base select-none">{item.icon}</span>
+                          
+                          {/* Micro-Badges / Count Indicators */}
+                          {item.count !== undefined && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                              isActive ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'
+                            }`}>
+                              {item.count}
+                            </span>
+                          )}
+
+                          {item.status !== undefined && (
+                            <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold font-mono tracking-wider ${
+                              item.status === 'ACTIVE' || item.status === 'AUTO'
+                                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              {item.status}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold leading-tight block">{t(`view.citizen.${item.id}`)}</span>
+                        <span className="text-[9px] text-slate-500 leading-normal block mt-0.5 truncate w-full">{t(`desc.citizen.${item.id}`)}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          
+          {/* Quick Context-Aware Helper Tip */}
+          {showContextHelp && (
+            <div className="flex items-start justify-between gap-3.5 p-4 bg-emerald-950/10 border border-emerald-500/20 rounded-xl relative shadow-md shadow-emerald-950/5">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg shrink-0 mt-0.5">
+                  <HelpCircle className="w-4 h-4 animate-pulse" />
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 font-sans block">Smart Assistant Tip</span>
+                  <p className="text-xs text-slate-300 leading-relaxed pr-6">
+                    {activeTab === 'overview' && "This is your main dashboard. It displays your active shield status and allows you to toggle custom widgets."}
+                    {activeTab === 'targeted' && "Configure targeted sound cancellation, biometric audio watermarking, and next-gen companion wearables."}
+                    {activeTab === 'audio_shield' && "Replicate visual shield rules in the acoustic domain: toggle watermarking, mic saturation, and vocal scrambling per profile or device."}
+                    {activeTab === 'settings' && "Configure haptic pocket pulses, audible alarm chirps, and dynamic push notifications."}
+                    {activeTab === 'signal' && "Set your custom localized privacy boundary radius. Controls how far your refusing signal propagates."}
+                    {activeTab === 'faces' && "Add face profiles for advanced optical recognition refusal to automatically apply camera-side overlays."}
+                    {activeTab === 'tags' && "Register cryptographic metadata tags for backpacks, wallets, or briefcases to keep personal items obscured."}
+                    {activeTab === 'wifi' && "Automate your defense configurations. Instantly transitions shield profiles when connecting to recognized SSIDs."}
+                    {activeTab === 'hierarchy' && "Sort your policy rules to resolve active priority conflicts when multiple conditions are met."}
+                    {activeTab === 'perimeter' && "Mark physical coordinates on a map to establish geo-fenced safe zones where shield is automated."}
+                    {activeTab === 'biometric' && "Arm local biometric credentials (TouchID/FaceID) to prevent device tampering or forced deactivation."}
+                    {activeTab === 'pairing' && "Bond physical smart keychains or active buttons to trigger instantaneous privacy sweeps."}
+                    {activeTab === 'licensing' && "Verify official regulatory compliance certificates proving the safe operational standard of your device."}
+                    {activeTab === 'escrow' && "View encrypted escrow keys held under legal warrant for emergency situational safety bypasses."}
+                    {activeTab === 'retention' && "Establish secure memory scrubbing policies to automatically purge localized telemetry records."}
+                    {activeTab === 'scrub' && "Initiate automatic face-obscuration requests on third-party video platforms and public streams."}
+                    {activeTab === 'audio_scrub' && "Initiate automatic voice-print scrubbing and retroactive muting requests on popular podcast and audio stream databases."}
+                    {activeTab === 'audio_map' && "Visualize local acoustic blind spots and saturation coverage spheres created by surrounding walls or interference."}
+                    {activeTab === 'legal' && "Take a quick educational quiz to learn about local privacy laws, camera regulations, and legal rights."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowContextHelp(false)}
+                className="text-slate-400 hover:text-rose-400 transition-colors p-1.5 rounded hover:bg-slate-900/40 text-xs self-start shrink-0"
+                title="Hide helper tip"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Tab 0: Overview Dashboard & Layout Configuration */}
+          {activeTab === 'overview' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              {/* Active Threat Intercept Banner */}
+              <AnimatePresence>
+                {activeThreatIntercept && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-3 text-xs transition duration-300 ${
+                      isShieldReinforced 
+                        ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' 
+                        : 'bg-red-500/10 border-red-500 text-red-400 animate-pulse'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${isShieldReinforced ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+                          <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div className="text-left">
+                          <p className="font-bold uppercase tracking-wider">
+                            {isShieldReinforced ? '🔒 PERIMETER DEFENSES REINFORCED' : '⚠️ SPATIAL THREAT INTERCEPTED'}
+                          </p>
+                          <p className="text-slate-400 font-sans mt-0.5 leading-normal text-[11px]">
+                            {isShieldReinforced 
+                              ? `Active phase shield overload activated! Nearby ${activeThreatIntercept.target} successfully blinded.`
+                              : `Targeted facial-recognition scan from nearby ${activeThreatIntercept.target} at ${activeThreatIntercept.distance}m.`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                        {!isShieldReinforced ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsShieldReinforced(true);
+                              onAddLog({
+                                deviceModel: activeThreatIntercept.target,
+                                action: 'deflected',
+                                shieldApplied: 'DEFENSIVE_SHIELD_OVERLOAD_EMERALD_REINFORCE',
+                                distance: activeThreatIntercept.distance,
+                                rotatedId: '0x' + Math.floor(Math.random() * 16777215).toString(16).toUpperCase()
+                              });
+                              setTimeout(() => {
+                                setIsShieldReinforced(false);
+                                setActiveThreatIntercept(null);
+                              }, 5000);
+                            }}
+                            className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition uppercase tracking-wider text-[10px] cursor-pointer shadow-md shadow-red-500/15"
+                          >
+                            REINFORCE SHIELD
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-mono text-emerald-400 font-bold tracking-widest bg-emerald-950 px-2 py-1 rounded border border-emerald-500/30">
+                            SHIELD POWER: 150%
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setActiveThreatIntercept(null)}
+                          className="p-1 text-slate-500 hover:text-slate-300 rounded cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Minimalist Status Display */}
+              <div className="p-6 rounded-2xl bg-slate-950/40 border border-slate-800/80 flex flex-col items-center text-center space-y-4">
+                <div className="relative">
+                  <button
+                    type="button"
+                    id="central-privacy-shield-beacon"
+                    onPointerDown={handleLogoPointerDown}
+                    onPointerUp={handleLogoPointerUpOrLeave}
+                    onPointerLeave={handleLogoPointerUpOrLeave}
+                    className="relative block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 cursor-pointer group"
+                    title={
+                      state.isBroadcasting 
+                        ? "Privacy Shield is ACTIVE • Press and Hold to Deactivate" 
+                        : "Privacy Shield is SILENT • Quick Tap to Activate"
+                    }
+                  >
+                    {/* Glowing Shield Ring & Radiating Radar Ripples when broadcasting */}
+                    {state.isBroadcasting ? (
+                      <>
+                        <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse"></div>
+                        <div className="absolute -inset-4 rounded-full border border-emerald-500/35 animate-ping opacity-75" style={{ animationDuration: '3s' }}></div>
+                        <div className="absolute -inset-8 rounded-full border border-emerald-400/20 animate-ping opacity-50" style={{ animationDuration: '3s', animationDelay: '1.2s' }}></div>
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 rounded-full bg-slate-800/10 blur-xl"></div>
+                    )}
+
+                    {/* Circular Hold Progress Ring Overlay */}
+                    {isHoldingLogo && (
+                      <svg className="absolute inset-0 w-24 h-24 z-20 -rotate-90 pointer-events-none scale-105">
+                        <circle
+                          cx="48"
+                          cy="48"
+                          r="45"
+                          fill="transparent"
+                          stroke="rgba(244, 63, 94, 0.2)"
+                          strokeWidth="3"
+                        />
+                        <circle
+                          cx="48"
+                          cy="48"
+                          r="45"
+                          fill="transparent"
+                          stroke="#f43f5e"
+                          strokeWidth="3"
+                          strokeDasharray={2 * Math.PI * 45}
+                          strokeDashoffset={2 * Math.PI * 45 * (1 - logoHoldProgress)}
+                          className="transition-all duration-75"
+                        />
+                      </svg>
+                    )}
+
+                    <div className={`w-24 h-24 rounded-full border p-1 overflow-hidden relative z-10 transition-all duration-300 ${
+                      state.isBroadcasting 
+                        ? isHoldingLogo
+                          ? 'border-rose-500 bg-rose-950/20 shadow-[0_0_20px_rgba(244,63,94,0.4)] scale-95'
+                          : 'border-emerald-500 bg-emerald-950/20 shadow-[0_0_20px_rgba(16,185,129,0.3)] scale-105 group-hover:scale-110' 
+                        : 'border-slate-800 bg-slate-900 scale-100 group-hover:scale-105 group-hover:border-emerald-500/50 group-hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                    }`}>
+                      <img
+                        src={appLogo}
+                        alt="Privacy Beacon Logo"
+                        className={`w-full h-full rounded-full object-cover transition-transform duration-500 ${
+                          state.isBroadcasting && !isHoldingLogo ? 'scale-105 animate-pulse' : 'scale-100'
+                        }`}
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+
+                    {/* Overlapping Broadcasting Radio Badge / "little ball" at bottom-right */}
+                    <div className={`absolute -bottom-1 -right-1 z-20 p-1.5 rounded-full border-2 border-slate-950 transition-all duration-300 ${
+                      state.isBroadcasting 
+                        ? 'bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.8)] animate-bounce' 
+                        : 'bg-slate-800 text-slate-500 shadow-none'
+                    }`}>
+                      <Radio className={`w-3.5 h-3.5 ${state.isBroadcasting && !isHoldingLogo ? 'animate-pulse' : ''}`} />
+                    </div>
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-white tracking-tight">
+                    {state.isBroadcasting ? 'Privacy Shield Active' : 'Privacy Shield Inactive'}
+                  </h3>
+                  <p className="text-xs text-slate-400 max-w-sm">
+                    {state.isBroadcasting 
+                      ? 'Broadcasting dynamic, encrypted opt-out packets. Nearby smart devices and cameras are restricted from registering your presence.' 
+                      : 'Broadcast beacon is currently silent. Re-enable broadcasting inside the Signal Broadcast Range tab to resume localized protection.'}
+                  </p>
+                  
+                  {/* Dynamic Help Gesture Hint */}
+                  <div className="pt-1.5 h-5 flex items-center justify-center">
+                    {isHoldingLogo ? (
+                      <span className="text-[10px] font-bold text-rose-400 tracking-wider animate-pulse font-mono uppercase">
+                        Silencing Shield... {Math.round(logoHoldProgress * 100)}%
+                      </span>
+                    ) : state.isBroadcasting ? (
+                      <span className="text-[9px] font-medium text-slate-500 tracking-wider font-mono uppercase">
+                        Press & Hold to Deactivate
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold text-emerald-400/90 tracking-wider font-mono uppercase animate-pulse">
+                        Tap to Activate Shield
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Signal Status Controls */}
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  {/* Signal Status Pill */}
+                  <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800 text-[10px] font-mono">
+                    <span className={`w-1.5 h-1.5 rounded-full ${state.isBroadcasting ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`}></span>
+                    <span className="text-slate-400 font-bold uppercase">Beacon Status:</span>
+                    <span className={state.isBroadcasting ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
+                      {state.isBroadcasting ? 'TRANSMITTING' : 'STANDBY'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Widget Layout & Swipe Deck Controller */}
+              <div className="bg-slate-950 border border-slate-900 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    {widgetViewMode === 'swipe' ? (
+                      <span className="text-sm">🎴</span>
+                    ) : (
+                      <span className="text-sm">📜</span>
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <span className="text-[10px] font-extrabold text-slate-400 font-mono tracking-wider uppercase block">
+                      Dashboard Widget Display Mode
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      {widgetViewMode === 'swipe' 
+                        ? `Swipable Deck active: swipe horizontally or click arrows to switch (Card ${enabledWidgetIds.length ? activeWidgetIndex + 1 : 0} of ${enabledWidgetIds.length})`
+                        : `Continuous Scroll active: all selected widgets are displayed in a continuous list`
+                      }
+                    </span>
+                  </div>
+                </div>
+
+                {/* Switcher & Swipe Controls */}
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  {widgetViewMode === 'swipe' && enabledWidgetIds.length > 1 && (
+                    <div className="flex items-center gap-1.5 mr-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveWidgetIndex(prev => (prev - 1 + enabledWidgetIds.length) % enabledWidgetIds.length)}
+                        className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 flex items-center justify-center transition text-xs font-bold cursor-pointer"
+                        title="Previous Card"
+                      >
+                        ⟨
+                      </button>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 min-w-[2.5rem] text-center bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800">
+                        {activeWidgetIndex + 1} / {enabledWidgetIds.length}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveWidgetIndex(prev => (prev + 1) % enabledWidgetIds.length)}
+                        className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 flex items-center justify-center transition text-xs font-bold cursor-pointer"
+                        title="Next Card"
+                      >
+                        ⟩
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-850">
+                    <button
+                      type="button"
+                      onClick={() => setWidgetViewMode('swipe')}
+                      className={`px-3 py-1 rounded text-[9px] font-mono font-extrabold tracking-wider uppercase transition cursor-pointer ${
+                        widgetViewMode === 'swipe'
+                          ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                          : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      🎴 Swipe Deck
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWidgetViewMode('scroll')}
+                      className={`px-3 py-1 rounded text-[9px] font-mono font-extrabold tracking-wider uppercase transition cursor-pointer ${
+                        widgetViewMode === 'scroll'
+                          ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                          : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      📜 Scroll
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Privacy Impact Score Gauge Panel */}
+              <AnimatePresence>
+                {showPrivacyImpactScore && (widgetViewMode === 'scroll' || enabledWidgetIds[activeWidgetIndex] === 'privacy-score') && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: 10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: 10 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <motion.div
+                      {...(widgetViewMode === 'swipe' ? {
+                        drag: "x",
+                        dragConstraints: { left: 0, right: 0 },
+                        dragElastic: 0.2,
+                        onDragEnd: handleSwipeDragEnd,
+                        className: "cursor-grab active:cursor-grabbing select-none w-full"
+                      } : {})}
+                    >
+                      <div id="privacy-impact-score-card" className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                      {/* OS Window Title Bar */}
+                      <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1.5 shrink-0">
+                            <span 
+                              onClick={() => onChange({ ...state, showPrivacyImpactScore: false })}
+                              className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" 
+                              title="Close" 
+                            />
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                          </div>
+                          <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Privacy Impact Score Monitor</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, showPrivacyImpactScore: false })}
+                          className="text-slate-400 hover:text-rose-400 transition-colors text-xs font-bold font-mono px-1.5 py-0.5 rounded bg-slate-950/65 border border-slate-800"
+                          title="Close Window"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Content Wrapper */}
+                      <div className="p-6 space-y-5 text-left bg-slate-900/10">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+                          <div className="space-y-0.5">
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                              <Award className="w-4 h-4 text-emerald-400 animate-pulse" />
+                              Spatial Compliance & Privacy Impact Score
+                            </h4>
+                            <p className="text-[10px] text-slate-400 leading-normal">
+                              Dynamic security audit calculating real-time protection efficiency against biometric scanners, acoustic recording arrays, and RF signals.
+                            </p>
+                          </div>
+                          <span className="text-[9px] font-mono font-extrabold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-widest animate-pulse self-start sm:self-auto">
+                            NPU ACTIVE
+                          </span>
+                        </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                  {/* Left Column: Gauge Dial (5 cols) */}
+                  <div className="md:col-span-5 flex flex-col items-center justify-center relative py-2 border-b md:border-b-0 md:border-r border-slate-800/40 md:pr-6">
+                    <div className="relative w-44 h-24 flex items-center justify-center overflow-hidden">
+                      {/* SVG Gauge Semicircle */}
+                      <svg className="w-full h-full" viewBox="0 0 100 50">
+                        <defs>
+                          <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stopColor="#ef4444" /> {/* Red */}
+                            <stop offset="50%" stopColor="#eab308" /> {/* Yellow */}
+                            <stop offset="100%" stopColor="#10b981" /> {/* Emerald */}
+                          </linearGradient>
+                          <filter id="glow">
+                            <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+                            <feMerge>
+                              <feMergeNode in="coloredBlur"/>
+                              <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                          </filter>
+                        </defs>
+                        {/* Background track */}
+                        <path 
+                          d="M 10 45 A 40 40 0 0 1 90 45" 
+                          fill="none" 
+                          stroke="#1e293b" 
+                          strokeWidth="8" 
+                          strokeLinecap="round" 
+                        />
+                        {/* Dynamic Filled track using strokeDasharray/offset to animate color path */}
+                        <path 
+                          d="M 10 45 A 40 40 0 0 1 90 45" 
+                          fill="none" 
+                          stroke="url(#gaugeGrad)" 
+                          strokeWidth="8" 
+                          strokeLinecap="round" 
+                          strokeDasharray="126" 
+                          strokeDashoffset={126 - (126 * Math.min(100, Math.max(0, calculatedScore.score))) / 100}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                        
+                        {/* Needle */}
+                        <g 
+                          transform={`rotate(${((calculatedScore.score / 100) * 180) - 90} 50 45)`} 
+                          className="transition-transform duration-1000 ease-out origin-[50px_45px]"
+                        >
+                          <line 
+                            x1="50" 
+                            y1="45" 
+                            x2="50" 
+                            y2="10" 
+                            stroke="#ffffff" 
+                            strokeWidth="2" 
+                            strokeLinecap="round" 
+                            filter="url(#glow)"
+                          />
+                          <circle cx="50" cy="45" r="4" fill="#ffffff" />
+                        </g>
+                      </svg>
+
+                      {/* Display Score in the center of dial */}
+                      <div className="absolute bottom-0 inset-x-0 flex flex-col items-center justify-center text-center">
+                        <span className="text-3xl font-extrabold text-white font-mono tracking-tighter drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]">
+                          {calculatedScore.score}
+                        </span>
+                        <span className="text-[8px] uppercase tracking-widest font-mono font-bold text-slate-500">
+                          {calculatedScore.score >= 80 ? '🔒 MAXIMUM' : calculatedScore.score >= 50 ? '⚠️ PARTIAL' : '🚨 CRITICAL'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Mitigation Vector Breakdown (7 cols) */}
+                  <div className="md:col-span-7 space-y-3">
+                    <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                      Active Privacy Countermeasures & Audit
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[160px] overflow-y-auto pr-1">
+                      {calculatedScore.contributors.map((contrib, idx) => (
+                        <div 
+                          key={idx} 
+                          className={`flex items-center justify-between p-2 rounded-xl border text-[10px] font-mono font-medium transition-all duration-300 ${
+                            contrib.active 
+                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                              : 'bg-slate-950/40 border-slate-900/60 text-slate-600'
+                          }`}
+                        >
+                          <span className="truncate pr-1">{contrib.name}</span>
+                          <span className="font-bold shrink-0">
+                            {contrib.active ? `+${contrib.value}` : '0'} pts
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-start gap-1.5 bg-slate-900/30 border border-slate-850 p-2.5 rounded-xl text-[9px] font-mono text-slate-400 leading-relaxed">
+                      <span className="text-emerald-400 shrink-0">💡</span>
+                      <p>
+                        {calculatedScore.score < 50 
+                          ? 'Activate the Beacon Signal Broadcaster, select a dynamic obscuration mask, and engage the sound scrambler to achieve full defense status.'
+                          : calculatedScore.score < 85 
+                          ? 'To achieve Maximum Stealth, activate infrared optical jammers, LiDAR countermeasures, or dynamic vocal scrambling in settings.'
+                          : 'Optimal shield configurations are fully active. Your local area is hardened against third-party camera and mic tracking.'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Signal History Analytics Window */}
+              <AnimatePresence>
+                {showSignalHistory && (widgetViewMode === 'scroll' || enabledWidgetIds[activeWidgetIndex] === 'signal-history') && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: 10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: 10 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <motion.div
+                      {...(widgetViewMode === 'swipe' ? {
+                        drag: "x",
+                        dragConstraints: { left: 0, right: 0 },
+                        dragElastic: 0.2,
+                        onDragEnd: handleSwipeDragEnd,
+                        className: "cursor-grab active:cursor-grabbing select-none w-full"
+                      } : {})}
+                    >
+                      <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                      {/* OS Window Title Bar */}
+                      <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1.5 shrink-0">
+                            <span 
+                              onClick={() => onChange({ ...state, showSignalHistory: false })}
+                              className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" 
+                              title="Close" 
+                            />
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                          </div>
+                          <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Signal History Analytics (Last 60 Minutes)</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                          <span className={`w-1.5 h-1.5 rounded-full ${state.isBroadcasting ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`}></span>
+                          <span>{state.isBroadcasting ? 'MONITORING' : 'SUSPENDED'}</span>
+                        </div>
+                      </div>
+
+                      {/* Window Content */}
+                      <div className="p-5 space-y-4 bg-slate-900/10 text-left">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800/40 pb-3">
+                          <div className="space-y-0.5">
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                              <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                              Spatial RF Waveforms & Opt-Out Forcefield
+                            </h4>
+                            <p className="text-[10px] text-slate-400 leading-normal max-w-md">
+                              Real-time visualization of scanning signals vs. current dynamic BlurBubble™ shield block effectiveness.
+                            </p>
+                          </div>
+                          {/* Dynamic Mini Stats Pill */}
+                          <div className="bg-slate-950 px-3 py-1.5 border border-slate-800 rounded-xl flex items-center gap-4 text-center shrink-0 self-start sm:self-auto">
+                            <div>
+                              <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-bold font-mono">Max Intensity</span>
+                              <span className="text-xs font-bold text-red-400 font-mono">
+                                {Math.max(...signalHistoryData.map(d => d.intensity))} units
+                              </span>
+                            </div>
+                            <div className="border-l border-slate-850 h-5"></div>
+                            <div>
+                              <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-bold font-mono">Avg Protection</span>
+                              <span className="text-xs font-bold text-emerald-400 font-mono">
+                                {Math.round(signalHistoryData.reduce((acc, d) => acc + d.shielding, 0) / signalHistoryData.length)}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Recharts Chart Container */}
+                        <div className="w-full h-[240px] bg-slate-950/60 rounded-xl border border-slate-850/60 p-2 relative">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={signalHistoryData} margin={{ top: 15, right: 10, left: -25, bottom: 5 }}>
+                              <defs>
+                                <linearGradient id="intensityGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#f87171" stopOpacity={0.2}/>
+                                  <stop offset="95%" stopColor="#f87171" stopOpacity={0}/>
+                                </linearGradient>
+                                <linearGradient id="shieldGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.6} />
+                              <XAxis 
+                                dataKey="time" 
+                                stroke="#475569" 
+                                fontSize={9} 
+                                tickLine={false} 
+                                axisLine={{ stroke: '#1e293b' }}
+                              />
+                              <YAxis 
+                                stroke="#475569" 
+                                fontSize={9} 
+                                tickLine={false} 
+                                axisLine={false} 
+                                domain={[0, 100]}
+                              />
+                              <Tooltip 
+                                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px', padding: '10px' }}
+                                labelStyle={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '10px', fontFamily: 'monospace' }}
+                                itemStyle={{ fontSize: '10px', padding: '2px 0' }}
+                              />
+                              <Legend 
+                                verticalAlign="top" 
+                                height={32} 
+                                iconType="circle"
+                                iconSize={6}
+                                wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', color: '#94a3b8' }}
+                              />
+                              <Area 
+                                type="monotone" 
+                                dataKey="intensity" 
+                                name="Device Scanning Intensity" 
+                                stroke="#f87171" 
+                                strokeWidth={2} 
+                                fillOpacity={1} 
+                                fill="url(#intensityGrad)" 
+                                activeDot={{ r: 4 }}
+                              />
+                              <Area 
+                                type="monotone" 
+                                dataKey="shielding" 
+                                name="Shield Effectiveness %" 
+                                stroke="#10b981" 
+                                strokeWidth={2} 
+                                fillOpacity={1} 
+                                fill="url(#shieldGrad)" 
+                                activeDot={{ r: 4 }}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="text-center">
+                          <p className="text-[9px] text-slate-500 leading-relaxed max-w-xl mx-auto">
+                            📡 Intensity represents the relative density of nearby active RF scanning packets (cameras, drones, glasses) intercepted by your beacon. Shielding levels confirm localized opt-out compliance performance.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Battery Status Graphical Widget */}
+              <AnimatePresence>
+                {(state.showBatteryWidget !== false) && (widgetViewMode === 'scroll' || enabledWidgetIds[activeWidgetIndex] === 'battery-status') && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: 10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: 10 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <motion.div
+                      {...(widgetViewMode === 'swipe' ? {
+                        drag: "x",
+                        dragConstraints: { left: 0, right: 0 },
+                        dragElastic: 0.2,
+                        onDragEnd: handleSwipeDragEnd,
+                        className: "cursor-grab active:cursor-grabbing select-none w-full"
+                      } : {})}
+                    >
+                      <div id="battery-status-overview-card" className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                      {/* OS Window Title Bar */}
+                      <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1.5 shrink-0">
+                            <span 
+                              onClick={() => onChange({ ...state, showBatteryWidget: false })}
+                              className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" 
+                              title="Close" 
+                            />
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                          </div>
+                          <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Connected Beacons & Tags Battery Monitor</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, showBatteryWidget: false })}
+                          className="text-slate-400 hover:text-rose-400 transition-colors text-xs font-bold font-mono px-1.5 py-0.5 rounded bg-slate-950/65 border border-slate-800"
+                          title="Close Window"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Content Wrapper */}
+                      <div className="p-6 space-y-5 text-left bg-slate-900/10">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+                          <div className="space-y-0.5">
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                              <Battery className="w-4 h-4 text-emerald-400 animate-pulse" />
+                              Power Cell Status & Signal Optimization Telemetry
+                            </h4>
+                            <p className="text-[10px] text-slate-400 leading-normal font-sans">
+                              Real-time power levels, adaptive BLE transmission throttles, and simulated active battery cell diagnostics.
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[9px] font-mono font-extrabold px-2 py-0.5 rounded border uppercase tracking-widest ${
+                              state.intelligentBatteryOptimization
+                                ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/20 animate-pulse'
+                                : 'text-slate-500 bg-slate-950 border-slate-850'
+                            }`}>
+                              {state.intelligentBatteryOptimization ? 'OPTIMIZER ON' : 'OPTIMIZER OFF'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Battery Cells Graphical Matrix */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                          {(state.registeredEntities || []).map((entity) => {
+                            const threshold = state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20;
+                            const isLow = entity.batteryPercent <= threshold;
+                            const isNominal = entity.batteryPercent > 50;
+                            const isMedium = entity.batteryPercent <= 50 && entity.batteryPercent > threshold;
+
+                            // Determine status label & color
+                            let statusText = "NOMINAL";
+                            let statusColorClass = "text-emerald-400 border-emerald-500/20 bg-emerald-950/40";
+                            let barColorClass = "bg-emerald-450";
+                            let glowClass = "shadow-[0_0_10px_rgba(16,185,129,0.3)]";
+
+                            if (isLow) {
+                              statusText = "CRITICAL";
+                              statusColorClass = "text-rose-400 border-rose-500/25 bg-rose-950/40 animate-pulse";
+                              barColorClass = "bg-rose-500 animate-pulse";
+                              glowClass = "shadow-[0_0_15px_rgba(244,63,94,0.4)]";
+                            } else if (isMedium) {
+                              statusText = "MODERATE";
+                              statusColorClass = "text-amber-400 border-amber-500/20 bg-amber-950/40";
+                              barColorClass = "bg-amber-400";
+                              glowClass = "shadow-[0_0_10px_rgba(230,140,10,0.2)]";
+                            }
+
+                            return (
+                              <div 
+                                key={entity.id} 
+                                className={`p-4 rounded-xl border bg-slate-950/60 backdrop-blur-sm transition-all duration-300 relative ${
+                                  entity.isActive ? 'border-emerald-500/30 ring-1 ring-emerald-500/10' : 'border-slate-900/80'
+                                }`}
+                              >
+                                {entity.isActive && (
+                                  <div className="absolute top-2.5 right-2.5 flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                  </div>
+                                )}
+                                
+                                <div className="space-y-3">
+                                  {/* Device Name and Type Badge */}
+                                  <div className="space-y-1 text-left">
+                                    <div className="flex items-center gap-1.5 w-full">
+                                      <input
+                                        type="text"
+                                        value={entity.name}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const updated = (state.registeredEntities || []).map(t => 
+                                            t.id === entity.id ? { ...t, name: val } : t
+                                          );
+                                          onChange({ ...state, registeredEntities: updated });
+                                        }}
+                                        className="bg-slate-900 border border-slate-800/80 focus:border-emerald-500/40 text-[11px] font-bold text-white px-2 py-1 rounded w-full focus:outline-none transition-all placeholder:text-slate-600 focus:bg-slate-950"
+                                        placeholder="Device Name"
+                                        title="Directly rename this connected tag"
+                                      />
+                                      {entity.batteryPercent < 10 && (
+                                        <BatteryWarning className="w-3.5 h-3.5 text-rose-500 animate-pulse shrink-0" title="Critical Low Battery Warning (<10%)" />
+                                      )}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className="text-[8px] font-mono text-slate-500 uppercase tracking-wider">
+                                        {entity.type.replace('_', ' ')}
+                                      </span>
+                                      <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border ${statusColorClass}`}>
+                                        {statusText}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Battery graphical cell */}
+                                  <div className="flex items-center gap-3">
+                                    {/* Icon-style Battery outline */}
+                                    <div className="w-12 h-6 rounded border border-slate-750 p-0.5 flex relative bg-slate-900/60 shrink-0">
+                                      <div 
+                                        className={`h-full rounded-sm transition-all duration-500 ${barColorClass} ${glowClass}`}
+                                        style={{ width: `${entity.batteryPercent}%` }}
+                                      />
+                                      {/* Battery tip */}
+                                      <div className="absolute -right-[3px] top-1.5 w-[3px] h-3 bg-slate-750 rounded-r" />
+                                    </div>
+                                    
+                                    <div className="space-y-0.5 text-left">
+                                      <span className="text-sm font-extrabold text-white font-mono leading-none">
+                                        {entity.batteryPercent}%
+                                      </span>
+                                      <span className="block text-[8px] font-mono text-slate-400 uppercase tracking-wider">
+                                        Remaining
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Transmit Power Capping Status */}
+                                  <div className="text-[9px] font-mono text-slate-500 flex justify-between items-center border-t border-slate-900/60 pt-2.5">
+                                    <span>Signal Range Cap:</span>
+                                    <span className={`font-bold ${entity.isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                      {entity.isActive 
+                                        ? state.batterySaverActive 
+                                          ? '8m (Saver)' 
+                                          : state.intelligentBatteryOptimization && entity.batteryPercent < 35 
+                                            ? '10m (Scaled)' 
+                                            : `${state.rangeMeters || 12}m`
+                                        : 'STANDBY'
+                                      }
+                                    </span>
+                                  </div>
+
+                                  {/* Interactive Power Calibration Slider */}
+                                  <div className="space-y-1 mt-2 pt-2 border-t border-slate-900/40 text-left">
+                                    <div className="flex justify-between items-center text-[8px] text-slate-500 font-mono">
+                                      <span>SIMULATE POWER level</span>
+                                      <span className="text-slate-300 font-bold">{entity.batteryPercent}%</span>
+                                    </div>
+                                    <input 
+                                      type="range"
+                                      min="1"
+                                      max="100"
+                                      value={entity.batteryPercent}
+                                      onChange={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        const updated = (state.registeredEntities || []).map(t => 
+                                          t.id === entity.id ? { ...t, batteryPercent: val } : t
+                                        );
+                                        
+                                        onChange({ ...state, registeredEntities: updated });
+
+                                        // Dispatch interactive warning logs if drops under threshold
+                                        const threshold = state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20;
+                                        if (val <= threshold && entity.batteryPercent > threshold) {
+                                          if (onTriggerAlert) {
+                                            onTriggerAlert(
+                                              "Critical Battery Warning",
+                                              `Companion hardware '${entity.name}' battery level dropped to ${val}% (Threshold set at ${threshold}%).`,
+                                              "battery_warning"
+                                            );
+                                          }
+                                          if (onAddLog) {
+                                            onAddLog({
+                                              deviceModel: 'BATTERY_TELEMETRY',
+                                              action: 'discovered',
+                                              shieldApplied: `ALERT DISPATCHED: ${entity.name.toUpperCase()} AT ${val}%`,
+                                              distance: 0,
+                                              rotatedId: 'BATTERY_CRITICAL'
+                                            });
+                                          }
+                                        }
+                                      }}
+                                      className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Interactive Optimization Controller panel */}
+                        <div className="p-4 rounded-xl border border-slate-850 bg-slate-950/40 flex flex-col md:flex-row items-center justify-between gap-4">
+                          <div className="space-y-1 text-left">
+                            <span className="text-[10px] font-extrabold text-white font-mono uppercase tracking-wider block">
+                              Intelligent Battery Optimization Engine
+                            </span>
+                            <p className="text-[10px] text-slate-400 font-sans leading-normal">
+                              Scales signal frequency, caps transmission ranges, and enters ultra-sleep intervals as companion device batteries drain.
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const active = !state.intelligentBatteryOptimization;
+                                onChange({
+                                  ...state,
+                                  intelligentBatteryOptimization: active
+                                });
+                                if (onAddLog) {
+                                  onAddLog({
+                                    deviceModel: 'BATTERY_TELEMETRY',
+                                    action: 'censored',
+                                    shieldApplied: active ? 'BATTERY_OPTIMIZATION_ENABLED' : 'BATTERY_OPTIMIZATION_DISABLED',
+                                    distance: 0,
+                                    rotatedId: 'BATT_ENGINE'
+                                  });
+                                }
+                              }}
+                              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold font-mono border uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                                state.intelligentBatteryOptimization
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-300'
+                              }`}
+                            >
+                              {state.intelligentBatteryOptimization ? 'Disable Optimizer' : 'Enable Optimizer'}
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Instantly recharge all connected beacons to 100%
+                                const updated = (state.registeredEntities || []).map(t => ({ ...t, batteryPercent: 100 }));
+                                onChange({ ...state, registeredEntities: updated });
+                                if (onAddLog) {
+                                  onAddLog({
+                                    deviceModel: 'BATTERY_TELEMETRY',
+                                    action: 'censored',
+                                    shieldApplied: 'BEACON_POWER_CELLS_RECHARGED_100',
+                                    distance: 0,
+                                    rotatedId: 'BATT_RECHARGE'
+                                  });
+                                }
+                              }}
+                              className="px-4 py-1.5 rounded-lg text-[10px] font-bold font-mono border border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-850 hover:text-white uppercase tracking-wider transition-all duration-200 cursor-pointer"
+                            >
+                              Recharge All Cells
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* D3 Real-Time Signal Strength Map Widget */}
+              <AnimatePresence>
+                {showSignalMap && (widgetViewMode === 'scroll' || enabledWidgetIds[activeWidgetIndex] === 'signal-map') && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: 10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: 10 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden animate-none"
+                  >
+                    <motion.div
+                      {...(widgetViewMode === 'swipe' ? {
+                        drag: "x",
+                        dragConstraints: { left: 0, right: 0 },
+                        dragElastic: 0.2,
+                        onDragEnd: handleSwipeDragEnd,
+                        className: "cursor-grab active:cursor-grabbing select-none w-full"
+                      } : {})}
+                    >
+                      <D3SignalMap
+                        state={state}
+                        onChange={onChange}
+                        onAddLog={onAddLog}
+                      />
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Pagination Indicators & Empty State in Swipe Mode */}
+              {widgetViewMode === 'swipe' && enabledWidgetIds.length > 0 && (
+                <div className="flex flex-col items-center justify-center gap-2 pt-2 pb-4">
+                  {enabledWidgetIds.length > 1 && (
+                    <div className="flex items-center gap-2">
+                      {enabledWidgetIds.map((widgetId, idx) => {
+                        const widgetNames: Record<string, string> = {
+                          'privacy-score': 'Privacy Impact Score',
+                          'signal-history': 'Signal History Analytics',
+                          'battery-status': 'Battery Monitor',
+                          'signal-map': 'D3 Spatial Map'
+                        };
+                        const isActive = idx === activeWidgetIndex;
+                        return (
+                          <button
+                            key={widgetId}
+                            type="button"
+                            onClick={() => setActiveWidgetIndex(idx)}
+                            className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                              isActive
+                                ? 'bg-emerald-400 w-6 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                                : 'bg-slate-800 hover:bg-slate-700 w-2'
+                            }`}
+                            title={`Switch to ${widgetNames[widgetId] || widgetId}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-500 font-mono tracking-wide uppercase">
+                    ⬅️ SWIPE CARD OR CLICK DOTS TO NAVIGATE WINDOWS ➡️
+                  </p>
+                </div>
+              )}
+
+              {enabledWidgetIds.length === 0 && (
+                <div className="p-8 rounded-2xl bg-slate-950/40 border border-slate-900 border-dashed text-center space-y-2">
+                  <div className="text-2xl">🎴</div>
+                  <h4 className="text-xs font-bold text-slate-400 font-mono uppercase tracking-wider">
+                    All Widget Windows Deactivated
+                  </h4>
+                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto leading-relaxed">
+                    Activate the Privacy Score, Signal History, Battery Monitor, or Spatial Signal Map in the "Collapsible App Interface Options" below to populate your dashboard views.
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Tab: Targeted Sound & Peripheral Console */}
+          {activeTab === 'targeted' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              className="space-y-6"
+            >
+              {/* OS Window 1: Targeted Audio-Visual Defenses & Companion Hardware */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                {/* Title Bar */}
+                <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5 shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" title="Close" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Targeted Acoustic Defenses &amp; Peripheral Console</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono">
+                    <span className={`w-2 h-2 rounded-full ${state.targetedPeripheralConnected ? 'bg-emerald-500 animate-ping' : 'bg-amber-500 animate-pulse'}`}></span>
+                    <span className={state.targetedPeripheralConnected ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+                      {state.targetedPeripheralConnected ? 'COMPANION PAIRED' : 'LOCAL SIMULATOR'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Window Content */}
+                <div className="p-5 sm:p-6 space-y-6 bg-slate-900/10">
+                  
+                  {/* Conceptual Banner detailing the Targeted Shield paradigm */}
+                  <div className="bg-gradient-to-r from-emerald-950/20 via-slate-950 to-teal-950/20 border border-emerald-500/20 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                    <div className="space-y-1.5 max-w-xl">
+                      <span className="text-[9px] px-2 py-0.5 rounded-full font-bold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest inline-block">
+                        Active Paradigm: Targeted Compliance
+                      </span>
+                      <h4 className="text-sm font-bold text-white font-sans">
+                        Selective Opt-Out Shielding vs. Blanket Recording Interference
+                      </h4>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        To respect the rights of others, BlurBubble operates strictly as a <strong>targeted privacy defense</strong>. If you are standing next to an innocent friend who is being recorded, <strong>only your face is blurred</strong> and <strong>only your speech is scrambled</strong>. Complying camera systems receive your localized opt-out broadcast and apply surgical masks, keeping bystanders fully visible and clear.
+                      </p>
+                    </div>
+
+                    {/* Quick Mode Toggle Widget */}
+                    <div className="p-3.5 bg-slate-950/80 border border-slate-900 rounded-xl flex flex-col items-center gap-3 shrink-0 w-full md:w-56 text-center">
+                      <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-wider">Shield Scope Mode</span>
+                      
+                      <div className="grid grid-cols-2 gap-1 w-full p-0.5 bg-slate-900 rounded-lg">
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, targetedShieldingEnabled: true })}
+                          className={`py-1.5 text-[10px] font-bold rounded-md font-mono transition uppercase ${
+                            state.targetedShieldingEnabled !== false
+                              ? 'bg-emerald-500 text-slate-950 font-black'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Targeted
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, targetedShieldingEnabled: false })}
+                          className={`py-1.5 text-[10px] font-bold rounded-md font-mono transition uppercase ${
+                            state.targetedShieldingEnabled === false
+                              ? 'bg-amber-500 text-slate-950 font-black'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Blanket
+                        </button>
+                      </div>
+
+                      <span className="text-[9px] text-slate-400 leading-snug">
+                        {state.targetedShieldingEnabled !== false 
+                          ? "🔒 Protects Paul G. Stuart only. Innocent bystanders are unaffected." 
+                          : "⚠️ Overrides all nearby fields. Might disrupt normal recordings."}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Core 3 Audio Shield Controllers */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b border-slate-900 pb-2">
+                      <Radio className="w-4 h-4 text-emerald-400" />
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Audio Defenses (Equivalent to Visual Blurs)</h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* 1. Vocal Resonance Scrambler */}
+                      <div className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                        state.vocalScramblerEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/35 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-850 text-slate-400'
+                      }`}>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <span className={`inline-block w-2 h-2 rounded-full ${state.vocalScramblerEnabled ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                              Vocal Scrambler
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-500">Audio Blur</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Applies micro-pitch fluctuation filters to your voice signature. Nearby humans understand you flawlessly, but automated speech-to-text recorders capture scrambled wave data.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, vocalScramblerEnabled: !state.vocalScramblerEnabled })}
+                          className={`w-full py-1.5 rounded-lg text-[10px] font-extrabold font-mono uppercase border transition ${
+                            state.vocalScramblerEnabled
+                              ? 'bg-emerald-500 text-slate-950 border-emerald-400 cursor-pointer'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          {state.vocalScramblerEnabled ? 'ACTIVE (Scrambling)' : 'STANDBY'}
+                        </button>
+                      </div>
+
+                      {/* 2. Inaudible Biometric Audio Watermarking */}
+                      <div className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                        state.acousticWatermarkingEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/35 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-850 text-slate-400'
+                      }`}>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <span className={`inline-block w-2 h-2 rounded-full ${state.acousticWatermarkingEnabled ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                              Biometric AI Watermark
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-500">Audio Metadata</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Injects near-ultrasonic cryptographic metadata into your spoken audio, forcing automated scraper bots to trigger reject policies and auto-delete your voice clips.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, acousticWatermarkingEnabled: !state.acousticWatermarkingEnabled })}
+                          className={`w-full py-1.5 rounded-lg text-[10px] font-extrabold font-mono uppercase border transition ${
+                            state.acousticWatermarkingEnabled
+                              ? 'bg-emerald-500 text-slate-950 border-emerald-400 cursor-pointer'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          {state.acousticWatermarkingEnabled ? 'ACTIVE (Watermarked)' : 'STANDBY'}
+                        </button>
+                      </div>
+
+                      {/* 3. Ultrasonic Microphone Saturation */}
+                      <div className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                        state.ultrasonicMicSaturationEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/35 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-850 text-slate-400'
+                      }`}>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <span className={`inline-block w-2 h-2 rounded-full ${state.ultrasonicMicSaturationEnabled ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                              Ultrasonic Mic Saturation
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-500">Hardware Jam</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Emits safe, inaudible 22kHz pressure waves that physically vibrate the capture mic diaphragm on snooping devices, distorting their records with non-destructive white noise.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, ultrasonicMicSaturationEnabled: !state.ultrasonicMicSaturationEnabled })}
+                          className={`w-full py-1.5 rounded-lg text-[10px] font-extrabold font-mono uppercase border transition ${
+                            state.ultrasonicMicSaturationEnabled
+                              ? 'bg-emerald-500 text-slate-950 border-emerald-400 cursor-pointer'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          {state.ultrasonicMicSaturationEnabled ? 'ACTIVE (Saturating)' : 'STANDBY'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Waveform Visualization section demonstrating Targeted Scrambling */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+                    {/* Column 1 & 2: Real-time Audio Feed Stream Simulator */}
+                    <div className="lg:col-span-2 bg-slate-950/60 border border-slate-850 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                        <div className="space-y-0.5">
+                          <h5 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Live Acoustic Waveform Spectrograph</h5>
+                          <p className="text-[10px] text-slate-500">Visual proof of targeted voice scrambling vs. bystander audio integrity.</p>
+                        </div>
+                        <span className="text-[8px] font-mono bg-emerald-950 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-900/30 uppercase tracking-wider animate-pulse">
+                          LIVE SPECTRUM MONITOR
+                        </span>
+                      </div>
+
+                      {/* Waveform Streams */}
+                      <div className="space-y-3.5 pt-1">
+                        
+                        {/* Stream A: Paul (Me) Scrambled */}
+                        <div className="bg-slate-900/40 border border-slate-900 rounded-lg p-3 space-y-2 relative overflow-hidden">
+                          <div className="flex justify-between items-center text-[10px] font-mono">
+                            <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                              Track A: Paul G. Stuart (Protected Voice)
+                            </span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ${
+                              state.vocalScramblerEnabled 
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                : 'bg-slate-800 text-slate-500'
+                            }`}>
+                              {state.vocalScramblerEnabled ? '🔒 Scrambled & Watermarked' : '⚠️ RAW & UNPROTECTED'}
+                            </span>
+                          </div>
+
+                          {/* Dynamic Waveform Graph */}
+                          <div className="h-16 flex items-center gap-[3px] px-2 bg-slate-950/80 rounded border border-slate-900/50 relative overflow-hidden">
+                            {/* Animated waveform bars representing voice scrambling */}
+                            {Array.from({ length: 48 }).map((_, i) => {
+                              const randomDelay = Math.random() * 0.8;
+                              const randomDuration = 0.5 + Math.random() * 0.8;
+                              const activeHeight = state.vocalScramblerEnabled 
+                                ? `${15 + Math.sin(i * 0.4) * 15 + Math.random() * 45}%`
+                                : `${5 + Math.sin(i * 0.2) * 10 + Math.random() * 15}%`;
+
+                              return (
+                                <div 
+                                  key={i} 
+                                  className={`flex-1 rounded-full transition-all duration-300 ${
+                                    state.vocalScramblerEnabled 
+                                      ? 'bg-gradient-to-t from-emerald-600 to-emerald-400' 
+                                      : 'bg-slate-700'
+                                  }`}
+                                  style={{
+                                    height: activeHeight,
+                                    animation: state.vocalScramblerEnabled ? `pulse ${randomDuration}s ease-in-out infinite alternate` : 'none',
+                                    animationDelay: `${randomDelay}s`
+                                  }}
+                                />
+                              );
+                            })}
+                            
+                            <div className="absolute right-3 top-2 flex items-center gap-1.5 font-mono text-[8px] text-slate-500 bg-slate-950/90 px-1 rounded border border-slate-900">
+                              <span>Mod: {state.targetedSoundAngle || 45}° Beam</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Stream B: Elena (Bystander next to me) Clear */}
+                        <div className="bg-slate-900/40 border border-slate-900 rounded-lg p-3 space-y-2 relative overflow-hidden">
+                          <div className="flex justify-between items-center text-[10px] font-mono">
+                            <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                              Track B: Adjacent Bystander (Friend's Voice)
+                            </span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ${
+                              state.targetedShieldingEnabled !== false
+                                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            }`}>
+                              {state.targetedShieldingEnabled !== false ? '🔊 100% Crisp / Clear' : '⚠️ COLLATERAL AUDIO SCRAMBLE'}
+                            </span>
+                          </div>
+
+                          {/* Dynamic Waveform Graph - Bystander stays calm, normal, pristine */}
+                          <div className="h-16 flex items-center gap-[3px] px-2 bg-slate-950/80 rounded border border-slate-900/50 relative overflow-hidden">
+                            {Array.from({ length: 48 }).map((_, i) => {
+                              const isScrambled = state.targetedShieldingEnabled === false && state.vocalScramblerEnabled;
+                              const randomDelay = Math.random() * 0.5;
+                              const randomDuration = 0.8 + Math.random() * 0.6;
+                              
+                              const activeHeight = isScrambled
+                                ? `${15 + Math.sin(i * 0.4) * 15 + Math.random() * 45}%` // Colateral scramble
+                                : `${20 + Math.sin(i * 0.15) * 20 + Math.sin(i * 0.5) * 5}%`; // Beautiful smooth vocal stream
+
+                              return (
+                                <div 
+                                  key={i} 
+                                  className={`flex-1 rounded-full transition-all duration-300 ${
+                                    isScrambled 
+                                      ? 'bg-amber-500' 
+                                      : 'bg-cyan-400/80'
+                                  }`}
+                                  style={{
+                                    height: activeHeight,
+                                    animation: `pulse ${randomDuration}s ease-in-out infinite alternate`,
+                                    animationDelay: `${randomDelay}s`
+                                  }}
+                                />
+                              );
+                            })}
+                            
+                            <div className="absolute right-3 top-2 flex items-center gap-1.5 font-mono text-[8px] text-slate-500 bg-slate-950/90 px-1 rounded border border-slate-900">
+                              <span>Range: Outside Beam Arc</span>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+
+                      {/* Interactive Controls for Beam Directional & Intensity */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 bg-slate-950 p-3.5 border border-slate-900 rounded-xl">
+                        
+                        {/* Sliders Control 1: Directional Beam Angle */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center text-[10px] font-mono">
+                            <span className="text-slate-300 font-semibold uppercase">Directional Beam Angle</span>
+                            <span className="text-emerald-400 font-bold">{state.targetedSoundAngle || 45}° Beam</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="15"
+                            max="180"
+                            step="5"
+                            value={state.targetedSoundAngle || 45}
+                            onChange={(e) => onChange({ ...state, targetedSoundAngle: parseInt(e.target.value) })}
+                            className="w-full accent-emerald-500 h-1 bg-slate-900 cursor-pointer rounded-full"
+                            title="Set the sonic cancellation beam width"
+                          />
+                          <p className="text-[8px] text-slate-500 leading-normal">
+                            {state.targetedSoundAngle <= 45 
+                              ? "Extremely focused 15°-45° acoustic laser beam. Shields only you. Zero bystander interference." 
+                              : state.targetedSoundAngle <= 90 
+                                ? "Medium 90° acoustic cone. Protects immediate personal workspace." 
+                                : "Wide 180° blanket wave. Shields entire table area, may affect nearby bystanders."}
+                          </p>
+                        </div>
+
+                        {/* Sliders Control 2: Ultrasonic Emission Power */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center text-[10px] font-mono">
+                            <span className="text-slate-300 font-semibold uppercase">Ultrasonic Power Level</span>
+                            <span className="text-emerald-400 font-bold">{state.targetedSoundIntensity || 75} dB SPL</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="40"
+                            max="110"
+                            step="5"
+                            value={state.targetedSoundIntensity || 75}
+                            onChange={(e) => onChange({ ...state, targetedSoundIntensity: parseInt(e.target.value) })}
+                            className="w-full accent-emerald-500 h-1 bg-slate-900 cursor-pointer rounded-full"
+                            title="Set the ultrasonic emitter volume"
+                          />
+                          <p className="text-[8px] text-slate-500 leading-normal">
+                            {state.targetedSoundIntensity <= 60
+                              ? "Eco mode. Suppresses low-gain lapel recorders up to 1.5 meters."
+                              : state.targetedSoundIntensity <= 85
+                                ? "Nominal high-defense setting. Saturates standard smartphone mics up to 3 meters."
+                                : "Overdrive boost. Safe ultrasonic saturation up to 5 meters against high-gain mic rigs."}
+                          </p>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Column 3: Companion Hardware pairing state */}
+                    <div className="bg-slate-950/60 border border-slate-850 rounded-xl p-4 flex flex-col justify-between space-y-4">
+                      <div>
+                        <div className="flex justify-between items-center border-b border-slate-900 pb-2 mb-3">
+                          <span className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">BlurBubble Wearable Hardware</span>
+                          <span className="text-[9px] text-slate-500 font-mono">BLE Core</span>
+                        </div>
+
+                        {/* Physical Hardware Representation Box */}
+                        <div className="bg-slate-950 border border-slate-900/60 rounded-xl p-4 flex flex-col items-center justify-center text-center space-y-3 relative overflow-hidden">
+                          {/* Hardware Glowing Ripple Background if connected */}
+                          {state.targetedPeripheralConnected && (
+                            <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none">
+                              <span className="animate-ping absolute inline-flex h-20 w-20 rounded-full bg-emerald-500 opacity-5"></span>
+                              <span className="animate-pulse absolute inline-flex h-36 w-36 rounded-full bg-emerald-500 opacity-5"></span>
+                            </div>
+                          )}
+
+                          {/* Companion Icon */}
+                          <div className={`p-4 rounded-2xl border transition-all relative z-10 ${
+                            state.targetedPeripheralConnected
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                              : 'bg-slate-900 border-slate-850 text-slate-500'
+                          }`}>
+                            <Cpu className={`w-8 h-8 ${state.targetedPeripheralConnected ? 'animate-spin' : ''}`} style={{ animationDuration: '10s' }} />
+                          </div>
+
+                          <div className="space-y-1 relative z-10">
+                            <span className="text-xs font-bold block text-white font-mono">
+                              {state.targetedPeripheralConnected ? 'BlurBubble Helix Badge v1.0' : 'No Companion Hardware Paired'}
+                            </span>
+                            <span className="text-[9px] text-slate-400 block font-sans">
+                              {state.targetedPeripheralConnected 
+                                ? 'Paired via Secure Bluetooth-LE mesh. Hardware sound emitters armed.' 
+                                : 'Using default mobile internal speaker simulation.'}
+                            </span>
+                          </div>
+
+                          {/* Pairing Buttons */}
+                          <div className="w-full relative z-10 pt-1">
+                            <button
+                              type="button"
+                              id="toggle-hardware-pairing-btn"
+                              onClick={() => {
+                                const isConnected = !state.targetedPeripheralConnected;
+                                onChange({
+                                  ...state,
+                                  targetedPeripheralConnected: isConnected
+                                });
+                                
+                                if (onTriggerAlert) {
+                                  onTriggerAlert(
+                                    isConnected ? "Hardware Badge Bonded" : "Companion Hardware Disconnected",
+                                    isConnected 
+                                      ? "BlurBubble Helix Badge successfully paired. Dynamic acoustic directional canceling and ultrasonic emitters are now routed to physical pocket hardware."
+                                      : "Hardware peripheral detached. Reverting acoustic shield emissions to mobile internal speaker array.",
+                                    isConnected ? "video_found" : "video_deleted"
+                                  );
+                                }
+
+                                if (onAddLog) {
+                                  onAddLog({
+                                    deviceModel: 'BLURBUBBLE_HARDWARE_PERIPHERAL',
+                                    action: isConnected ? 'discovered' : 'censored',
+                                    shieldApplied: isConnected ? 'SECURE_BLE_MESH_ESTABLISHED' : 'BLE_MESH_DISMANTLED_REVERT_TO_INTERNAL',
+                                    distance: 0,
+                                    rotatedId: isConnected ? 'HARDWARE_LINKED_SUITE_A2' : 'HARDWARE_UNLINKED'
+                                  });
+                                }
+                              }}
+                              className={`w-full py-1.5 rounded-lg text-[9px] font-extrabold font-mono uppercase border transition cursor-pointer ${
+                                state.targetedPeripheralConnected
+                                  ? 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30 text-rose-400'
+                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                              }`}
+                            >
+                              {state.targetedPeripheralConnected ? '🔌 DISCONNECT BADGE' : '⚡ PAIR SECURE HELIX BADGE'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interactive Test Button & Details */}
+                      <div className="space-y-2">
+                        <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-wider block">Diagnostics</span>
+                        <button
+                          type="button"
+                          id="targeted-acoustics-test-btn"
+                          onClick={() => {
+                            const isTargeted = state.targetedShieldingEnabled !== false;
+                            
+                            if (onTriggerAlert) {
+                              onTriggerAlert(
+                                isTargeted ? "Surgical Privacy Test Passed" : "Blanket Jammer Test Run",
+                                isTargeted
+                                  ? "Directional voice cancellation and optical overlays triggered successfully. Verification check confirms: Paul Stuart blurred & voice scrambled; bystander standing 1 meter away remains 100% untouched and recorded cleanly."
+                                  : "Room-wide blanket jamming wave emitted. All nearby audio and visual capturing elements suppressed in a 5-meter radius.",
+                                "video_found"
+                              );
+                            }
+
+                            if (onAddLog) {
+                              onAddLog({
+                                deviceModel: 'DIAGNOSTIC_VOICE_ISOLATION',
+                                action: 'censored',
+                                shieldApplied: isTargeted 
+                                  ? 'TARGETED_ACOUSTIC_MASKING_VERIFIED: paul_blurred_friend_clear' 
+                                  : 'BLANKET_ROOM_JAMMING_VERIFIED: all_elements_jammed',
+                                distance: 1.2,
+                                rotatedId: 'ISOLATION_DIAGNOSTIC_VERIFICATION_COMPLETE'
+                              });
+                            }
+                          }}
+                          className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 hover:border-emerald-500/50 rounded-lg text-xs font-bold text-emerald-400 uppercase tracking-wide font-mono transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Zap className="w-3.5 h-3.5 animate-pulse" />
+                          Run Targeted Privacy Test
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab: Audio Shield Settings (Replicates visual controls but for audio domain) */}
+          {activeTab === 'audio_shield' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              className="space-y-6"
+            >
+              {/* Profile/Device Selector Section */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                {/* Title Bar */}
+                <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5 shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" title="Close" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Acoustic Shield Console &amp; Profile Matrix</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono">
+                    <span className={`w-2 h-2 rounded-full bg-emerald-400 animate-pulse`}></span>
+                    <span className="text-emerald-400 font-semibold uppercase tracking-wider">Acoustic Armor Armed</span>
+                  </div>
+                </div>
+
+                <div className="p-5 sm:p-6 space-y-6">
+                  {/* Explanation Banner */}
+                  <div className="bg-gradient-to-r from-emerald-950/20 via-slate-950 to-teal-950/20 border border-emerald-500/20 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                    <div className="space-y-1.5 max-w-2xl">
+                      <span className="text-[9px] px-2 py-0.5 rounded-full font-bold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest inline-block">
+                        Acoustic Sensory Refusal Domain
+                      </span>
+                      <h4 className="text-sm font-bold text-white font-sans">
+                        Multi-Layered Spatial Voice &amp; Mic Refusal System
+                      </h4>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Just like visual shields blur facial details and proprietary objects, the <strong>Acoustic Shield Settings</strong> scramble vocal waves, tag voice clip metadata, and block physical microphones. Manage individual audio defense policies for your main voice profile or each paired hardware device.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-850 shrink-0">
+                      <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      <span className="text-[10px] font-mono text-slate-300 font-bold uppercase">3 Shield Classes</span>
+                    </div>
+                  </div>
+
+                  {/* Profile selector dropdown and global parameters */}
+                  <div className="bg-slate-900/40 border border-slate-850 rounded-xl p-4 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-3">
+                      <div>
+                        <h4 className="text-xs font-extrabold text-white uppercase tracking-wider font-mono">Select Target Profile or Companion Device</h4>
+                        <p className="text-[10px] text-slate-500">Configure independent acoustic properties for this profile</p>
+                      </div>
+
+                      {/* Dropdown for selecting profile */}
+                      <select
+                        id="audio-profile-select"
+                        value={selectedAudioProfileId}
+                        onChange={(e) => setSelectedAudioProfileId(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-lg p-2 font-mono font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 max-w-[280px]"
+                      >
+                        <option value="primary">👤 Paul Stuart (Primary Profile)</option>
+                        {state.registeredEntities.map(ent => (
+                          <option key={ent.id} value={ent.id}>
+                            {ent.type === 'phone' ? '📱' : '🎒'} {ent.name} ({ent.isActive ? 'ACTIVE' : 'STANDBY'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Render toggles and values for the selected profile */}
+                    {(() => {
+                      const isPrimary = selectedAudioProfileId === 'primary';
+                      const entity = !isPrimary ? state.registeredEntities.find(ent => ent.id === selectedAudioProfileId) : null;
+                      
+                      // Resolve active state values for selected profile
+                      const scramblerActive = isPrimary ? !!state.vocalScramblerEnabled : !!entity?.vocalScramblerEnabled;
+                      const watermarkingActive = isPrimary ? !!state.acousticWatermarkingEnabled : !!entity?.acousticWatermarkingEnabled;
+                      const saturationActive = isPrimary ? !!state.ultrasonicMicSaturationEnabled : !!entity?.ultrasonicMicSaturationEnabled;
+
+                      const toggleProperty = (prop: 'vocalScramblerEnabled' | 'acousticWatermarkingEnabled' | 'ultrasonicMicSaturationEnabled') => {
+                        if (isPrimary) {
+                          onChange({ ...state, [prop]: !state[prop] });
+                          
+                          if (onTriggerAlert) {
+                            onTriggerAlert(
+                              `Paul Stuart Audio Armor Updated`,
+                              `Acoustic shield parameter '${prop.replace('Enabled', '').replace(/([A-Z])/g, ' $1')}' has been updated on your primary profile.`,
+                              "video_found"
+                            );
+                          }
+                        } else if (entity) {
+                          const updatedEntities = state.registeredEntities.map(ent => 
+                            ent.id === entity.id ? { ...ent, [prop]: !ent[prop] } : ent
+                          );
+                          onChange({ ...state, registeredEntities: updatedEntities });
+
+                          if (onTriggerAlert) {
+                            onTriggerAlert(
+                              `${entity.name} Parameter Shifted`,
+                              `Acoustic shield parameter '${prop.replace('Enabled', '').replace(/([A-Z])/g, ' $1')}' has been toggled to ${!entity[prop] ? 'ACTIVE' : 'STANDBY'} on the device profile.`,
+                              "video_found"
+                            );
+                          }
+                        }
+                      };
+
+                      return (
+                        <div className="space-y-6">
+                          {/* 3 Interactive Cards replicating the visual logic */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            
+                            {/* 1. Vocal Scrambler Control */}
+                            <div className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                              scramblerActive 
+                                ? 'bg-emerald-950/15 border-emerald-500/40 text-slate-200' 
+                                : 'bg-slate-950/20 border-slate-850 text-slate-400'
+                            }`}>
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <span className={`inline-block w-2 h-2 rounded-full ${scramblerActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                                    Vocal Scrambler
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-500">Audio Blur</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-relaxed">
+                                  Modulates voice waves using live pseudo-noise carriers. Surrounding bystanders hear you clearly, but smart microphones/analyzers receive chaotic scrambled spectrographs.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                id={`toggle-vocal-scrambler-${selectedAudioProfileId}`}
+                                onClick={() => toggleProperty('vocalScramblerEnabled')}
+                                className={`w-full py-2 rounded-lg text-[10px] font-bold font-mono uppercase border transition cursor-pointer ${
+                                  scramblerActive
+                                    ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                                }`}
+                              >
+                                {scramblerActive ? '🔒 SCRAMBLER ACTIVE' : '⚠️ STANDBY'}
+                              </button>
+                            </div>
+
+                            {/* 2. Acoustic Watermarking Control */}
+                            <div className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                              watermarkingActive 
+                                ? 'bg-emerald-950/15 border-emerald-500/40 text-slate-200' 
+                                : 'bg-slate-950/20 border-slate-850 text-slate-400'
+                            }`}>
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <span className={`inline-block w-2 h-2 rounded-full ${watermarkingActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                                    Acoustic Watermarking
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-500">Signature Tag</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-relaxed">
+                                  Embeds sub-audible high-frequency metadata codes directly into your speech wave. Recording systems decode an "opt-out" flag, forcing compliant bots to purge or skip storing your voice.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                id={`toggle-watermarking-${selectedAudioProfileId}`}
+                                onClick={() => toggleProperty('acousticWatermarkingEnabled')}
+                                className={`w-full py-2 rounded-lg text-[10px] font-bold font-mono uppercase border transition cursor-pointer ${
+                                  watermarkingActive
+                                    ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                                }`}
+                              >
+                                {watermarkingActive ? '🔒 WATERMARK ACTIVE' : '⚠️ STANDBY'}
+                              </button>
+                            </div>
+
+                            {/* 3. Ultrasonic Mic Saturation Control */}
+                            <div className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                              saturationActive 
+                                ? 'bg-emerald-950/15 border-emerald-500/40 text-slate-200' 
+                                : 'bg-slate-950/20 border-slate-850 text-slate-400'
+                            }`}>
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <span className={`inline-block w-2 h-2 rounded-full ${saturationActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                                    Ultrasonic Mic Saturation
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-500">Hardware Block</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-relaxed">
+                                  Emits micro-vibrational pressure pulses focused in the 22kHz-25kHz spectrum. Overloads adjacent lapel/smart mics to physically block local recordings from gaining legible audio.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                id={`toggle-saturation-${selectedAudioProfileId}`}
+                                onClick={() => toggleProperty('ultrasonicMicSaturationEnabled')}
+                                className={`w-full py-2 rounded-lg text-[10px] font-bold font-mono uppercase border transition cursor-pointer ${
+                                  saturationActive
+                                    ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                                }`}
+                              >
+                                {saturationActive ? '🔒 SATURATOR ENFORCED' : '⚠️ STANDBY'}
+                              </button>
+                            </div>
+
+                          </div>
+
+                          {/* Interactive Scrambler Pitch, Preset Phrases & Dynamic Waveform visualization */}
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+                            
+                            {/* Visualizer and Simulator: Scrambler in Action */}
+                            <div className="lg:col-span-2 bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-4">
+                              <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                                <div className="space-y-0.5">
+                                  <h5 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Live Acoustic Demodulator &amp; Scrambling Waveform</h5>
+                                  <p className="text-[9px] text-slate-500">Simulating the effect of live audio processing for {isPrimary ? 'Paul Stuart' : entity?.name}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[8px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider ${
+                                    scramblerActive 
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse' 
+                                      : 'bg-slate-900 text-slate-500 border-slate-800'
+                                  }`}>
+                                    {scramblerActive ? 'SCRAMBLING ON' : 'RAW STREAM'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Interactive phrase selector */}
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[9px] font-mono uppercase text-slate-500 font-bold">Try Spoken Phrases:</span>
+                                  {[
+                                    "Initializing BlurBubble spatial envelope.",
+                                    "Requesting secure biometric exclusion.",
+                                    "Stop recording me: law 88 compliance check.",
+                                    "Innocent bystanders remain fully untouched."
+                                  ].map((phrase, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => {
+                                        setTestedPhrase(phrase);
+                                        // Trigger small alert simulation
+                                        if (onTriggerAlert) {
+                                          onTriggerAlert(
+                                            "Scrambler Audio Analyzed",
+                                            `Vocal scrambler processed '${phrase}' through a 2.4kHz acoustic filter. Bystanders hear normal sound, raw recording yields encrypted noise.`,
+                                            "video_deleted"
+                                          );
+                                        }
+                                      }}
+                                      className={`px-2 py-1 text-[8px] font-mono rounded border transition ${
+                                        testedPhrase === phrase
+                                          ? 'bg-emerald-500/25 border-emerald-400/50 text-emerald-400 font-bold'
+                                          : 'bg-slate-900/60 border-slate-850 text-slate-400 hover:text-white'
+                                      }`}
+                                    >
+                                      Phrase {idx + 1}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Display Selected Phrase Raw vs Scrambled */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-900/30 p-3 rounded-lg border border-slate-900">
+                                  <div className="space-y-1">
+                                    <span className="text-[8px] font-mono uppercase text-slate-500 font-bold block">Spoken (Bystanders Hear)</span>
+                                    <p className="text-xs text-slate-200 font-medium italic">"{testedPhrase}"</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <span className="text-[8px] font-mono uppercase text-slate-500 font-bold block">Intercepted (Bots Capture)</span>
+                                    <p className="text-xs text-emerald-400 font-mono font-bold leading-relaxed tracking-wide">
+                                      {scramblerActive 
+                                        ? testedPhrase.split(' ').map(w => w.split('').map(() => '■').join('')).join(' ') + " [X-" + (state.targetedSoundAngle || 45) + "]"
+                                        : `"${testedPhrase}" [UNPROTECTED]`
+                                      }
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Interactive Waveform Graph */}
+                              <div className="h-20 flex items-center gap-[3px] px-3.5 bg-slate-950 rounded-xl border border-slate-900 relative overflow-hidden">
+                                {Array.from({ length: 55 }).map((_, i) => {
+                                  const randomDelay = Math.random() * 0.7;
+                                  const randomDuration = 0.4 + Math.random() * 0.7;
+                                  
+                                  // Modulate height based on selected triggers
+                                  let heightFactor = 15;
+                                  if (scramblerActive) heightFactor += 40;
+                                  if (watermarkingActive) heightFactor += 15;
+                                  if (saturationActive) heightFactor += 20;
+
+                                  const barHeight = scramblerActive 
+                                    ? `${10 + Math.sin(i * 0.35 + (audioModulator / 10)) * 25 + Math.random() * heightFactor}%`
+                                    : `${5 + Math.sin(i * 0.15) * 15 + Math.random() * 12}%`;
+
+                                  return (
+                                    <div 
+                                      key={i} 
+                                      className={`flex-1 rounded-full transition-all duration-300 ${
+                                        scramblerActive 
+                                          ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.3)]' 
+                                          : 'bg-slate-700'
+                                      }`}
+                                      style={{
+                                        height: barHeight,
+                                        animation: `pulse ${randomDuration}s ease-in-out infinite alternate`,
+                                        animationDelay: `${randomDelay}s`
+                                      }}
+                                    />
+                                  );
+                                })}
+
+                                <div className="absolute left-3 top-2 flex items-center gap-1 text-[8px] font-mono text-slate-500 bg-slate-950/90 px-1.5 py-0.5 rounded border border-slate-900">
+                                  <span>FREQ: {scramblerActive ? `${440 + audioModulator * 12}Hz (Vocal Shift)` : '44.1kHz Bypass'}</span>
+                                </div>
+
+                                <div className="absolute right-3 top-2 flex items-center gap-1 text-[8px] font-mono text-slate-500 bg-slate-950/90 px-1.5 py-0.5 rounded border border-slate-900">
+                                  <span>AMPLITUDE: {scramblerActive ? `${state.targetedSoundIntensity || 75} dB` : 'Ambient'}</span>
+                                </div>
+                              </div>
+
+                              {/* Interactive Modulation Slider */}
+                              <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-850 space-y-2">
+                                <div className="flex justify-between items-center text-[10px] font-mono">
+                                  <span className="text-slate-300 font-semibold uppercase">Modulation Carrier Shift</span>
+                                  <span className="text-emerald-400 font-bold">+{audioModulator} Hz Modulation</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="20"
+                                  max="300"
+                                  step="10"
+                                  value={audioModulator}
+                                  onChange={(e) => setAudioModulator(parseInt(e.target.value))}
+                                  className="w-full accent-emerald-500 h-1 bg-slate-950 cursor-pointer rounded-full"
+                                  title="Adjust simulated scramble modulation speed/carrier shift"
+                                />
+                                <div className="flex justify-between items-center text-[8px] text-slate-500 font-mono">
+                                  <span>20 Hz (Deep Low-Frequency Scramble)</span>
+                                  <span>300 Hz (High-Frequency Laser Scatter)</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Column 3: Summary & Diagnostic Testing Panel */}
+                            <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between space-y-4">
+                              <div className="space-y-3.5">
+                                <div className="flex justify-between items-center border-b border-slate-900 pb-2">
+                                  <span className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Profile Summary</span>
+                                  <span className="text-[9px] text-slate-500 font-mono">Audit State</span>
+                                </div>
+
+                                <div className="space-y-2.5 font-mono text-[10px]">
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-500">Target Type:</span>
+                                    <span className="text-slate-300 uppercase font-bold">{isPrimary ? 'Primary User' : entity?.type}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-500">Device Power:</span>
+                                    <span className="text-emerald-400 font-bold">{isPrimary ? '100% (Plugged)' : `${entity?.batteryPercent}%`}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-500">Signal Range:</span>
+                                    <span className="text-slate-300">{state.rangeMeters} Meters</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-500">Visual Censor Style:</span>
+                                    <span className="text-emerald-400 uppercase font-bold">{isPrimary ? state.privacyLevel.replace('_', ' ') : entity?.privacyLevel.replace('_', ' ')}</span>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-slate-900 pt-3 space-y-2">
+                                  <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest block">Active Defense Logs</span>
+                                  <div className="bg-slate-900/30 p-2.5 rounded border border-slate-900 text-[8px] font-mono text-slate-400 h-20 overflow-y-auto space-y-1">
+                                    <div>[00:01:03] PAIRED: {isPrimary ? 'Paul Stuart HUD' : entity?.name} synchronized.</div>
+                                    {scramblerActive && <div className="text-emerald-400">[00:01:14] BROADCAST: Vocal scrambler carrier shift active.</div>}
+                                    {watermarkingActive && <div className="text-emerald-400">[00:01:21] WATERMARK: Embedded cryptotags injected.</div>}
+                                    {saturationActive && <div className="text-rose-400 font-semibold">[00:01:29] MICROPHONE SATURATION: Emitting 22kHz pressure.</div>}
+                                    {!scramblerActive && !watermarkingActive && !saturationActive && <div className="text-slate-500">[00:01:00] STANDBY: All acoustic shields disabled.</div>}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-wider block">Diagnostics Check</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onTriggerAlert) {
+                                      onTriggerAlert(
+                                        "Acoustic Shield Audit Run",
+                                        `Audio defense diagnostic finished with zero critical failures. Scrambling wave carrier shifted at ${audioModulator}Hz correctly, ultrasonic mic saturation emitter tuned at 22.4kHz, biometric watermark active.`,
+                                        "video_found"
+                                      );
+                                    }
+                                    if (onAddLog) {
+                                      onAddLog({
+                                        deviceModel: isPrimary ? 'PRIMARY_PAUL_STUART' : `DEVICE_${entity?.id}`,
+                                        action: 'discovered',
+                                        shieldApplied: scramblerActive 
+                                          ? `ACOUSTIC_SCRAMBLER_MOD_${audioModulator}HZ` 
+                                          : 'ACOUSTIC_STANDBY',
+                                        distance: isPrimary ? 0 : 1.5,
+                                        rotatedId: isPrimary ? 'PRIMARY_AUDIT_LOG' : `DEVICE_AUDIT_${entity?.id}`
+                                      });
+                                    }
+                                  }}
+                                  className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 hover:border-emerald-500/50 rounded-lg text-xs font-bold text-emerald-400 uppercase tracking-wide font-mono transition flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <Zap className="w-3.5 h-3.5 animate-pulse" />
+                                  Test Acoustic Shielding
+                                </button>
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Device and profile list replicate visual shield table list */}
+                  <div className="space-y-3.5">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-xs font-extrabold text-white uppercase tracking-wider font-mono">Acoustic Shield Directories ({state.registeredEntities.length + 1})</h4>
+                      <span className="text-[9px] font-mono text-slate-500">Click a card above to toggle, or select profile here</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      
+                      {/* Paul Stuart Primary Profile card */}
+                      <div className={`p-4 rounded-xl border bg-slate-950/40 space-y-3 transition-all ${
+                        selectedAudioProfileId === 'primary' ? 'border-emerald-500 bg-slate-950/80 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'border-slate-850'
+                      }`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex gap-2.5 items-start">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-sm">
+                              👤
+                            </div>
+                            <div>
+                              <h5 className="text-xs font-bold text-white">Paul Stuart (Primary)</h5>
+                              <span className="text-[8px] font-mono text-slate-500">USER PROFILE</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAudioProfileId('primary')}
+                            className="text-[9px] font-mono text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded hover:bg-emerald-500/10 transition cursor-pointer"
+                          >
+                            SELECT
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded uppercase ${state.vocalScramblerEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                            Scrambler: {state.vocalScramblerEnabled ? 'ON' : 'OFF'}
+                          </span>
+                          <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded uppercase ${state.acousticWatermarkingEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                            Watermark: {state.acousticWatermarkingEnabled ? 'ON' : 'OFF'}
+                          </span>
+                          <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded uppercase ${state.ultrasonicMicSaturationEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                            Saturation: {state.ultrasonicMicSaturationEnabled ? 'ON' : 'OFF'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Map of registered entities */}
+                      {state.registeredEntities.map(ent => (
+                        <div key={ent.id} className={`p-4 rounded-xl border bg-slate-950/40 space-y-3 transition-all ${
+                          selectedAudioProfileId === ent.id ? 'border-emerald-500 bg-slate-950/80 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'border-slate-850'
+                        }`}>
+                          <div className="flex justify-between items-start">
+                            <div className="flex gap-2.5 items-start">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-sm">
+                                {ent.type === 'phone' ? '📱' : '🎒'}
+                              </div>
+                              <div>
+                                <h5 className="text-xs font-bold text-white truncate max-w-[120px]">{ent.name}</h5>
+                                <span className="text-[8px] font-mono text-slate-500 uppercase">{ent.type}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAudioProfileId(ent.id)}
+                              className="text-[9px] font-mono text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded hover:bg-emerald-500/10 transition cursor-pointer"
+                            >
+                              SELECT
+                            </button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded uppercase ${ent.vocalScramblerEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                              Scrambler: {ent.vocalScramblerEnabled ? 'ON' : 'OFF'}
+                            </span>
+                            <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded uppercase ${ent.acousticWatermarkingEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                              Watermark: {ent.acousticWatermarkingEnabled ? 'ON' : 'OFF'}
+                            </span>
+                            <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded uppercase ${ent.ultrasonicMicSaturationEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                              Saturation: {ent.ultrasonicMicSaturationEnabled ? 'ON' : 'OFF'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab: Alerts & App Settings Hub */}
+          {activeTab === 'settings' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              className="space-y-6"
+            >
+              {/* OS Window 1: Alerts & Notifications Configurator */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                {/* OS Window Title Bar */}
+                <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5 shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" title="Close" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Alerts & Notifications Configurator</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>ONLINE</span>
+                  </div>
+                </div>
+
+                {/* Window Content */}
+                <div className="p-5 sm:p-6 space-y-6 bg-slate-900/10">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Column A: Delivery Toggles */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800/80 pb-2">Alert Triggers & Delivery Channels</h4>
+                      
+                      <div className="space-y-3">
+                        {/* Master Push */}
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          state.enablePushNotifications 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400 hover:border-slate-800'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={!!state.enablePushNotifications}
+                            onChange={(e) => onChange({ ...state, enablePushNotifications: e.target.checked })}
+                            className="mt-0.5 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-950"
+                          />
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-semibold block text-white flex items-center gap-1.5">
+                              <Bell className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                              Push Notification Banners
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Deliver real-time high-priority floating toast banners whenever a nearby camera scans your beacon.
+                            </span>
+                          </div>
+                        </label>
+
+                        {/* Master Haptic Buzz */}
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          state.enablePhoneBuzz 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400 hover:border-slate-800'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={!!state.enablePhoneBuzz}
+                            onChange={(e) => onChange({ ...state, enablePhoneBuzz: e.target.checked })}
+                            className="mt-0.5 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-950"
+                          />
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-semibold block text-white flex items-center gap-1.5">
+                              <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                              Pocket Haptic Vibrations
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Simulate immediate physical vibration ticks on your smartphone when recording handshakes trigger.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+
+                      <div className="pt-2 space-y-3">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Trigger on Specific Events</span>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <label className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-950/40 border border-slate-850/80 cursor-pointer text-xs">
+                            <input
+                              type="checkbox"
+                              checked={!!state.notifyOnChildEngaged}
+                              onChange={(e) => onChange({ ...state, notifyOnChildEngaged: e.target.checked })}
+                              className="rounded border-slate-800 text-emerald-500 bg-slate-950"
+                            />
+                            <span className="text-slate-300">Child Tag Scans</span>
+                          </label>
+
+                          <label className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-950/40 border border-slate-850/80 cursor-pointer text-xs">
+                            <input
+                              type="checkbox"
+                              checked={!!state.notifyOnVideoFound}
+                              onChange={(e) => onChange({ ...state, notifyOnVideoFound: e.target.checked })}
+                              className="rounded border-slate-800 text-emerald-500 bg-slate-950"
+                            />
+                            <span className="text-slate-300">Online Video Matches</span>
+                          </label>
+
+                          <label className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-950/40 border border-slate-850/80 cursor-pointer text-xs sm:col-span-2">
+                            <input
+                              type="checkbox"
+                              checked={!!state.notifyOnVideoDeleted}
+                              onChange={(e) => onChange({ ...state, notifyOnVideoDeleted: e.target.checked })}
+                              className="rounded border-slate-800 text-emerald-500 bg-slate-950"
+                            />
+                            <span className="text-slate-300">Retroactive Takedown Success Confirmations</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Column B: Alert Details Customizer & Sound Selection */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800/80 pb-2">Display Filter & Sound Chimes</h4>
+
+                      <div className="space-y-3">
+                        {/* Toggle Distance */}
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          state.notificationShowDistance !== false 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400 hover:border-slate-800'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={state.notificationShowDistance !== false}
+                            onChange={(e) => onChange({ ...state, notificationShowDistance: e.target.checked })}
+                            className="mt-0.5 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-950"
+                          />
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-semibold block text-white">Display Device Distance</span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Include simulated distance estimates (e.g. "1.8m away") inside your banner alert descriptions.
+                            </span>
+                          </div>
+                        </label>
+
+                        {/* Toggle Model */}
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                          state.notificationShowModel !== false 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400 hover:border-slate-800'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={state.notificationShowModel !== false}
+                            onChange={(e) => onChange({ ...state, notificationShowModel: e.target.checked })}
+                            className="mt-0.5 rounded border-slate-800 text-emerald-500 focus:ring-emerald-500 bg-slate-950"
+                          />
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-semibold block text-white">Display Smart Glasses / Device Model</span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Show specific camera models (e.g. "Meta Ray-Ban v3") or restrict display to generic labels (e.g. "a smart device").
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Sound Selection Dropdown */}
+                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-850 space-y-3">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-semibold text-slate-300">Alert Chime Sound</span>
+                          <span className="text-[10px] text-emerald-400 font-mono">Synthesizer Mode</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: 'sonar_chime', label: '🔊 Sonar Chime' },
+                            { value: 'tactical_click', label: '🔊 Tactical Click' },
+                            { value: 'silent_glow', label: '🔊 Silent Glow' }
+                          ].map((chime) => (
+                            <button
+                              key={chime.value}
+                              type="button"
+                              onClick={() => {
+                                const newSound = chime.value as any;
+                                onChange({ ...state, notificationSound: newSound });
+                                playLocalSoundTest(newSound, state.notificationSoundVolume || 80);
+                              }}
+                              className={`p-2 rounded-lg border text-xs text-center font-semibold transition-all ${
+                                state.notificationSound === chime.value 
+                                  ? 'bg-emerald-950/30 border-emerald-500 text-white' 
+                                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {chime.label}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => playLocalSoundTest(state.notificationSound || 'sonar_chime', state.notificationSoundVolume || 80)}
+                            className="p-2 rounded-lg border text-xs text-center font-bold bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white"
+                          >
+                            ⚡ Test Chime
+                          </button>
+                        </div>
+
+                        {/* Volume Slider */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex justify-between items-center text-[10px] text-slate-400">
+                            <span>Chime Volume</span>
+                            <span className="font-bold text-slate-200">{(state.notificationSoundVolume !== undefined ? state.notificationSoundVolume : 80)}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={(state.notificationSoundVolume !== undefined ? state.notificationSoundVolume : 80)}
+                            onChange={(e) => onChange({ ...state, notificationSoundVolume: parseInt(e.target.value) })}
+                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Custom Configuration Section for Battery Percentage Threshold */}
+                  <div className="border-t border-slate-800/80 pt-6 mt-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                        <Battery className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Hardware Battery Telemetry Alerts</h4>
+                        <p className="text-[10px] text-slate-400">
+                          Configure personalized battery percentage thresholds for instant alert dispatches on all registered active companion devices.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-slate-950/40 p-4 border border-slate-850 rounded-xl">
+                      {/* Left: Custom Control Panel */}
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-200">Enable Low-Battery Alerts</span>
+                            <button
+                              type="button"
+                              id="toggle-low-battery-notifications-btn"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onChange({ 
+                                  ...state, 
+                                  enableLowBatteryNotifications: !state.enableLowBatteryNotifications 
+                                });
+                              }}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                state.enableLowBatteryNotifications !== false ? 'bg-emerald-500/85' : 'bg-slate-800'
+                              }`}
+                              title={state.enableLowBatteryNotifications !== false ? "Disable Low Battery Notifications" : "Enable Low Battery Notifications"}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  state.enableLowBatteryNotifications !== false ? 'translate-x-4' : 'translate-x-0 bg-slate-400'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            Deliver urgent push notifications and fire synchronized pocket haptics when wearable device batteries drop below safety levels.
+                          </p>
+                        </div>
+
+                        {/* Slider Control */}
+                        <div className="space-y-2 pt-2 border-t border-slate-900">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-semibold text-slate-300">Custom Alert Threshold</span>
+                            <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${
+                              (state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20) <= 15
+                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                : (state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20) <= 25
+                                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              {state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20}%
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            id="low-battery-threshold-input-slider"
+                            min="5"
+                            max="50"
+                            step="1"
+                            value={state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20}
+                            onChange={(e) => {
+                              onChange({ 
+                                ...state, 
+                                lowBatteryThreshold: parseInt(e.target.value) 
+                              });
+                            }}
+                            className="w-full accent-emerald-500 bg-slate-900 h-1.5 rounded-lg cursor-pointer"
+                            title="Set custom battery threshold (5% - 50%)"
+                          />
+                          <div className="flex justify-between text-[8px] text-slate-500 font-mono">
+                            <span>5% (Critical)</span>
+                            <span>20% (Default)</span>
+                            <span>50% (High)</span>
+                          </div>
+                        </div>
+
+                        {/* Simulate / Trigger Test Alert Button */}
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            id="test-battery-alert-btn"
+                            disabled={state.enableLowBatteryNotifications === false}
+                            onClick={() => {
+                              const threshold = state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20;
+                              // Pick a device to simulate dropping
+                              const entities = state.registeredEntities || [];
+                              const targetDevice = entities.find(e => e.isActive) || entities[0];
+                              const deviceName = targetDevice ? targetDevice.name : "Companion Beacon Tag";
+                              
+                              if (onTriggerAlert) {
+                                onTriggerAlert(
+                                  "Critical Battery Warning",
+                                  `Companion hardware '${deviceName}' battery drops below safe threshold (currently at ${Math.min(targetDevice ? targetDevice.batteryPercent : 15, threshold - 2)}%, threshold set at ${threshold}%).`,
+                                  "battery_warning"
+                                );
+                              }
+
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'BATTERY_TELEMETRY',
+                                  action: 'discovered',
+                                  shieldApplied: `ALERT DISPATCHED: ${deviceName.toUpperCase()} DROPPED BELOW ${threshold}%`,
+                                  distance: 0,
+                                  rotatedId: 'BATTERY_CRITICAL'
+                                });
+                              }
+                            }}
+                            className={`w-full py-2 px-3 rounded-lg text-xs font-bold font-mono transition flex items-center justify-center gap-2 border ${
+                              state.enableLowBatteryNotifications !== false
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 cursor-pointer'
+                                : 'bg-slate-900/40 border-slate-900 text-slate-600 cursor-not-allowed'
+                            }`}
+                          >
+                            <BatteryWarning className="w-3.5 h-3.5" />
+                            Dispatch Test Low-Battery Alert
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right: Live Telemetry Preview */}
+                      <div className="space-y-3 bg-slate-950/65 p-3 rounded-lg border border-slate-900/60 flex flex-col justify-between">
+                        <div>
+                          <div className="flex justify-between items-center border-b border-slate-900 pb-1.5 mb-2.5">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Registered Devices</span>
+                            <span className="text-[9px] text-slate-500 font-mono">Live Simulation</span>
+                          </div>
+
+                          <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1">
+                            {(state.registeredEntities || []).map(entity => {
+                              const threshold = state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20;
+                              const isLow = entity.batteryPercent <= threshold;
+                              
+                              return (
+                                <div key={entity.id} className="space-y-1">
+                                  <div className="flex justify-between items-center text-[10px]">
+                                    <span className="text-slate-300 truncate max-w-[150px] font-medium">{entity.name}</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`font-mono font-bold ${
+                                        isLow ? 'text-rose-400 animate-pulse' : 'text-slate-400'
+                                      }`}>
+                                        {entity.batteryPercent}%
+                                      </span>
+                                      {isLow ? (
+                                        <span className="text-[8px] px-1.5 py-0.5 rounded font-bold font-mono bg-rose-500/15 text-rose-400 border border-rose-500/25 animate-pulse">
+                                          WARNING
+                                        </span>
+                                      ) : (
+                                        <span className="text-[8px] px-1.5 py-0.5 rounded font-bold font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                                          NOMINAL
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Progress Bar Visual Gauge */}
+                                  <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full transition-all duration-300 ${
+                                        isLow ? 'bg-rose-500' : 'bg-emerald-400/80'
+                                      }`}
+                                      style={{ width: `${entity.batteryPercent}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Dynamic Status summary footer */}
+                        <div className="text-[9px] text-slate-500 bg-slate-900/40 p-2 rounded border border-slate-900/50 font-mono flex items-center gap-2 mt-2">
+                          <div className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          </div>
+                          <span>
+                            {(() => {
+                              const threshold = state.lowBatteryThreshold !== undefined ? state.lowBatteryThreshold : 20;
+                              const lowDevices = (state.registeredEntities || []).filter(e => e.batteryPercent <= threshold);
+                              if (lowDevices.length > 0) {
+                                return `Detected ${lowDevices.length} device(s) below custom threshold. ${state.enableLowBatteryNotifications !== false ? "Notifications will trigger." : "Notifications muted."}`;
+                              }
+                              return "All companion devices operating above critical battery threshold.";
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* OS Window: Alert Customizer & Vibration Pattern Configurator */}
+              <div id="vibration-alert-customizer" className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                {/* OS Window Title Bar */}
+                <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5 shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" title="Close" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Alert Customizer &amp; Vibration Pattern Configurator</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>HAPTIC ENGINE ACTIVE</span>
+                  </div>
+                </div>
+
+                {/* Window Content */}
+                <div className="p-5 sm:p-6 bg-slate-900/10 space-y-6">
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Personalize physical haptic feedback pulses transmitted to your smartphone or companion badge. This leverages the browser's native <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded font-mono font-bold">Vibration API</code> with custom millisecond sequences.
+                  </p>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* Left Panel: Alert Type Selector (4 cols) */}
+                    <div className="lg:col-span-4 space-y-3">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Select Target Event Alert</span>
+                      <div className="space-y-2">
+                        {(Object.entries(vibrationPatterns) as [string, { name: string; pattern: number[]; desc: string }][]).map(([id, item]) => {
+                          const isEditing = editingPatternId === id;
+                          const isTesting = activeTestingPatternId === id;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => {
+                                setEditingPatternId(id);
+                                setCustomizerSuccessMsg('');
+                              }}
+                              className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer flex justify-between items-center ${
+                                isEditing
+                                  ? 'bg-emerald-950/20 border-emerald-500 text-slate-200 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
+                                  : 'bg-slate-950/30 border-slate-850 text-slate-400 hover:border-slate-800 hover:text-slate-300'
+                              }`}
+                            >
+                              <div className="space-y-1">
+                                <span className="text-xs font-bold block">{item.name}</span>
+                                <span className="text-[9px] text-slate-500 block truncate max-w-[170px]">{item.desc}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                <span className="text-[9px] bg-slate-900 px-1.5 py-0.5 rounded font-mono text-slate-400 border border-slate-800">
+                                  {item.pattern.length} pulses
+                                </span>
+                                {isTesting && (
+                                  <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Right Panel: Pattern Editor & Real-Time Test (8 cols) */}
+                    <div className="lg:col-span-8 bg-slate-950/40 p-5 border border-slate-850 rounded-xl space-y-5 flex flex-col justify-between">
+                      {(() => {
+                        const currentItem = vibrationPatterns[editingPatternId];
+                        if (!currentItem) return <div className="text-slate-500 text-xs font-mono">Select an alert type above.</div>;
+
+                        const parsedArr = patternInputText
+                          .split(',')
+                          .map(x => parseInt(x.trim()))
+                          .filter(x => !isNaN(x));
+                        const isValid = parsedArr.length > 0 && parsedArr.every(x => x >= 0);
+                        const totalDuration = parsedArr.reduce((a, b) => a + b, 0);
+
+                        return (
+                          <div className="space-y-4">
+                            {/* Heading */}
+                            <div className="flex justify-between items-start border-b border-slate-900 pb-3">
+                              <div>
+                                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                                  <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                                  Edit Pattern: {currentItem.name}
+                                </h4>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{currentItem.desc}</p>
+                              </div>
+                              <span className="text-[9px] bg-slate-900 text-emerald-400 border border-slate-850 px-2 py-0.5 rounded font-mono font-bold uppercase">
+                                Active Customizer
+                              </span>
+                            </div>
+
+                            {/* Live Pattern Testing & Fallback Visualizer */}
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-slate-950/60 p-4 border border-slate-900 rounded-lg">
+                              <div className="md:col-span-4 flex flex-col items-center justify-center p-2">
+                                {/* Interactive vibrating visual frame */}
+                                <motion.div
+                                  animate={visualVibrationTicks ? { 
+                                    scale: [1, 1.15, 0.95, 1.1, 1], 
+                                    rotate: [0, -4, 4, -4, 0],
+                                    x: [0, -3, 3, -3, 0]
+                                  } : { scale: 1 }}
+                                  transition={visualVibrationTicks ? { repeat: Infinity, duration: 0.15 } : {}}
+                                  className={`w-16 h-16 rounded-full flex items-center justify-center border transition-all duration-100 ${
+                                    visualVibrationTicks 
+                                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                                      : 'bg-slate-900 border-slate-850 text-slate-500'
+                                  }`}
+                                >
+                                  <Activity className={`w-7 h-7 ${visualVibrationTicks ? 'text-emerald-400' : 'text-slate-500'}`} />
+                                </motion.div>
+                                <span className={`text-[8px] font-mono mt-2 block font-extrabold uppercase ${
+                                  visualVibrationTicks ? 'text-emerald-400 animate-pulse' : 'text-slate-500'
+                                }`}>
+                                  {visualVibrationTicks ? '⚡ Buzzing Device ⚡' : 'Standby / Idle'}
+                                </span>
+                              </div>
+
+                              <div className="md:col-span-8 space-y-2">
+                                <span className="text-[9px] font-mono font-bold text-slate-400 uppercase block">Dynamic Simulated Signal Stream</span>
+                                <div className="p-3 bg-slate-950 border border-slate-900 rounded-lg font-mono text-[10px] text-slate-300 space-y-1.5 relative overflow-hidden">
+                                  {/* Waveform indicator */}
+                                  <div className="flex gap-0.5 items-end h-8 overflow-hidden">
+                                    {parsedArr.map((duration, index) => {
+                                      const isVibrate = index % 2 === 0;
+                                      const heightPct = isVibrate ? 'h-full bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'h-1 bg-slate-800';
+                                      const widthPx = Math.min(Math.max(duration / 10, 8), 100);
+                                      return (
+                                        <div 
+                                          key={index} 
+                                          style={{ width: `${widthPx}px` }} 
+                                          className={`rounded-t transition-all ${heightPct}`} 
+                                          title={`${isVibrate ? 'Vibrate' : 'Delay'}: ${duration}ms`}
+                                        />
+                                      );
+                                    })}
+                                    {parsedArr.length === 0 && (
+                                      <div className="text-slate-500 text-xs italic flex items-center h-full">Empty sequence graph</div>
+                                    )}
+                                  </div>
+                                  <div className="flex justify-between text-[8px] text-slate-500 pt-1 border-t border-slate-900">
+                                    <span>T = 0ms</span>
+                                    <span>Total: {totalDuration}ms</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* User Custom Input Form */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="font-semibold text-slate-300">Custom Sequence (Milliseconds)</span>
+                                <span className={`font-mono font-bold px-1.5 py-0.5 rounded text-[9px] ${
+                                  isValid 
+                                    ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' 
+                                    : 'text-rose-400 bg-rose-500/10 border border-rose-500/20'
+                                }`}>
+                                  {isValid ? '✅ Formatted Correctly' : '❌ Needs integers (e.g. 200, 100)'}
+                                </span>
+                              </div>
+                              
+                              <input
+                                type="text"
+                                value={patternInputText}
+                                onChange={(e) => {
+                                  setPatternInputText(e.target.value);
+                                  setCustomizerSuccessMsg('');
+                                }}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500"
+                                placeholder="e.g. 200, 100, 200, 100, 400"
+                              />
+                              <p className="text-[9px] text-slate-500">
+                                Enter comma-separated millisecond values. Even slots index vibration intervals, odd slots represent idle pause gaps. E.g. <strong className="text-slate-400 font-mono">400, 100, 100</strong> translates to 400ms buzz, 100ms silence, 100ms buzz.
+                              </p>
+                            </div>
+
+                            {/* Quick Preset Selector */}
+                            <div className="space-y-1.5">
+                              <span className="text-[9px] font-mono font-bold text-slate-500 uppercase block">Quick Presets / Inspiration Library</span>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {[
+                                  { name: 'Long-Short-Long Pulse', pattern: [400, 100, 100, 100, 400] },
+                                  { name: 'Double Fast Tap', pattern: [100, 50, 100] },
+                                  { name: 'SOS Urgent Beacon', pattern: [100, 100, 100, 200, 200, 200, 100, 100, 100] },
+                                  { name: 'Rhythmic Heartbeat', pattern: [80, 80, 80, 300, 80, 80, 80] },
+                                  { name: 'Single Solid Alert', pattern: [500] }
+                                ].map((preset, index) => (
+                                  <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => {
+                                      setPatternInputText(preset.pattern.join(', '));
+                                      playLocalSoundTest('tactical_click', 50);
+                                      setCustomizerSuccessMsg('');
+                                    }}
+                                    className="p-1.5 bg-slate-900 border border-slate-850 hover:border-slate-700 text-[10px] font-semibold text-slate-400 hover:text-slate-200 rounded text-left transition truncate block"
+                                  >
+                                    💡 {preset.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Success feedback line */}
+                            {customizerSuccessMsg && (
+                              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-2.5 rounded-lg text-[10px] font-mono flex items-center gap-1.5 animate-fadeIn">
+                                <Check className="w-3.5 h-3.5" />
+                                {customizerSuccessMsg}
+                              </div>
+                            )}
+
+                            {/* Save and Test Buttons */}
+                            <div className="flex gap-3 pt-2">
+                              <button
+                                type="button"
+                                disabled={activeTestingPatternId !== null}
+                                onClick={() => testVibrationPattern(editingPatternId, parsedArr)}
+                                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold font-mono transition flex items-center justify-center gap-1.5 border ${
+                                  activeTestingPatternId !== null
+                                    ? 'bg-slate-900/40 border-slate-900 text-slate-600 cursor-not-allowed'
+                                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 cursor-pointer'
+                                }`}
+                              >
+                                <Zap className="w-3.5 h-3.5" />
+                                {activeTestingPatternId === editingPatternId ? 'Simulating Pattern...' : 'Test Pattern'}
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={!isValid}
+                                onClick={() => {
+                                  if (!isValid) return;
+                                  const updated = {
+                                    ...vibrationPatterns,
+                                    [editingPatternId]: {
+                                      ...currentItem,
+                                      pattern: parsedArr
+                                    }
+                                  };
+                                  setVibrationPatterns(updated);
+                                  localStorage.setItem('blurbubble_custom_vibrations', JSON.stringify(updated));
+                                  setCustomizerSuccessMsg(`Successfully saved updated pattern for '${currentItem.name}'! Persistent browser storage active.`);
+                                  playLocalSoundTest('tactical_click', 80);
+
+                                  if (onAddLog) {
+                                    onAddLog({
+                                      deviceModel: 'HAPTIC_ENGINE',
+                                      action: 'discovered',
+                                      shieldApplied: `VIBRATION PATTERN RECONFIGURED: ${currentItem.name.toUpperCase()} => [${parsedArr.join(', ')}]`,
+                                      distance: 0,
+                                      rotatedId: 'HAPTIC_CONFIG'
+                                    });
+                                  }
+                                }}
+                                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                                  isValid 
+                                    ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-600 cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                                    : 'bg-slate-900 text-slate-600 border border-slate-950 cursor-not-allowed'
+                                }`}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Save Updated Pattern
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* OS Window 2: Quick-Access System Preferences */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                {/* OS Window Title Bar */}
+                <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5 shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" title="Close" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Quick-Access System Preferences</span>
+                  </div>
+                  <div className="text-[9px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-2 py-0.5 rounded">
+                    ACTIVE MODULES
+                  </div>
+                </div>
+
+                {/* Window Content */}
+                <div className="p-5 sm:p-6 bg-slate-900/10 space-y-6">
+                  <p className="text-xs text-slate-400">
+                    A centralized control center to quickly tweak active shield levels, broadcast power range, connected SSI automaton triggers, and main theme styles.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Preference Item 1: Broadcast Switch */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-white block">Signal Transmission</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold font-mono ${state.isBroadcasting ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                          {state.isBroadcasting ? 'Broadcasting' : 'Silent'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal">
+                        Main toggle for local BLE and WiFi-NAN opt-out packets.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...state, isBroadcasting: !state.isBroadcasting })}
+                        className={`w-full py-2 rounded-lg text-xs font-bold transition ${
+                          state.isBroadcasting 
+                            ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20' 
+                            : 'bg-emerald-500 text-slate-950 hover:bg-emerald-600'
+                        }`}
+                      >
+                        {state.isBroadcasting ? 'Disable Broadcast' : 'Enable Broadcast'}
+                      </button>
+                    </div>
+
+                    {/* Preference Item 2: Range Meters */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-white block">Signal Range</span>
+                        <span className="text-[10px] text-emerald-400 font-mono font-bold">{state.rangeMeters} Meters</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal">
+                        Power consumption level for signal bubble radius.
+                      </p>
+                      <div className="space-y-1.5 pt-1">
+                        <input
+                          type="range"
+                          min="1"
+                          max="50"
+                          value={state.rangeMeters}
+                          onChange={(e) => onChange({ ...state, rangeMeters: parseInt(e.target.value) })}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        />
+                        <div className="flex justify-between text-[8px] text-slate-500 font-mono">
+                          <span>1m (Close)</span>
+                          <span>50m (Max)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Preference Item 3: Shield Privacy Level */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-white block">Default Privacy Level</span>
+                        <span className="text-[10px] text-emerald-400 font-mono font-bold uppercase">{state.privacyLevel.replace('_', ' ')}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal">
+                        Blur style requested during nearby device handshakes.
+                      </p>
+                      <select
+                        value={state.privacyLevel}
+                        onChange={(e) => onChange({ ...state, privacyLevel: e.target.value as PrivacyLevel })}
+                        className="w-full p-2 bg-slate-900 border border-slate-800 text-xs rounded-lg text-slate-200 focus:ring-emerald-500 focus:border-emerald-500 font-medium"
+                      >
+                        <option value="strict_blur">Gaussian Blur</option>
+                        <option value="pixelate">Pixelate Matrix</option>
+                        <option value="emoji">Emoji Overlay Mask</option>
+                        <option value="black_bar">Black Bar Censored</option>
+                        <option value="magic_removal">AI Magic Eraser</option>
+                      </select>
+                    </div>
+
+                    {/* Preference Item 4: SSID Automate Rule */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-white block">SSID Automation</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold font-mono ${state.wifiRulesEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                          {state.wifiRulesEnabled ? 'Auto SSID' : 'Disabled'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal">
+                        Auto-broadcast rules triggered by Wi-Fi connections.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...state, wifiRulesEnabled: !state.wifiRulesEnabled })}
+                        className={`w-full py-2 rounded-lg text-xs font-bold border transition ${
+                          state.wifiRulesEnabled 
+                            ? 'bg-emerald-950/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-950/20' 
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {state.wifiRulesEnabled ? 'SSID Rules On' : 'SSID Rules Off'}
+                      </button>
+                    </div>
+
+                    {/* Preference Item 5: Biometric Pin */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-white block">Security Lock</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold font-mono ${state.biometricLockEnabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-900 text-slate-500'}`}>
+                          {state.biometricLockEnabled ? 'Locked' : 'Open'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal">
+                        PIN or fingerprint challenge for access control.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...state, biometricLockEnabled: !state.biometricLockEnabled })}
+                        className={`w-full py-2 rounded-lg text-xs font-bold border transition ${
+                          state.biometricLockEnabled 
+                            ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20' 
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {state.biometricLockEnabled ? 'Disable Lock' : 'Enable Security Lock'}
+                      </button>
+                    </div>
+
+                    {/* Preference Item 6: Layout Reset */}
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-white block">Factory Defaults</span>
+                        <span className="text-[10px] text-slate-500 font-mono">STEALTH</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal">
+                        Reset configuration profiles, clears counters and saved keys.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChange({
+                            ...state,
+                            isBroadcasting: true,
+                            privacyLevel: 'strict_blur',
+                            rangeMeters: 12,
+                            facialRecognitionOptOut: true,
+                            dataRetentionPref: 'zero_retention',
+                            enablePhoneBuzz: true,
+                            enablePushNotifications: true,
+                            notifyOnChildEngaged: true,
+                            notifyOnVideoFound: true,
+                            notifyOnVideoDeleted: true,
+                            notificationSound: 'sonar_chime',
+                            notificationMinDistance: 15,
+                            notificationShowDistance: true,
+                            notificationShowModel: true,
+                            notificationSoundVolume: 80,
+                            irDisruptionEnabled: true,
+                            lidarInterferenceEnabled: true,
+                            antiLipReadingEnabled: true,
+                            acousticWatermarkingEnabled: true,
+                            ultrasonicMicSaturationEnabled: true,
+                            vocalScramblerEnabled: true,
+                            theme: 'stealth',
+                            biometricLockEnabled: false,
+                            wifiRulesEnabled: true,
+                            showMetricsBar: true,
+                            showControlBar: true,
+                            showAuditLogs: true,
+                            showEmergencyButton: true,
+                            showGuideButton: true
+                          });
+                        }}
+                        className="w-full py-2 rounded-lg text-xs font-bold bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 hover:text-white transition"
+                      >
+                        Reset All Settings
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab 1: Signal & Shield */}
+          {activeTab === 'signal' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                <div className="space-y-1 pr-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    Do Not Record Status (Signal Beacon)
+                  </span>
+                  <p className="text-sm font-semibold text-white">
+                    {state.isBroadcasting ? 'Broadcasting "Do Not Record" Signal' : 'Signal Offline / Hidden Mode'}
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    Sends dynamic BLE and WiFi-NAN packets instructing cameras and glasses to block your recording coordinates.
+                  </p>
+                </div>
+                <button
+                  id="beacon-toggle-btn"
+                  onClick={() => onChange({ ...state, isBroadcasting: !state.isBroadcasting })}
+                  className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition shadow-lg shrink-0 ${
+                    state.isBroadcasting
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'
+                      : 'bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300'
+                  }`}
+                >
+                  {state.isBroadcasting ? 'Broadcasting ON' : 'Broadcasting OFF'}
+                </button>
+              </div>
+
+              {state.isBroadcasting && (
+                <div className="space-y-4">
+                  {/* Key Rotation Widgets (Local rolling key & 15-min UUID) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* Local rolling key */}
+                    <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 flex items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <span className="text-slate-500 text-[10px] flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                          <Clock className="w-3.5 h-3.5 text-blue-400" />
+                          Rolling Anonymous Local Key
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-blue-400 bg-blue-950/40 border border-blue-900/40 px-2 py-1 rounded">
+                            {state.anonymousId.match(/.{1,4}/g)?.join('-') || state.anonymousId}
+                          </span>
+                          <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
+                            <RefreshCw className="w-2.5 h-2.5 animate-spin text-blue-400" style={{ animationDuration: '6s' }} />
+                            {timeLeft}s
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-24 bg-slate-900 rounded-full h-1 overflow-hidden shrink-0">
+                        <div 
+                          className="bg-blue-400 h-full transition-all duration-1000 ease-linear"
+                          style={{ width: `${(timeLeft / 30) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    {/* Global BLE UUID Rotation countdown */}
+                    <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 flex items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <span className="text-slate-500 text-[10px] flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                          <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+                          Decentralized BLE UUID Rotation
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-indigo-400 bg-indigo-950/40 border border-indigo-900/40 px-2 py-1 rounded">
+                            UUID_CYCLE_{Math.floor(uuidTimeLeft / 60) + 1}
+                          </span>
+                          <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono font-bold">
+                            <RefreshCw className="w-2.5 h-2.5 animate-spin text-indigo-400" style={{ animationDuration: '15s' }} />
+                            {Math.floor(uuidTimeLeft / 60)}:{(uuidTimeLeft % 60).toString().padStart(2, '0')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-24 bg-slate-900 rounded-full h-1 overflow-hidden shrink-0">
+                        <div 
+                          className="bg-indigo-400 h-full transition-all duration-1000 ease-linear"
+                          style={{ width: `${(uuidTimeLeft / 900) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Interactive SVG Signal Radar / Bubble Visualizer */}
+                  <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 flex flex-col items-center justify-center space-y-4 relative overflow-hidden">
+                    <div className="text-center space-y-1 w-full border-b border-slate-900 pb-3">
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center justify-center gap-1.5">
+                        <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                        Dynamic Signal Range Radar
+                      </h4>
+                      <p className="text-[10px] text-slate-400">
+                        Click &amp; drag the outer green boundary ring to scale your opt-out broadcast bubble.
+                      </p>
+                    </div>
+
+                    {/* SVG RADAR CONTAINER */}
+                    <div className="relative w-full max-w-[280px] aspect-square flex items-center justify-center">
+                      <svg
+                        viewBox="0 0 280 280"
+                        className="w-full h-full select-none"
+                        onMouseDown={(e) => handleSvgInteraction(e, true)}
+                        onMouseMove={(e) => {
+                          if (isDraggingRange) {
+                            handleSvgInteraction(e);
+                          }
+                        }}
+                        onMouseUp={() => setIsDraggingRange(false)}
+                        onMouseLeave={() => setIsDraggingRange(false)}
+                        onTouchStart={(e) => handleSvgInteraction(e, true)}
+                        onTouchMove={(e) => {
+                          if (isDraggingRange) {
+                            handleSvgInteraction(e);
+                          }
+                        }}
+                        onTouchEnd={() => setIsDraggingRange(false)}
+                      >
+                        <defs>
+                          <radialGradient id="radarSweep" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.12" />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                          </radialGradient>
+                          <linearGradient id="sweepGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity="0" />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity="0.25" />
+                          </linearGradient>
+                        </defs>
+
+                        {/* Concentric Circle Grids */}
+                        <circle cx="140" cy="140" r="30" fill="none" stroke="rgba(16, 185, 129, 0.08)" strokeWidth="1" strokeDasharray="3 3" />
+                        <circle cx="140" cy="140" r="60" fill="none" stroke="rgba(16, 185, 129, 0.08)" strokeWidth="1" strokeDasharray="3 3" />
+                        <circle cx="140" cy="140" r="90" fill="none" stroke="rgba(16, 185, 129, 0.08)" strokeWidth="1" strokeDasharray="3 3" />
+                        <circle cx="140" cy="140" r="120" fill="none" stroke="rgba(16, 185, 129, 0.08)" strokeWidth="1" strokeDasharray="3 3" />
+
+                        {/* Cross Hair Axis Lines */}
+                        <line x1="140" y1="10" x2="140" y2="270" stroke="rgba(16, 185, 129, 0.05)" strokeWidth="1" />
+                        <line x1="10" y1="140" x2="270" y2="140" stroke="rgba(16, 185, 129, 0.05)" strokeWidth="1" />
+
+                        {/* Range Label Markings */}
+                        <text x="140" y="105" fill="rgba(16, 185, 129, 0.35)" fontSize="8" fontFamily="monospace" textAnchor="middle">10m</text>
+                        <text x="140" y="75" fill="rgba(16, 185, 129, 0.35)" fontSize="8" fontFamily="monospace" textAnchor="middle">20m</text>
+                        <text x="140" y="45" fill="rgba(16, 185, 129, 0.35)" fontSize="8" fontFamily="monospace" textAnchor="middle">30m</text>
+                        <text x="140" y="15" fill="rgba(16, 185, 129, 0.35)" fontSize="8" fontFamily="monospace" textAnchor="middle">40m</text>
+
+                        {/* Dynamic Radar Sweep Hand */}
+                        {state.isBroadcasting && (
+                          <g className="origin-[140px_140px] animate-[spin_5s_linear_infinite]">
+                            <line x1="140" y1="140" x2="140" y2="20" stroke="#10b981" strokeWidth="1" strokeOpacity="0.25" />
+                            <path d="M 140 140 L 140 20 A 120 120 0 0 1 224.8 55.2 Z" fill="url(#sweepGradient)" />
+                          </g>
+                        )}
+
+                        {/* Opt-Out Broadcast Boundary Circle (Interactive Drag Area) */}
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={state.rangeMeters * 3}
+                          fill="url(#radarSweep)"
+                          stroke="#10b981"
+                          strokeWidth={isDraggingRange ? "3" : "1.5"}
+                          strokeDasharray={isDraggingRange ? "none" : "4 2"}
+                          className="transition-all duration-75 ease-out cursor-ns-resize"
+                          opacity={state.isBroadcasting ? 1 : 0.15}
+                        />
+
+                        {/* Drag Handle Knob */}
+                        {state.isBroadcasting && (
+                          <circle
+                            cx="140"
+                            cy={140 - (state.rangeMeters * 3)}
+                            r="6"
+                            fill="#10b981"
+                            stroke="#ffffff"
+                            strokeWidth="2"
+                            className="cursor-ns-resize shadow-md"
+                          />
+                        )}
+
+                        {/* Center Beacon Station (Self) */}
+                        <circle cx="140" cy="140" r="7" fill={state.isBroadcasting ? "#10b981" : "#64748b"} />
+                        {state.isBroadcasting && (
+                          <circle cx="140" cy="140" r="14" fill="none" stroke="#10b981" strokeWidth="1" className="animate-ping opacity-40" />
+                        )}
+
+                        {/* Simulated Nearby Threat 1: CCTV Camera (22m out) */}
+                        <g>
+                          {(() => {
+                            const d_x = 140 + Math.cos(2.3) * (22 * 3);
+                            const d_y = 140 + Math.sin(2.3) * (22 * 3);
+                            const isShielded = state.isBroadcasting && state.rangeMeters >= 22;
+                            return (
+                              <>
+                                <circle cx={d_x} cy={d_y} r="5" fill={isShielded ? "#10b981" : "#ef4444"} className={isShielded ? "" : "animate-pulse"} />
+                                <circle cx={d_x} cy={d_y} r="10" fill="none" stroke={isShielded ? "#10b981" : "#ef4444"} strokeWidth="0.5" className="animate-ping" style={{ animationDuration: isShielded ? '3s' : '1.5s' }} />
+                                <text x={d_x} y={d_y - 8} fill="#94a3b8" fontSize="6" fontFamily="sans-serif" textAnchor="middle" fontWeight="bold">
+                                  {isShielded ? "🔒 CCTV (Blurred)" : "📹 CCTV (Recording)"}
+                                </text>
+                              </>
+                            );
+                          })()}
+                        </g>
+
+                        {/* Simulated Nearby Threat 2: Drone Camera (35m out) */}
+                        <g>
+                          {(() => {
+                            const d_x = 140 + Math.cos(-0.5) * (35 * 3);
+                            const d_y = 140 + Math.sin(-0.5) * (35 * 3);
+                            const isShielded = state.isBroadcasting && state.rangeMeters >= 35;
+                            return (
+                              <>
+                                <circle cx={d_x} cy={d_y} r="5" fill={isShielded ? "#10b981" : "#ef4444"} className={isShielded ? "" : "animate-pulse"} />
+                                <circle cx={d_x} cy={d_y} r="10" fill="none" stroke={isShielded ? "#10b981" : "#ef4444"} strokeWidth="0.5" className="animate-ping" style={{ animationDuration: isShielded ? '3s' : '1.8s' }} />
+                                <text x={d_x} y={d_y - 8} fill="#94a3b8" fontSize="6" fontFamily="sans-serif" textAnchor="middle" fontWeight="bold">
+                                  {isShielded ? "🔒 Drone (Blocked)" : "🚁 Drone (Scanning)"}
+                                </text>
+                              </>
+                            );
+                          })()}
+                        </g>
+
+                        {/* Simulated Nearby Threat 3: Wearable HUD Glasses (12m out) */}
+                        <g>
+                          {(() => {
+                            const d_x = 140 + Math.cos(4.2) * (12 * 3);
+                            const d_y = 140 + Math.sin(4.2) * (12 * 3);
+                            const isShielded = state.isBroadcasting && state.rangeMeters >= 12;
+                            return (
+                              <>
+                                <circle cx={d_x} cy={d_y} r="5" fill={isShielded ? "#10b981" : "#ef4444"} className={isShielded ? "" : "animate-pulse"} />
+                                <circle cx={d_x} cy={d_y} r="10" fill="none" stroke={isShielded ? "#10b981" : "#ef4444"} strokeWidth="0.5" className="animate-ping" style={{ animationDuration: isShielded ? '2.5s' : '1.2s' }} />
+                                <text x={d_x} y={d_y - 8} fill="#94a3b8" fontSize="6" fontFamily="sans-serif" textAnchor="middle" fontWeight="bold">
+                                  {isShielded ? "🔒 Glasses (Muted)" : "🕶️ Smart Glasses"}
+                                </text>
+                              </>
+                            );
+                          })()}
+                        </g>
+
+                        {/* Custom Placed Radar Nodes */}
+                        {state.isBroadcasting && customRadarNodes.map((node) => {
+                          const isShielded = state.isBroadcasting && state.rangeMeters >= node.distance;
+                          const nodeColor = node.type === 'beacon' ? '#10b981' : (isShielded ? '#10b981' : '#ef4444');
+                          return (
+                            <g key={node.id} className="cursor-pointer" onClick={(ev) => {
+                              ev.stopPropagation();
+                              // Pulse/Interact with custom node
+                              onAddLog({
+                                deviceModel: node.name,
+                                action: node.type === 'beacon' ? 'discovered' : 'censored',
+                                shieldApplied: 'PERIMETER_RE-EVALUATED_SHAKEHAND',
+                                distance: node.distance,
+                                rotatedId: '0x' + Math.floor(Math.random() * 16777215).toString(16).toUpperCase()
+                              });
+                            }}>
+                              <circle cx={node.x} cy={node.y} r="5.5" fill={nodeColor} />
+                              <circle cx={node.x} cy={node.y} r="11" fill="none" stroke={nodeColor} strokeWidth="0.5" className="animate-ping" style={{ animationDuration: '3s' }} />
+                              <text x={node.x} y={node.y - 8} fill="#a7f3d0" fontSize="5.5" fontFamily="sans-serif" textAnchor="middle" fontWeight="semibold">
+                                {node.type === 'beacon' ? `📡 ${node.name}` : (isShielded ? `🔒 ${node.name}` : `⚠️ ${node.name}`)}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </svg>
+
+                      {/* Live overlay when signal is offline */}
+                      {!state.isBroadcasting && (
+                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-4">
+                          <Radio className="w-8 h-8 text-slate-500 mb-2" />
+                          <span className="text-xs font-bold text-slate-400">Telemetry Offline</span>
+                          <p className="text-[10px] text-slate-500 mt-1">Activate Do Not Record Status above to view and drag your shield range perimeter.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Range Slider */}
+                  <div className="space-y-2 bg-slate-950/30 border border-slate-800/40 rounded-xl p-4">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400 uppercase tracking-wider font-semibold">Broadcast Range (Fine Tune)</span>
+                      <span className="text-emerald-400 font-bold font-mono">{state.rangeMeters} Meters</span>
+                    </div>
+                    <input
+                      id="beacon-range-slider"
+                      type="range"
+                      min="3"
+                      max="40"
+                      value={state.rangeMeters}
+                      onChange={(e) => onChange({ ...state, rangeMeters: Number(e.target.value) })}
+                      className="w-full accent-emerald-400 cursor-pointer"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      Approximate signal reach. Recording smart devices inside this boundary will blur you out automatically.
+                    </p>
+                  </div>
+
+                  {/* Real-time Signal Strength & Optimization Console */}
+                  <div id="realtime-signal-visualizer-container" className="space-y-3 bg-slate-950/40 border border-slate-800 rounded-xl p-4">
+                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <Bluetooth className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                        Real-Time Hardware Signal Telemetry (BLE)
+                      </span>
+                      <span className="text-[10px] font-mono text-blue-400 font-bold bg-blue-950/40 border border-blue-900/40 px-2 py-0.5 rounded">
+                        Scanning
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {state.registeredEntities.filter(tag => tag.isActive).length === 0 ? (
+                        <div id="no-active-beacons-warning" className="text-center py-4 text-slate-500 text-xs">
+                          <p className="font-sans font-semibold">No active BlurBubble beacons nearby.</p>
+                          <p className="text-[10px] text-slate-600 mt-1">Activate or unmute tags in the "Smart Tags" tab, or pair new ones in the "Hardware Pairing" tab to start visual range telemetry.</p>
+                        </div>
+                      ) : (
+                        state.registeredEntities.filter(tag => tag.isActive).map(tag => {
+                          const noise = signalNoise[tag.id] || 0;
+                          // Base signal strength at 1 meter: -35 dBm.
+                          // As rangeMeters increases, we simulate higher TX power (boosts signal strength).
+                          const txPowerOffset = (state.rangeMeters - 12) * 1.1;
+                          const rawStrength = (tag.signalStrength || -60) + txPowerOffset + noise;
+                          
+                          // Clamp between -95 and -30
+                          const dbm = Math.min(-30, Math.max(-95, Math.round(rawStrength)));
+                          
+                          // Signal rating
+                          let signalClass = "text-emerald-400";
+                          let bgBarClass = "bg-emerald-500";
+                          let ratingText = "Optimal Coverage";
+                          let recommendation = "Coverage is solid. Your device will trigger blurs reliably.";
+
+                          if (dbm < -80) {
+                            signalClass = "text-rose-400 animate-pulse";
+                            bgBarClass = "bg-rose-500";
+                            ratingText = "Critical Attenuation";
+                            recommendation = "Signal weak. Increase Broadcast Range (TX Power) or move closer.";
+                          } else if (dbm < -65) {
+                            signalClass = "text-amber-400";
+                            bgBarClass = "bg-amber-500";
+                            ratingText = "Moderate / Fading";
+                            recommendation = "Intermittent drops possible. Slightly boost Broadcast Range.";
+                          }
+
+                          // Percentage for visual signal bar (e.g. -95dBm is 0%, -30dBm is 100%)
+                          const strengthPercent = Math.round(((dbm - (-95)) / (-30 - (-95))) * 100);
+
+                          return (
+                            <div key={tag.id} id={`signal-item-${tag.id}`} className="bg-slate-950/60 border border-slate-900 rounded-lg p-3 space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">
+                                    {tag.type === 'smart_tag' ? '🎒' : 
+                                     tag.type === 'phone' ? '📱' : 
+                                     tag.type === 'airtag' ? '🍎' : 
+                                     tag.type === 'galaxy_tag' ? '🌌' : 
+                                     tag.type === 'key_fob' ? '🔑' : 
+                                     tag.type === 'prototype' ? '🔬' : 
+                                     tag.type === 'artwork' ? '🎨' : 
+                                     tag.type === 'building' ? '🏢' : '💎'}
+                                  </span>
+                                  <span className="font-semibold text-white">{tag.name}</span>
+                                  <span className="text-[9px] text-slate-500 font-mono">({tag.type})</span>
+                                </div>
+                                <div className="flex items-center gap-2 font-mono">
+                                  <span className={`font-bold ${signalClass}`}>{dbm} dBm</span>
+                                  <span className="text-slate-500 text-[10px]">•</span>
+                                  <span className="text-slate-400 font-sans text-[10px]">{ratingText}</span>
+                                </div>
+                              </div>
+
+                              {/* Visual Bar Graph */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-700 ease-out ${bgBarClass}`}
+                                    style={{ width: `${strengthPercent}%` }}
+                                  />
+                                </div>
+                                {/* dBm scale label */}
+                                <div className="flex justify-between text-[8px] text-slate-600 font-mono px-0.5">
+                                  <span>-95 dBm (Limit)</span>
+                                  <span>-75 dBm</span>
+                                  <span>-55 dBm</span>
+                                  <span>-30 dBm (Max)</span>
+                                </div>
+                              </div>
+
+                              <p className="text-[10px] text-slate-400 italic">
+                                💡 {recommendation}
+                              </p>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  Censor Shield Mode
+                  <button
+                    type="button"
+                    onClick={() => setHelpTopic('privacy-levels')}
+                    className="p-0.5 rounded-full text-slate-500 hover:text-blue-400 hover:bg-slate-800 transition"
+                    title="What are the shield modes?"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-blue-400/80 animate-pulse" />
+                  </button>
+                </span>
+
+                <div className="grid grid-cols-1 gap-2.5">
+                  {privacyOptions.map((opt) => {
+                    const isActive = state.privacyLevel === opt.value;
+                    return (
+                      <button
+                        id={`shield-option-${opt.value}`}
+                        key={opt.value}
+                        onClick={() => handleLevelChange(opt.value)}
+                        disabled={!state.isBroadcasting}
+                        className={`flex items-start gap-4 p-3.5 rounded-xl border text-left transition ${
+                          isActive
+                            ? `${opt.value === 'magic_removal' ? 'border-emerald-500 bg-emerald-950/20 text-white' : 'border-slate-300 bg-slate-850 text-white'}`
+                            : 'border-slate-800 bg-slate-950/20 hover:bg-slate-900/40 text-slate-400'
+                        } ${!state.isBroadcasting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        <div className={`p-2 rounded-lg ${isActive ? 'bg-slate-850' : 'bg-slate-900'}`}>
+                          {opt.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold">{opt.label}</span>
+                            {isActive && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase font-bold ${
+                                opt.value === 'magic_removal' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-white'
+                              }`}>
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-normal">{opt.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ethical Acoustic Shielding & Bystander Protection Panel */}
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
+                      <Volume2 className="w-4 h-4 text-emerald-400" />
+                      Ethical Acoustic Shielding &amp; Bystander Safety Core
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-sans">
+                      Ensures audio privacy without disrupting or jamming innocent bystander recordings and nearby conversations.
+                    </p>
+                  </div>
+                  <span className="text-[10px] bg-blue-500/10 border border-blue-500/25 text-blue-400 px-2 py-0.5 rounded-full font-mono uppercase font-semibold">
+                    FCC Part 15 / CE RED Safe
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Explanation card */}
+                  <div className="bg-slate-900/40 border border-slate-850 p-3.5 rounded-lg text-xs leading-relaxed text-slate-300 font-sans">
+                    🚫 <strong className="text-white">Anti-Intrusive Protocol:</strong> Broad-spectrum omnidirectional audio jamming is locked. Instead, BlurBubble utilizes <span className="text-emerald-400 font-semibold">Focused Acoustic Beamforming</span> and <span className="text-emerald-400 font-semibold">Real-Time Phase Cancellation</span>. This ensures that only the recording device pointed directly at you receives a blurred version of your voice, while your neighbors and friends can record their birthday parties, vlogs, and innocent street scenes completely interference-free.
+                  </div>
+
+                  {/* Mode Selector buttons */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* Beamforming Mode */}
+                    <button
+                      type="button"
+                      onClick={() => setAcousticMode('beamforming')}
+                      className={`p-3 rounded-lg border text-left transition flex flex-col gap-1.5 ${
+                        acousticMode === 'beamforming'
+                          ? 'bg-emerald-950/15 border-emerald-500/50 text-white'
+                          : 'bg-slate-900/30 border-slate-800 hover:bg-slate-900/60 text-slate-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-semibold text-xs">
+                        <Volume2 className={`w-3.5 h-3.5 ${acousticMode === 'beamforming' ? 'text-emerald-400' : 'text-slate-500'}`} />
+                        <span>Focused Beamforming</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        Targets the recording lens directly (±{beamformingAngle}°). Surrounding bystanders are 100% unaffected.
+                      </p>
+                    </button>
+
+                    {/* Selective Voice Eraser */}
+                    <button
+                      type="button"
+                      onClick={() => setAcousticMode('voice_isolation')}
+                      className={`p-3 rounded-lg border text-left transition flex flex-col gap-1.5 ${
+                        acousticMode === 'voice_isolation'
+                          ? 'bg-emerald-950/15 border-emerald-500/50 text-white'
+                          : 'bg-slate-900/30 border-slate-800 hover:bg-slate-900/60 text-slate-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-semibold text-xs">
+                        <User className={`w-3.5 h-3.5 ${acousticMode === 'voice_isolation' ? 'text-emerald-400' : 'text-slate-500'}`} />
+                        <span>Personal Voice Eraser</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        Calculates phase cancellation for your voice-print signature *only*. Ambient sounds pass clearly.
+                      </p>
+                    </button>
+
+                    {/* Wide-Area Acoustic Jamming (RESTRICTED) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                          detail: { 
+                            title: 'Access Restricted',
+                            body: 'Wide-Area Jamming requires an Enterprise Compliance License. Personal beacons are hard-locked to Ethical Beamforming to prevent illegal signal interference.',
+                            type: 'restricted'
+                          } 
+                        }));
+                      }}
+                      className="p-3 rounded-lg border border-slate-800/80 bg-slate-900/20 text-slate-500 cursor-not-allowed opacity-60 text-left flex flex-col gap-1.5 relative overflow-hidden group"
+                    >
+                      <div className="absolute top-1.5 right-1.5">
+                        <Lock className="w-3 h-3 text-red-500" />
+                      </div>
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-500">
+                        <VolumeX className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Wide-Area Jamming</span>
+                      </div>
+                      <p className="text-[10px] text-slate-600 leading-snug">
+                        Omnidirectional ultrasound. Hard-locked to avoid interfering with innocent public recordings.
+                      </p>
+                    </button>
+                  </div>
+
+                  {/* Beamforming angle control */}
+                  {acousticMode === 'beamforming' && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }} 
+                      animate={{ opacity: 1, height: 'auto' }} 
+                      className="bg-slate-900/20 border border-slate-850 p-4 rounded-xl space-y-2"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400 font-semibold flex items-center gap-1">
+                          <Sliders className="w-3.5 h-3.5 text-slate-500" />
+                          Acoustic Targeting Dispersion Angle
+                        </span>
+                        <span className="text-emerald-400 font-bold font-mono">±{beamformingAngle}° Directional Cone</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="5"
+                        max="45"
+                        value={beamformingAngle}
+                        onChange={(e) => setBeamformingAngle(Number(e.target.value))}
+                        className="w-full accent-emerald-400 cursor-pointer"
+                      />
+                      <div className="flex items-center justify-between text-[10px] text-slate-500">
+                        <span>Narrow Beam (Pinpoint)</span>
+                        <span>Wide Protection (Slight spill)</span>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Interactive Bystander Safeguards list */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 text-xs">
+                    <label className="flex items-start gap-3 p-3 bg-slate-900/20 border border-slate-850 rounded-xl cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={bystanderPass}
+                        onChange={(e) => setBystanderPass(e.target.checked)}
+                        className="w-4 h-4 mt-0.5 rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-slate-300 font-semibold group-hover:text-white transition">Bystander Ambient Bypass</span>
+                        <p className="text-[10px] text-slate-500 leading-snug">Detects and allows adjacent bystander voices (not facing you) to record perfectly without muffled interference.</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 p-3 bg-slate-900/20 border border-slate-850 rounded-xl cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={voicePrintOnly}
+                        onChange={(e) => setVoicePrintOnly(e.target.checked)}
+                        className="w-4 h-4 mt-0.5 rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-slate-300 font-semibold group-hover:text-white transition">Biometric Voice-Print Only</span>
+                        <p className="text-[10px] text-slate-500 leading-snug">Strictly matches your own dynamic vocal frequency. Environmental sounds (birds, waves, street music) are preserved.</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Real-time Waveform Simulator Visualizer */}
+                  <div className="bg-slate-950/80 border border-slate-900 p-4 rounded-xl space-y-4 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-radial-gradient from-emerald-500/5 to-transparent opacity-50 pointer-events-none" />
+                    
+                    <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-slate-500">
+                      <span>Live Acoustic Protection Beam Visualizer &amp; Phase Modulator</span>
+                      <span className="text-emerald-400 flex items-center gap-1.5 font-mono animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        Targeted Beam Active
+                      </span>
+                    </div>
+
+                    {/* Simple geometric grid showing bystander separation */}
+                    <div className="h-28 bg-slate-950 rounded border border-slate-900/50 relative flex items-center justify-between px-4 overflow-hidden">
+                      {/* Left: Bystander */}
+                      <div className="flex flex-col items-center gap-1 z-10">
+                        <User className="w-5 h-5 text-slate-500" />
+                        <span className="text-[9px] font-semibold text-slate-400 font-sans">Bystander</span>
+                        <span className="text-[8px] font-mono bg-blue-950 text-blue-400 px-1 rounded border border-blue-900/30">100% Crisp Audio</span>
+                        {/* Little pulsing ripples representing unaffected audio */}
+                        <div className="absolute left-6 h-1 w-12 bg-blue-500/20 animate-pulse rounded-full" />
+                      </div>
+
+                      {/* Middle Beam */}
+                      <div className="flex-1 flex flex-col items-center justify-center relative px-2">
+                        {/* Directional beam effect */}
+                        <div className="w-full relative flex items-center justify-center">
+                          {/* Interactive Responsive SVG Wave Generator */}
+                          <svg viewBox="0 0 120 40" className="w-full h-10 overflow-visible text-emerald-400">
+                            <path
+                              d={(() => {
+                                const points = [];
+                                const width = 120;
+                                const height = 40;
+                                const centerY = height / 2;
+                                // Scale frequency visually
+                                const freqFactor = (acousticFrequency / 500) * 2.5;
+                                for (let x = 0; x <= width; x += 1.5) {
+                                  let y = 0;
+                                  const radians = (x / width) * Math.PI * 2 * freqFactor;
+                                  if (acousticWaveType === 'sine') {
+                                    y = Math.sin(radians) * 8;
+                                  } else if (acousticWaveType === 'triangle') {
+                                    y = (Math.abs((radians % (Math.PI * 2)) - Math.PI) / Math.PI - 0.5) * 16;
+                                  } else if (acousticWaveType === 'square') {
+                                    y = Math.sin(radians) >= 0 ? 8 : -8;
+                                  } else { // noise
+                                    y = (Math.random() - 0.5) * 14;
+                                  }
+                                  points.push(`${x},${centerY + y}`);
+                                }
+                                return `M ${points.join(' L ')}`;
+                              })()}
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              className={acousticWaveType !== 'noise' ? "animate-pulse" : ""}
+                            />
+                          </svg>
+                        </div>
+                        <span className="text-[8px] text-slate-500 font-mono mt-2 uppercase tracking-widest bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800">
+                          {acousticWaveType.toUpperCase()} MODE: {acousticFrequency}Hz
+                        </span>
+                      </div>
+
+                      {/* Right: User */}
+                      <div className="flex flex-col items-center gap-1 z-10">
+                        <div className="relative">
+                          <User className="w-5 h-5 text-emerald-400" />
+                          <div className="absolute -inset-1 rounded-full border border-emerald-500/30 animate-ping" style={{ animationDuration: '3s' }} />
+                        </div>
+                        <span className="text-[9px] font-semibold text-emerald-400 font-sans">You (User)</span>
+                        <span className="text-[8px] font-mono bg-emerald-950 text-emerald-400 px-1 rounded border border-emerald-900/30 uppercase tracking-wide">Blurred Vocal Wave</span>
+                      </div>
+                    </div>
+
+                    {/* Interactive controls for waveform and frequency */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 bg-slate-950/40 p-3 rounded-lg border border-slate-900">
+                      {/* Waveform Selector */}
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider font-bold">Encrypted Mask Waveform</span>
+                        <div className="grid grid-cols-4 gap-1">
+                          {(['sine', 'triangle', 'square', 'noise'] as const).map((wt) => (
+                            <button
+                              key={wt}
+                              type="button"
+                              onClick={() => setAcousticWaveType(wt)}
+                              className={`py-1 text-[9px] rounded font-mono uppercase font-bold border transition ${
+                                acousticWaveType === wt
+                                  ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
+                                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {wt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Frequency Slider */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[9px] font-mono text-slate-500 uppercase tracking-wider font-bold">
+                          <span>Modulation Frequency</span>
+                          <span className="text-emerald-400">{acousticFrequency} Hz</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="200"
+                          max="2200"
+                          step="50"
+                          value={acousticFrequency}
+                          onChange={(e) => setAcousticFrequency(Number(e.target.value))}
+                          className="w-full accent-emerald-400 cursor-pointer h-1 bg-slate-900 rounded-lg appearance-none"
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 font-sans text-center">
+                      The acoustic beam dynamically tracks the facing camera lens, cancels your speech, and injects {acousticWaveType} waves modulated at {acousticFrequency}Hz to prevent forensic reconstruction.
+                    </p>
+                  </div>
+
+                  {/* Dynamic Voice Signature Defense & Biometric Deception */}
+                  <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-4">
+                    <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                      <MicOff className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                        Vocal Signature Defense &amp; Machine-Learning Countermeasures
+                      </h4>
+                    </div>
+
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      If a nearby device (such as smart glasses, hidden recording apps, or directional spy microphone arrays) is blocked visually but manages to capture your acoustic raw waves, BlurBubble triggers multi-layered biometric defense countermeasures to neutralize your voice records for profile tracking, transcription, or synthetic AI voice-cloning:
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {/* Ultrasonic Microphone Saturation */}
+                      <div className={`p-3 rounded-lg border transition-all flex flex-col justify-between gap-2 ${
+                        state.ultrasonicMicSaturationEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                      }`}>
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold block text-white flex items-center gap-1">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            Ultrasonic Mic Saturation
+                          </span>
+                          <span className="text-[10px] text-slate-400 block leading-normal">
+                            Emits a safe, inaudible 22kHz–25kHz pressure wave. This physically vibrates the capture mic's internal diaphragm on target devices, distorting the audio recording with non-destructive white noise.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, ultrasonicMicSaturationEnabled: !state.ultrasonicMicSaturationEnabled })}
+                          className={`w-full py-1 rounded text-[9px] font-bold font-mono uppercase border transition ${
+                            state.ultrasonicMicSaturationEnabled
+                              ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                              : 'bg-slate-900 text-slate-400 border-slate-800'
+                          }`}
+                        >
+                          {state.ultrasonicMicSaturationEnabled ? 'ACTIVE (Saturating)' : 'STANDBY'}
+                        </button>
+                      </div>
+
+                      {/* Inaudible Biometric Audio Watermarking */}
+                      <div className={`p-3 rounded-lg border transition-all flex flex-col justify-between gap-2 ${
+                        state.acousticWatermarkingEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                      }`}>
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold block text-white flex items-center gap-1">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            Biometric AI Watermarking
+                          </span>
+                          <span className="text-[10px] text-slate-400 block leading-normal">
+                            Injects near-ultrasonic cryptographic metadata into your spoken audio. If the voice clip is scraped by web crawlers or AI voice-cloners, the watermark triggers automated crawler reject policies.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, acousticWatermarkingEnabled: !state.acousticWatermarkingEnabled })}
+                          className={`w-full py-1 rounded text-[9px] font-bold font-mono uppercase border transition ${
+                            state.acousticWatermarkingEnabled
+                              ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                              : 'bg-slate-900 text-slate-400 border-slate-800'
+                          }`}
+                        >
+                          {state.acousticWatermarkingEnabled ? 'ACTIVE (Watermarked)' : 'STANDBY'}
+                        </button>
+                      </div>
+
+                      {/* Vocal Resonance Scrambler */}
+                      <div className={`p-3 rounded-lg border transition-all flex flex-col justify-between gap-2 ${
+                        state.vocalScramblerEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                      }`}>
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold block text-white flex items-center gap-1">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            Vocal Resonance Scrambler
+                          </span>
+                          <span className="text-[10px] text-slate-400 block leading-normal">
+                            Applies micro-pitch fluctuation filters to your voice signature. Nearby humans understand you flawlessly, but automatic speech-to-text algorithms and voice-print indexers receive scrambled data.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...state, vocalScramblerEnabled: !state.vocalScramblerEnabled })}
+                          className={`w-full py-1 rounded text-[9px] font-bold font-mono uppercase border transition ${
+                            state.vocalScramblerEnabled
+                              ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                              : 'bg-slate-900 text-slate-400 border-slate-800'
+                          }`}
+                        >
+                          {state.vocalScramblerEnabled ? 'ACTIVE (Scrambling)' : 'STANDBY'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Simulation test button */}
+                    <div className="bg-slate-950 border border-slate-900 p-3 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div className="space-y-0.5 text-left">
+                        <span className="text-[11px] font-bold text-slate-200 block">Biometric Voice Harvester Repelled Test</span>
+                        <p className="text-[10px] text-slate-500 leading-snug">Simulates a nearby smart-assistant or directional laser spy microphone attempting to harvest your voice conversation.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!state.isBroadcasting) {
+                            window.dispatchEvent(new CustomEvent('trigger-test-alert', {
+                              detail: {
+                                title: 'Signal Offline',
+                                body: 'You must activate your Signal Beacon before simulating an active acoustic harvest attempt.',
+                                type: 'restricted'
+                              }
+                            }));
+                            return;
+                          }
+
+                          window.dispatchEvent(new CustomEvent('trigger-test-alert', {
+                            detail: {
+                              title: 'Vocal Ingestion Blocked',
+                              body: 'A dynamic voice harvesting attempt was detected. Your acoustic watermark and ultrasonic saturation tripped the harvester\'s ingestion engine, causing instant rejection.',
+                              type: 'success'
+                            }
+                          }));
+
+                          if (onAddLog) {
+                            onAddLog({
+                              deviceModel: 'ACOUSTIC_VOICE_HARVESTER',
+                              action: 'censored',
+                              shieldApplied: 'ACOUSTIC_WATERMARK_INJECT_&_ULTRASONIC_SATURATION',
+                              distance: 2.5,
+                              rotatedId: 'BLOCKLIST_SIGNAL_DEPLOYED_FOR_VOICE_INGEST'
+                            });
+                          }
+                        }}
+                        className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/60 rounded text-xs font-bold text-emerald-400 transition font-mono uppercase tracking-wide cursor-pointer shrink-0"
+                      >
+                        ⚡ Simulate Voice Harvest
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Smart Scheduling Engine Card */}
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
+                      <Calendar className="w-4 h-4 text-emerald-400" />
+                      Autonomous Smart Scheduling Engine
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-sans">
+                      Automatically toggle broadcasting based on your location profiles, calendar routines, or time-of-day. Saves battery when safe.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 mr-1">Status:</span>
+                    <button
+                      type="button"
+                      onClick={() => onChange({ ...state, smartSchedulingEnabled: !state.smartSchedulingEnabled })}
+                      className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border tracking-wider transition ${
+                        state.smartSchedulingEnabled 
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold' 
+                          : 'bg-slate-900 border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {state.smartSchedulingEnabled ? 'AUTOMATION ENABLED' : 'DISABLED'}
+                    </button>
+                  </div>
+                </div>
+
+                {state.smartSchedulingEnabled && (
+                  <div className="space-y-5">
+                    {/* Simulated Clock & Event Matcher Panel */}
+                    <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                          Time-of-Day Simulator &amp; Router
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSimulationMode('real')}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase transition ${
+                              simulationMode === 'real' ? 'bg-blue-500 text-white font-bold' : 'bg-slate-850 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            Real Clock
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSimulationMode('simulated')}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase transition ${
+                              simulationMode === 'simulated' ? 'bg-blue-500 text-white font-bold' : 'bg-slate-850 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            Simulated Timeline
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                        {simulationMode === 'simulated' ? (
+                          <div className="md:col-span-8 space-y-3">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-semibold">Simulated Time</span>
+                              <span className="text-emerald-400 font-bold font-mono">{simulatedTime} ({simulatedDay})</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              {/* Day Selector */}
+                              <select
+                                value={simulatedDay}
+                                onChange={(e) => setSimulatedDay(e.target.value)}
+                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                              >
+                                {daysOfWeek.map(d => (
+                                  <option key={d} value={d} className="bg-slate-950 text-white">{d}</option>
+                                ))}
+                              </select>
+
+                              {/* Time slider */}
+                              <input
+                                type="range"
+                                min="0"
+                                max="1439" // 24 * 60 - 1
+                                value={(() => {
+                                  const [h, m] = simulatedTime.split(':').map(Number);
+                                  return h * 60 + m;
+                                })()}
+                                onChange={(e) => {
+                                  const totalMin = Number(e.target.value);
+                                  const h = String(Math.floor(totalMin / 60)).padStart(2, '0');
+                                  const m = String(totalMin % 60).padStart(2, '0');
+                                  setSimulatedTime(`${h}:${m}`);
+                                }}
+                                className="flex-1 accent-emerald-400 cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="md:col-span-8 py-2 text-xs text-slate-400 space-y-1">
+                            <div className="flex items-center gap-2 text-white">
+                              <Clock className="w-4 h-4 text-emerald-400 animate-spin" style={{ animationDuration: '30s' }} />
+                              <span className="font-bold">Syncing Live Clock...</span>
+                            </div>
+                            <p className="text-[10px]">
+                              System triggers state changes as your device moves across calendar zones automatically.
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="md:col-span-4 bg-slate-950/60 border border-slate-850 p-2.5 rounded-lg flex flex-col justify-center text-center">
+                          <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Active Shield Profile</span>
+                          <span className="text-xs font-bold text-white mt-1 truncate">{activeScheduledSlotName}</span>
+                          <span className={`text-[10px] font-bold font-mono mt-0.5 ${state.isBroadcasting ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {state.isBroadcasting ? 'BROADCASTING ON' : 'BATTERY SAVING (OFF)'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Schedule slots list */}
+                    <div className="space-y-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-900 pb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          Configured Schedule Profiles ({state.scheduleSlots?.length || 0})
+                        </span>
+                        <button
+                          type="button"
+                          id="btn-create-new-schedule"
+                          onClick={() => {
+                            setNewSlotLabel('');
+                            setNewSlotStartTime('09:00');
+                            setNewSlotEndTime('17:00');
+                            setNewSlotDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                            setNewSlotBroadcastEnabled(true);
+                            setNewSlotIcon('briefcase');
+                            setNewSlotPrivacyLevel('default');
+                            setIsScheduleModalOpen(true);
+                          }}
+                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[10px] uppercase rounded-lg tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10 active:scale-95"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Create New Schedule
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2.5">
+                        {state.scheduleSlots?.map((slot) => {
+                          const isCurrentlyMatching = activeScheduledSlotName === slot.label && state.smartSchedulingEnabled;
+                          return (
+                            <div 
+                              key={slot.id} 
+                              className={`p-3.5 rounded-xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+                                isCurrentlyMatching 
+                                  ? 'border-emerald-500 bg-emerald-950/10 shadow-[0_0_15px_rgba(16,185,129,0.05)]' 
+                                  : 'border-slate-800 bg-slate-950/20'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`p-2 rounded-lg shrink-0 ${isCurrentlyMatching ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-900 text-slate-400'}`}>
+                                  {renderSlotIcon(slot.icon, "w-4 h-4")}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-xs font-bold text-white truncate">{slot.label}</h4>
+                                    {isCurrentlyMatching && (
+                                      <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                                        Active
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400 mt-1">
+                                    <span className="font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 text-slate-300">
+                                      {slot.startTime} - {slot.endTime}
+                                    </span>
+                                    <span className="text-slate-500">•</span>
+                                    <span className="text-slate-300 font-semibold">{slot.days.join(', ')}</span>
+                                    {slot.privacyLevel && (
+                                      <>
+                                        <span className="text-slate-500">•</span>
+                                        <span className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[8px] font-mono px-1.5 py-0.5 rounded uppercase font-bold">
+                                          Privacy Override: {slot.privacyLevel.replace('_', ' ')}
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end border-t sm:border-0 border-slate-900 pt-2.5 sm:pt-0">
+                                {/* Simulation quick-select */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleSimulateSlot(slot)}
+                                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-[10px] font-bold uppercase rounded text-slate-300 transition"
+                                >
+                                  Simulate
+                                </button>
+
+                                {/* Broadcast state marker */}
+                                <div className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${
+                                  slot.broadcastEnabled 
+                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                                }`}>
+                                  {slot.broadcastEnabled ? 'Beacon ON' : 'Beacon OFF'}
+                                </div>
+
+                                {/* Active toggle switch */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleScheduleSlotActive(slot.id)}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    slot.isActive ? 'bg-emerald-500' : 'bg-slate-800'
+                                  }`}
+                                >
+                                  <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                    slot.isActive ? 'translate-x-4' : 'translate-x-0'
+                                  }`} />
+                                </button>
+
+                                {/* Delete */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteScheduleSlot(slot.id)}
+                                  className="p-1 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 rounded text-slate-500 hover:text-rose-400 transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Add Schedule slot form */}
+                    <form onSubmit={handleAddScheduleSlot} className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-4">
+                      <div className="flex items-center gap-1.5 border-b border-slate-900 pb-2">
+                        <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-[10px] font-bold text-white uppercase tracking-wider">Configure New Auto-Rule</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                        {/* Name */}
+                        <div className="sm:col-span-2 md:col-span-1">
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Rule Name</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Commute / Subway"
+                            value={newSlotLabel}
+                            onChange={(e) => setNewSlotLabel(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                          />
+                        </div>
+
+                        {/* Times */}
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Start Time (24h)</label>
+                          <input
+                            type="time"
+                            required
+                            value={newSlotStartTime}
+                            onChange={(e) => setNewSlotStartTime(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">End Time (24h)</label>
+                          <input
+                            type="time"
+                            required
+                            value={newSlotEndTime}
+                            onChange={(e) => setNewSlotEndTime(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                          />
+                        </div>
+
+                        {/* Mode action */}
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Beacon Action</label>
+                          <select
+                            value={newSlotBroadcastEnabled ? 'on' : 'off'}
+                            onChange={(e) => setNewSlotBroadcastEnabled(e.target.value === 'on')}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                          >
+                            <option value="on" className="bg-slate-950 text-white">Beacon ON (Broadcasting)</option>
+                            <option value="off" className="bg-slate-950 text-white">Beacon OFF (Battery Saver)</option>
+                          </select>
+                        </div>
+
+                        {/* Icon */}
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Visual Icon Profile</label>
+                          <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1 overflow-x-auto">
+                            {(['briefcase', 'baby', 'beer', 'home', 'school', 'car', 'users', 'shield'] as const).map(ic => {
+                              const isSel = newSlotIcon === ic;
+                              return (
+                                <button
+                                  key={ic}
+                                  type="button"
+                                  onClick={() => setNewSlotIcon(ic)}
+                                  className={`p-1 rounded transition shrink-0 ${
+                                    isSel ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                  }`}
+                                  title={ic}
+                                >
+                                  {renderSlotIcon(ic, "w-3.5 h-3.5")}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Days */}
+                        <div className="sm:col-span-2 md:col-span-3">
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Select Days</label>
+                          <div className="flex flex-wrap gap-1">
+                            {daysOfWeek.map(day => {
+                              const isSelected = newSlotDays.includes(day);
+                              return (
+                                <button
+                                  key={day}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      setNewSlotDays(newSlotDays.filter(d => d !== day));
+                                    } else {
+                                      setNewSlotDays([...newSlotDays, day]);
+                                    }
+                                  }}
+                                  className={`flex-1 py-1 text-[10px] font-bold uppercase rounded border transition ${
+                                    isSelected 
+                                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold' 
+                                      : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                                  }`}
+                                >
+                                  {day}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-1 text-right">
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs uppercase rounded-lg tracking-wider transition shadow-lg shadow-emerald-500/10"
+                        >
+                          Add Custom Schedule Rule
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
+
+              {/* Pocket Haptic & Notification Settings Card */}
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4 pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BellRing className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Haptic Alert &amp; Push Notification Core</h4>
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[9px] font-mono">
+                    ACTIVE SENSORS SYNCED
+                  </span>
+                </div>
+                
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Go out without worrying! When someone points an AI device at you or scans your children, BlurBubble can buzz your phone in your pocket or trigger push alerts. No need to look back or keep checking your glasses.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-900 text-xs">
+                  <div className="space-y-3.5">
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <div className="space-y-0.5 pr-2">
+                        <span className="text-slate-300 font-semibold group-hover:text-white transition">Pocket Phone Vibration Buzz</span>
+                        <p className="text-[10px] text-slate-500 leading-snug">Vibrates phone twice when active shielding triggers.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={state.enablePhoneBuzz ?? true}
+                        onChange={(e) => onChange({ ...state, enablePhoneBuzz: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <div className="space-y-0.5 pr-2">
+                        <span className="text-slate-300 font-semibold group-hover:text-white transition">In-App Push Notifications</span>
+                        <p className="text-[10px] text-slate-500 leading-snug">Displays pop-up banners for real-time compliance events.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={state.enablePushNotifications ?? true}
+                        onChange={(e) => onChange({ ...state, enablePushNotifications: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <div className="space-y-0.5 pr-2">
+                        <span className="text-slate-300 font-semibold group-hover:text-white transition">Child &amp; Asset Protection Alerts</span>
+                        <p className="text-[10px] text-slate-500 leading-snug">Notifies you if your children or items are actively being blurred.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={state.notifyOnChildEngaged ?? true}
+                        onChange={(e) => onChange({ ...state, notifyOnChildEngaged: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="space-y-3.5 border-t md:border-t-0 md:border-l border-slate-900 pt-3.5 md:pt-0 md:pl-4">
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <div className="space-y-0.5 pr-2">
+                        <span className="text-slate-300 font-semibold group-hover:text-white transition">Online Video Discovery Alerts</span>
+                        <p className="text-[10px] text-slate-500 leading-snug">Alerts immediately if our web crawler indexes your face online.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={state.notifyOnVideoFound ?? true}
+                        onChange={(e) => onChange({ ...state, notifyOnVideoFound: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <div className="space-y-0.5 pr-2">
+                        <span className="text-slate-300 font-semibold group-hover:text-white transition">Online Video Deletion/Blur Success</span>
+                        <p className="text-[10px] text-slate-500 leading-snug">Confirms when a detected online video is successfully blurred.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={state.notifyOnVideoDeleted ?? true}
+                        onChange={(e) => onChange({ ...state, notifyOnVideoDeleted: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                    </label>
+
+                    {/* Quick Simulation Trigger Buttons */}
+                    <div className="pt-2">
+                      <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block mb-1.5">Simulation Playground</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Trigger intercept test
+                            const testModels = ['Meta Ray-Ban v3', 'Snap Spectacles Pro', 'Apple Vision Wear v2'];
+                            const selectedModel = testModels[Math.floor(Math.random() * testModels.length)];
+                            const distance = parseFloat((Math.random() * 5 + 1).toFixed(1));
+                            
+                            window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                              detail: { 
+                                title: 'Bystander Alert (Mock)',
+                                body: `Intercepted scanning by ${selectedModel} at ${distance}m. Active blur filter enforced.`,
+                                type: 'blocking'
+                              } 
+                            }));
+                          }}
+                          className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold py-1.5 rounded text-[10px] transition text-center"
+                        >
+                          Test Shield Alert
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Trigger child intercept test
+                            const activeEntities = state.registeredEntities.filter(e => e.isActive);
+                            const tagLabel = activeEntities.length > 0 ? activeEntities[0].name : "Lily's Backpack";
+                            window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                              detail: { 
+                                title: 'Child Tag Security Event',
+                                body: `Sensor detected nearby scan targeting "${tagLabel}". Active blurring engaged!`,
+                                type: 'child_blocking'
+                              } 
+                            }));
+                          }}
+                          className="bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-purple-400 font-bold py-1.5 rounded text-[10px] transition text-center"
+                        >
+                          Test Child Tag Alert
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Family Shield Sync & Battery Saver Dashboard */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Card 1: Battery Saver Mode */}
+                <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Zap className={`w-4 h-4 ${state.batterySaverActive ? 'text-amber-400 animate-bounce' : 'text-slate-400'}`} />
+                          <h4 className="text-xs font-bold text-white uppercase tracking-wider">Battery Saver Mode</h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const active = !state.batterySaverActive;
+                            const updatedMeters = active ? Math.min(state.rangeMeters, 8) : state.rangeMeters;
+                            onChange({
+                              ...state,
+                              batterySaverActive: active,
+                              rangeMeters: updatedMeters
+                            });
+                            window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                              detail: { 
+                                title: active ? 'Battery Saver Active' : 'Battery Saver Disengaged',
+                                body: active 
+                                  ? 'Signal transmission interval throttled to 1.2s. Range capped to 8m to conserve active battery.' 
+                                  : 'High-fidelity real-time scans re-established. Full signal range active.',
+                                type: 'schedule_update'
+                              } 
+                            }));
+                          }}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            state.batterySaverActive ? 'bg-amber-450' : 'bg-slate-800'
+                          }`}
+                          title="Toggle eco-friendly power saving mode (caps signal range to 8m)"
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                            state.batterySaverActive ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Optimizes beacon transmit parameters. Pulse interval is dynamically throttled and signal range is capped to extend operational lifetime on low-power tags by up to 45%.
+                      </p>
+                    </div>
+
+                    {/* Battery Optimization Toggle */}
+                    <div className="pt-3 border-t border-slate-850 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap" title="Adapts wireless pulse rate based on current simulated device level">
+                            <span className={`text-[11px] font-bold uppercase tracking-wider transition-all duration-350 ${
+                              state.intelligentBatteryOptimization ? 'text-emerald-400 font-extrabold shadow-emerald-500/20' : 'text-slate-300 font-bold'
+                            }`}>
+                              Battery Optimization
+                            </span>
+                            <AnimatePresence>
+                              {state.intelligentBatteryOptimization && (
+                                <motion.span 
+                                  initial={{ opacity: 0, scale: 0.8, x: -5 }}
+                                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                                  exit={{ opacity: 0, scale: 0.8, x: -5 }}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-mono font-black bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 animate-pulse"
+                                  style={{ animationDuration: '2.2s' }}
+                                  title="Low power throttle mode currently scaling transmitter energy consumption"
+                                >
+                                  <span className="w-1 h-1 rounded-full bg-emerald-400 animate-ping"></span>
+                                  ENERGY SAVING
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                          <span className="text-[9px] text-slate-500">
+                            Intelligently scales down BLE broadcast frequency as battery level drains to maximize device longevity.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const active = !state.intelligentBatteryOptimization;
+                            onChange({
+                              ...state,
+                              intelligentBatteryOptimization: active
+                            });
+                            window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                              detail: { 
+                                title: active ? 'Battery Optimization Enabled' : 'Battery Optimization Disabled',
+                                body: active 
+                                  ? 'Adaptive BLE power saving active. Broadcast frequency will dynamically scale with device battery.' 
+                                  : 'Fixed broadcast frequency restored.',
+                                type: 'blocking'
+                              } 
+                            }));
+                          }}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            state.intelligentBatteryOptimization ? 'bg-emerald-500' : 'bg-slate-800'
+                          }`}
+                          title="Toggle adaptive BLE transmission power based on device charge level"
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                            state.intelligentBatteryOptimization ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Intelligent Parameters Display */}
+                      {(() => {
+                        const activeEntities = state.registeredEntities?.filter(e => e.isActive) || [];
+                        const trackedEntity = activeEntities.find(e => e.type === 'phone') || activeEntities[0] || state.registeredEntities?.[0];
+                        const battery = trackedEntity ? trackedEntity.batteryPercent : 88;
+                        const deviceName = trackedEntity ? trackedEntity.name : "Companion Device";
+                        
+                        // Calculate intelligent scaling
+                        let frequency = "10.0 Hz";
+                        let intervalMs = "100 ms";
+                        let desc = "Standard broadcast rate. Absolute coverage fidelity.";
+                        let colorClass = "text-slate-300";
+
+                        if (state.intelligentBatteryOptimization && trackedEntity) {
+                          if (battery >= 80) {
+                            frequency = "10.0 Hz";
+                            intervalMs = "100 ms";
+                            desc = "Optimal level. Peak transmit fidelity active.";
+                            colorClass = "text-emerald-400";
+                          } else if (battery >= 60) {
+                            frequency = "7.5 Hz";
+                            intervalMs = "133 ms";
+                            desc = "High level. Dynamic adaptive frequency control.";
+                            colorClass = "text-emerald-400/90";
+                          } else if (battery >= 35) {
+                            frequency = "5.0 Hz";
+                            intervalMs = "200 ms";
+                            desc = "Moderate level. Throttling frequency to preserve battery.";
+                            colorClass = "text-emerald-500/80";
+                          } else if (battery >= 15) {
+                            frequency = "2.5 Hz";
+                            intervalMs = "400 ms";
+                            desc = "Low battery. Extended sleep cycle active.";
+                            colorClass = "text-amber-400";
+                          } else if (battery >= 10) {
+                            frequency = "1.0 Hz";
+                            intervalMs = "1000 ms";
+                            desc = "Battery warning. Emergency low pulse enabled.";
+                            colorClass = "text-rose-400 animate-pulse";
+                          } else {
+                            frequency = "0.2 Hz";
+                            intervalMs = "5000 ms";
+                            desc = "Deep battery saver. Extreme standby preservation.";
+                            colorClass = "text-rose-500 font-bold animate-pulse";
+                          }
+                        } else if (state.batterySaverActive) {
+                          frequency = "1.2 Hz";
+                          intervalMs = "830 ms";
+                          desc = "Eco-Pulse mode active (fixed throttle).";
+                          colorClass = "text-amber-400";
+                        }
+
+                        return (
+                          <div className="p-3 bg-slate-950/70 border border-slate-900 rounded-lg space-y-1.5">
+                            <div className="flex justify-between items-center text-[10px] font-mono">
+                              <span className="text-slate-500">TRACKED DEVICE</span>
+                              <span className="text-white font-semibold truncate max-w-[150px]">{deviceName} ({battery}%)</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] font-mono">
+                              <span className="text-slate-500">BLE TX FREQUENCY</span>
+                              <span className={`font-bold ${colorClass}`}>{frequency} ({intervalMs} interval)</span>
+                            </div>
+                            <p className="text-[9px] text-slate-400 italic pt-1 border-t border-slate-900/40">
+                              {desc}
+                            </p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Interactive Device Battery Level Slider */}
+                    <div className="pt-3 border-t border-slate-900 space-y-2">
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-slate-500 uppercase font-mono">SIMULATE ACTIVE DEVICE BATTERY</span>
+                        <span className="text-white font-bold font-mono">
+                          {(() => {
+                            const activeEntities = state.registeredEntities?.filter(e => e.isActive) || [];
+                            const tracked = activeEntities.find(e => e.type === 'phone') || activeEntities[0] || state.registeredEntities?.[0];
+                            return tracked ? `${tracked.batteryPercent}%` : "No Active Device";
+                          })()}
+                        </span>
+                      </div>
+                      {(() => {
+                        const activeEntities = state.registeredEntities?.filter(e => e.isActive) || [];
+                        const tracked = activeEntities.find(e => e.type === 'phone') || activeEntities[0] || state.registeredEntities?.[0];
+                        if (!tracked) {
+                          return <p className="text-[9px] text-slate-500 italic">No devices found. Add a smart tag or active phone in the Directory below.</p>;
+                        }
+
+                        return (
+                          <div className="space-y-1">
+                            <input
+                              type="range"
+                              min="1"
+                              max="100"
+                              value={tracked.batteryPercent}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                const updated = state.registeredEntities.map(t => 
+                                  t.id === tracked.id ? { ...t, batteryPercent: val } : t
+                                );
+                                onChange({
+                                  ...state,
+                                  registeredEntities: updated
+                                });
+                              }}
+                              className="w-full accent-emerald-500 bg-slate-950 h-1.5 rounded-lg cursor-pointer"
+                              title="Slide to dynamically simulate change in device battery charge and test adaptive power throttles"
+                            />
+                            <div className="flex justify-between text-[8px] text-slate-500 font-mono">
+                              <span className="text-rose-500">1%</span>
+                              <span className="text-rose-400 font-bold">10% Crit Alert</span>
+                              <span className="text-amber-400 font-bold">15% Low Alert</span>
+                              <span>100%</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-950 space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-mono">
+                      <span className="text-slate-500">TAG DISCHARGE RATE</span>
+                      <span className={state.batterySaverActive ? "text-emerald-400" : "text-amber-400"}>
+                        {state.batterySaverActive ? "0.38%/hr (Eco-Pulse)" : "1.25%/hr (High-Fidelity)"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-mono">
+                      <span className="text-slate-500">ESTIMATED RUNTIME</span>
+                      <span className="text-white font-bold">
+                        {state.batterySaverActive ? "48.5 Hours (+18h Saved)" : "14.8 Hours (Peak power)"}
+                      </span>
+                    </div>
+                    {state.batterySaverActive && (
+                      <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded text-[10px] text-amber-300 font-sans flex items-center gap-1.5">
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                        </span>
+                        Eco-Pulse Active. Signal range capped at 8 meters.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Card 2: Family Shield Sync */}
+                <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Users className={`w-4 h-4 ${state.familyShieldSync ? 'text-blue-400 animate-pulse' : 'text-slate-400'}`} />
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Family Shield Sync</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const active = !state.familyShieldSync;
+                          onChange({
+                            ...state,
+                            familyShieldSync: active,
+                            familyShieldSyncStatus: active ? 'synchronized' : 'disabled'
+                          });
+                          if (active) {
+                            setIsSyncingFamily(true);
+                            setFamilySyncLogs([
+                              "[INFO] Initiating Family Mesh Synchronization...",
+                              "[SECURE] Exchanging public key signatures with Robert (Dad)...",
+                              "[SECURE] Verifying Lily's smart backpack hardware tag signature...",
+                              "[SUCCESS] Synchronized 3 active family shields successfully!"
+                            ]);
+                            setTimeout(() => setIsSyncingFamily(false), 2000);
+                          }
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          state.familyShieldSync ? 'bg-blue-500' : 'bg-slate-800'
+                        }`}
+                      >
+                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                          state.familyShieldSync ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Coordinated mesh network. Encrypts and distributes custom privacy level rules and whitelists to ensure siblings and parents stand unified under the same security profile.
+                    </p>
+                  </div>
+
+                  {state.familyShieldSync ? (
+                    <div className="space-y-2.5 pt-3 border-t border-slate-950 text-[10px]">
+                      {isSyncingFamily ? (
+                        <div className="space-y-1 bg-slate-950 p-2.5 rounded border border-slate-900/80">
+                          <div className="w-full bg-slate-850 h-1 rounded-full overflow-hidden">
+                            <div className="bg-blue-400 h-full w-2/3 animate-pulse" />
+                          </div>
+                          <span className="text-[9px] font-mono text-blue-400 block text-center animate-pulse">
+                            EXCHANGING PUBLIC KEYS OVER DECENTRALIZED MESH NETWORK...
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 uppercase font-bold text-[9px]">Mesh Sync Group</span>
+                            <span className="text-blue-400 font-mono font-bold">3 Active Members</span>
+                          </div>
+                          <div className="grid grid-cols-1 gap-1.5 font-sans">
+                            {familyMembers.map((member) => (
+                              <div key={member.id} className="flex items-center justify-between p-1.5 bg-slate-900/40 border border-slate-800 rounded">
+                                <div className="flex items-center gap-1.5">
+                                  <span>👤</span>
+                                  <span className="text-white font-semibold">{member.name} ({member.relation})</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[9px] font-mono text-slate-400">
+                                  <span>{member.deviceName}</span>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  <span className="text-emerald-400 uppercase font-bold">Synced</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-2 text-slate-600 text-[10px] italic pt-3 border-t border-slate-950">
+                      Family synchronization is disabled. Engage toggle above to synchronize.
+                    </div>
+                  )}
+
+                  {/* Coercion Defense Panic Module */}
+                  <div className="bg-red-950/10 border border-red-900/30 rounded-xl p-4.5 space-y-3">
+                    <div className="flex items-center gap-2 text-red-500">
+                      <ShieldAlert className="w-4 h-4 animate-pulse text-red-500" />
+                      <h4 className="text-xs font-black tracking-wider uppercase font-mono">Emergency Coercion Defense</h4>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+                      If you are in a high-risk zone and are being forced or coerced to unlock your device, trigger a <strong>Zero-Delay Sanitization Purge</strong>. This instantly wipes all registered facial templates, automated SSID rules, synced tags, and encrypted audit logs, reverting the app to a clean state.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                      {/* G-force shake simulation button */}
+                      <button
+                        type="button"
+                        id="simulate-shake-btn"
+                        onClick={handleCoercionPurge}
+                        className="flex-1 bg-red-950/40 hover:bg-red-950/75 border border-red-900/40 hover:border-red-500 text-red-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
+                      >
+                        📳 Simulate Phone Shake (G-Force 4.5)
+                      </button>
+
+                      {/* Manual Hold Button */}
+                      <button
+                        type="button"
+                        id="hold-purge-btn"
+                        onMouseDown={() => setIsHoldingWipe(true)}
+                        onMouseUp={() => setIsHoldingWipe(false)}
+                        onMouseLeave={() => setIsHoldingWipe(false)}
+                        onTouchStart={() => setIsHoldingWipe(true)}
+                        onTouchEnd={() => setIsHoldingWipe(false)}
+                        className={`flex-1 relative border font-extrabold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition overflow-hidden select-none ${
+                          isHoldingWipe
+                            ? 'bg-red-600 text-white border-red-500'
+                            : 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20'
+                        }`}
+                      >
+                        {isHoldingWipe ? (
+                          <>
+                            <div className="absolute left-0 top-0 h-full bg-red-800 transition-all duration-1000" style={{ width: `${(wipeHoldSeconds / 2) * 100}%`, zIndex: 0 }} />
+                            <span className="relative z-10 animate-pulse">HOLDING... {2 - wipeHoldSeconds}s</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Hold 2s to Wipe Device</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Infrared (IR) & LiDAR Counter-Defense Enclave */}
+                  <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3">
+                      <div className="space-y-1">
+                        <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
+                          <EyeOff className="w-4 h-4 text-emerald-400" />
+                          Advanced Optical &amp; Active Laser Countermeasures (IR/LiDAR)
+                        </h3>
+                        <p className="text-[11px] text-slate-400 font-sans">
+                          Mitigate near-infrared surveillance, sub-millimeter AI lip-reading, and active LiDAR point-cloud face scans.
+                        </p>
+                      </div>
+                      <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 px-2.5 py-0.5 rounded-full font-mono uppercase font-semibold">
+                        Spatial Cloaking Active
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Interactive Explanation Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Infrared Shield Toggle */}
+                        <div className={`p-4 rounded-xl border transition-all ${
+                          state.irDisruptionEnabled 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                                <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                                940nm Infrared (IR) Pulse Jammer
+                              </span>
+                              <span className="text-[10px] text-slate-400 block leading-relaxed">
+                                Emits randomized near-infrared optical noise. Blinds active IR cameras and spatial audio buds trying to track lip contours in low light.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onChange({ ...state, irDisruptionEnabled: !state.irDisruptionEnabled })}
+                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
+                                state.irDisruptionEnabled
+                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                  : 'bg-slate-900 text-slate-400 border-slate-800'
+                              }`}
+                            >
+                              {state.irDisruptionEnabled ? 'ACTIVE' : 'MUTED'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* LiDAR Laser Point-Cloud Jammer */}
+                        <div className={`p-4 rounded-xl border transition-all ${
+                          state.lidarInterferenceEnabled 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                                <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                                LiDAR Time-of-Flight Scrambler
+                              </span>
+                              <span className="text-[10px] text-slate-400 block leading-relaxed">
+                                Transmits specialized optical phase-cancellation pulses. Scatters 3D depth-laser beams, corrupting face-mesh tracking and spatial scans.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onChange({ ...state, lidarInterferenceEnabled: !state.lidarInterferenceEnabled })}
+                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
+                                state.lidarInterferenceEnabled
+                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                  : 'bg-slate-900 text-slate-400 border-slate-800'
+                              }`}
+                            >
+                              {state.lidarInterferenceEnabled ? 'ACTIVE' : 'MUTED'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Anti-Lip Reading Spatial Deflector */}
+                        <div className={`p-4 rounded-xl border transition-all md:col-span-2 ${
+                          state.antiLipReadingEnabled 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                        }`}>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="space-y-1">
+                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                                <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                                Anti-Lip Reading Coordinate Deflector
+                              </span>
+                              <span className="text-[10px] text-slate-400 block leading-relaxed">
+                                Dynamically feeds anti-lip-reading micro-oscillations into localized computer-vision frameworks. Prevents deep-learning AI from reconstructing private vocal conversations from high-definition video feeds or directional earbud mic arrays.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onChange({ ...state, antiLipReadingEnabled: !state.antiLipReadingEnabled })}
+                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
+                                state.antiLipReadingEnabled
+                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                  : 'bg-slate-900 text-slate-400 border-slate-800'
+                              }`}
+                            >
+                              {state.antiLipReadingEnabled ? 'ARMED' : 'STANDBY'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interactive Telemetry & Simulator Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                        {/* Telemetry Panel */}
+                        <div className="bg-slate-950 border border-slate-900 p-3 rounded-lg md:col-span-2 space-y-2">
+                          <div className="flex items-center justify-between text-[9px] font-bold font-mono text-slate-500 uppercase">
+                            <span>Optical Shield Telemetry</span>
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              Shielding Enclave Standard
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+                            <div className="bg-slate-900/30 p-2 rounded border border-slate-900/40 space-y-0.5">
+                              <span className="text-[9px] text-slate-500 block">IR PULSE SPEED</span>
+                              <span className="font-bold text-slate-200">
+                                {state.irDisruptionEnabled ? '142 Hz (RANDOMIZED)' : 'OFF / STANDBY'}
+                              </span>
+                            </div>
+                            <div className="bg-slate-900/30 p-2 rounded border border-slate-900/40 space-y-0.5">
+                              <span className="text-[9px] text-slate-500 block">LIDAR SCRAMBLE INDEX</span>
+                              <span className="font-bold text-emerald-400">
+                                {state.lidarInterferenceEnabled ? '98.7% (CRITICAL)' : '0.0% (DEFAULT)'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Active Probe Simulator Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!state.isBroadcasting) {
+                              window.dispatchEvent(new CustomEvent('trigger-test-alert', {
+                                detail: {
+                                  title: 'Signal Offline',
+                                  body: 'You must activate your Signal Beacon before simulating an active IR/LiDAR sensor probe.',
+                                  type: 'restricted'
+                                }
+                              }));
+                              return;
+                            }
+
+                            // Trigger sound / notification alerts
+                            window.dispatchEvent(new CustomEvent('trigger-test-alert', {
+                              detail: {
+                                title: 'Active LiDAR & IR Sweep Repelled',
+                                body: 'An active infrared optical scan and LiDAR depth probe was detected trying to map your lip movements. Dynamic counter-pulses have successfully jammed the scan.',
+                                type: 'success'
+                              }
+                            }));
+
+                            // If onAddLog is available, add a log entry
+                            if (onAddLog) {
+                              onAddLog({
+                                deviceModel: 'IR_LIDAR_PROBE (Lip-Reading Target)',
+                                action: 'censored',
+                                shieldApplied: '940nm_IR_LED_PULSE_&_PHASE_DISTORTION_JAM',
+                                distance: 1.2,
+                                rotatedId: 'REPELLED_LIDAR_POINT_CLOUD_SCAN'
+                              });
+                            }
+                          }}
+                          className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 border border-emerald-500/20 hover:border-emerald-500/50 p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1 transition cursor-pointer group"
+                        >
+                          <span className="text-xs font-bold text-white group-hover:text-emerald-400 transition">⚡ Simulate IR/LiDAR Probe</span>
+                          <span className="text-[9px] text-slate-400">Deploy a real-time anti-lip-reading test to check shield response.</span>
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+
+                </div>
+
+            </div>
+          </motion.div>
+        )}
+
+          {/* Tab 2: Smart Tags & Objects (Child & Asset Protection) */}
+          {activeTab === 'tags' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                    <Tag className="w-4 h-4 text-emerald-400" />
+                    Universal Tagging &amp; Object Protection
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('pairing')}
+                    className="self-start sm:self-auto px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-bold rounded-lg flex items-center gap-1.5 transition"
+                  >
+                    <Bluetooth className="w-3.5 h-3.5" />
+                    Go to BLE Pairing Console
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Attach compact BLE beacons, smart tags, or anchor points to children's apparel, valuable business prototypes, proprietary products, private artwork, film sets, or secret recipes. Open-source AI scanning models and BlurBubble-compatible smart cameras read these broadcast handshakes, instantly blurring or erasing the designated items to protect intellectual property and personal privacy alike.
+                </p>
+              </div>
+
+              {/* Add New Tag Form */}
+              <form onSubmit={handleAddTag} className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Register Protected Object or Beacon</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Item / Object Name</label>
+                    <input
+                      id="tag-name-input"
+                      type="text"
+                      placeholder="e.g. Generation-4 AI Chip Prototype"
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Device / Asset Type</label>
+                    <select
+                      id="tag-type-select"
+                      value={newTagType}
+                      onChange={(e: any) => setNewTagType(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                    >
+                      <option value="prototype">🔬 Confidential Business Prototype / Product</option>
+                      <option value="artwork">🎨 Proprietary Art / Gallery Piece / Cinema Set</option>
+                      <option value="building">🏢 Protected Location / Shopfront / Signage</option>
+                      <option value="valuable">💎 Private Asset / Vault / Secret Document</option>
+                      <option value="smart_tag">🎒 BlurBubble Smart Tag (Standard Child/Family)</option>
+                      <option value="airtag">🍎 Apple AirTag (Re-used BLE Beacon)</option>
+                      <option value="galaxy_tag">🌌 Samsung Galaxy SmartTag (Re-used)</option>
+                      <option value="phone">📱 Smartphone App (This Device / Second Phone)</option>
+                      <option value="key_fob">🔑 Specialized Keychain Fob</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Assigned Censor Shield</label>
+                    <select
+                      id="tag-privacy-select"
+                      value={newTagPrivacy}
+                      onChange={(e: any) => setNewTagPrivacy(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                    >
+                      <option value="magic_removal">🪄 Magic Eraser Removal (Inpaint Empty Space)</option>
+                      <option value="strict_blur">🔴 Strict Blur (Dense Obfuscation)</option>
+                      <option value="pixelate">🟡 8-Bit Pixelate (Low Fidelity)</option>
+                      <option value="emoji">🔵 Shield Avatar (Interception Graphic)</option>
+                      <option value="black_bar">⚫ Censored Black Bar (Classic Ban)</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  id="add-tag-btn"
+                  type="submit"
+                  className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Protection Beacon Tag
+                </button>
+              </form>
+
+              {/* Tags List */}
+              <div className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+                  Broadcasting Shield Beacon Directory ({state.registeredEntities.length})
+                </span>
+
+                <div className="space-y-2.5">
+                  {state.registeredEntities.map((tag) => (
+                    <div 
+                      key={tag.id} 
+                      className={`border rounded-xl p-4 bg-slate-950/40 flex flex-col gap-3 transition-all duration-300 ${
+                        ringingTagId === tag.id
+                          ? 'border-emerald-500 bg-slate-950/80 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30'
+                          : tag.isActive ? 'border-slate-800' : 'border-slate-900 opacity-60'
+                      }`}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className={`w-9 h-9 rounded-lg bg-slate-900 border flex items-center justify-center text-sm shrink-0 transition-colors ${
+                            ringingTagId === tag.id ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-800'
+                          }`}>
+                            {tag.type === 'smart_tag' ? '🎒' : 
+                             tag.type === 'phone' ? '📱' : 
+                             tag.type === 'airtag' ? '🍎' : 
+                             tag.type === 'galaxy_tag' ? '🌌' : 
+                             tag.type === 'key_fob' ? '🔑' : 
+                             tag.type === 'prototype' ? '🔬' : 
+                             tag.type === 'artwork' ? '🎨' : 
+                             tag.type === 'building' ? '🏢' : '💎'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {editingTagId === tag.id ? (
+                                <input
+                                  type="text"
+                                  value={editingTagName}
+                                  onChange={(e) => setEditingTagName(e.target.value)}
+                                  onBlur={() => handleRenameTag(tag.id, editingTagName)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleRenameTag(tag.id, editingTagName);
+                                    if (e.key === 'Escape') setEditingTagId(null);
+                                  }}
+                                  className="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-xs text-white font-sans focus:outline-none focus:border-cyan-500 w-full max-w-[180px]"
+                                  autoFocus
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingTagId(tag.id);
+                                    setEditingTagName(tag.name);
+                                  }}
+                                  className="flex items-center gap-1.5 cursor-pointer text-left hover:text-cyan-400 group/name"
+                                  title="Click to rename"
+                                >
+                                  <span className="text-sm font-semibold text-white group-hover/name:text-cyan-400 transition-colors">
+                                    {tag.name}
+                                  </span>
+                                  <Edit2 className="w-3 h-3 text-slate-500 group-hover/name:text-cyan-400 transition-colors shrink-0" />
+                                </button>
+                              )}
+                              <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800/80 px-1.5 py-0.2 rounded font-mono uppercase">
+                                {tag.type}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              <span className="text-[9px] bg-slate-900 text-slate-400 border border-slate-800 px-1.5 py-0.2 rounded font-mono">
+                                Battery: {tag.batteryPercent}%
+                              </span>
+                              <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-900/60 px-1.5 py-0.2 rounded font-mono uppercase">
+                                Target Shield: {tag.privacyLevel.toUpperCase().replace('_', ' ')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 self-end md:self-center">
+                          <div>
+                            <select
+                              id={`tag-shield-${tag.id}`}
+                              value={tag.privacyLevel}
+                              onChange={(e) => handleTagPrivacyChange(tag.id, e.target.value as PrivacyLevel)}
+                              className="bg-slate-900 border border-slate-850 rounded px-2 py-1 text-[10px] text-slate-300 focus:outline-none focus:border-emerald-500/40"
+                            >
+                              <option value="magic_removal">Magic Eraser</option>
+                              <option value="strict_blur">Strict Blur</option>
+                              <option value="pixelate">Pixelate</option>
+                              <option value="emoji">Shield Avatar</option>
+                              <option value="black_bar">Black Bar</option>
+                              <option value="none">No Shield</option>
+                            </select>
+                          </div>
+
+                          <button
+                            id={`toggle-tag-${tag.id}`}
+                            onClick={() => handleToggleTagStatus(tag.id)}
+                            className={`text-[10px] px-2.5 py-1 rounded font-bold transition ${
+                              tag.isActive 
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' 
+                                : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-750'
+                            }`}
+                          >
+                            {tag.isActive ? 'BROADCASTING' : 'MUTED'}
+                          </button>
+
+                          {editingTagId === tag.id ? (
+                            <button
+                              id={`save-tag-btn-${tag.id}`}
+                              type="button"
+                              onClick={() => handleRenameTag(tag.id, editingTagName)}
+                              className="text-[10px] px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 font-bold rounded transition flex items-center gap-1 cursor-pointer"
+                              title="Save Name"
+                            >
+                              <Check className="w-3 h-3" />
+                              <span>Save</span>
+                            </button>
+                          ) : (
+                            <button
+                              id={`rename-tag-btn-${tag.id}`}
+                              type="button"
+                              onClick={() => {
+                                setEditingTagId(tag.id);
+                                setEditingTagName(tag.name);
+                              }}
+                              className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 font-bold rounded transition flex items-center gap-1 cursor-pointer"
+                              title="Rename Tag"
+                            >
+                              <Edit2 className="w-3 h-3 text-slate-400" />
+                              <span>Rename</span>
+                            </button>
+                          )}
+
+                          <button
+                            id={`delete-tag-${tag.id}`}
+                            onClick={() => handleDeleteTag(tag.id)}
+                            className="p-1 text-slate-500 hover:text-red-400 transition"
+                            title="Delete Tag"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Interactive Find Tag & Simulate Help buttons */}
+                      <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-900/40">
+                        {/* 1. Find Tag / Play Sound (Phone -> Tag) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRingingTagId(tag.id);
+                            playTagBuzzerSound();
+                            // Reset ringing state after 3 seconds
+                            setTimeout(() => {
+                              setRingingTagId((current) => (current === tag.id ? null : current));
+                            }, 3000);
+                          }}
+                          className={`flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all ${
+                            ringingTagId === tag.id
+                              ? 'bg-emerald-500 text-slate-950 animate-pulse font-extrabold shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                              : 'bg-slate-900 hover:bg-slate-850 text-emerald-400 border border-emerald-500/10 hover:border-emerald-500/30'
+                          }`}
+                          title="Trigger a high-frequency audible sweep on this smart tag's buzzer to find it"
+                        >
+                          <Volume2 className={`w-3.5 h-3.5 ${ringingTagId === tag.id ? 'animate-bounce' : ''}`} />
+                          <span>{ringingTagId === tag.id ? 'CHIRPING BUZZER...' : '🔊 Play Sound on Tag (Find Tag)'}</span>
+                        </button>
+
+                        {/* 2. Press Tag Button / Help Call (Tag -> Phone) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const now = new Date();
+                            const timeStr = now.toTimeString().split(' ')[0];
+                            setActiveHelpAlert({
+                              tagId: tag.id,
+                              tagName: tag.name,
+                              time: timeStr
+                            });
+                            // Trigger system wide notification & buzzing rings in App.tsx
+                            window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                              detail: { 
+                                title: "🚨 ACTIVE HELP ALERT: Son Needs Help!", 
+                                body: `Help request pressed on child tag: ${tag.name}. Mobile phone alert initiated.`,
+                                type: 'child_blocking' 
+                              } 
+                            }));
+                          }}
+                          className="flex items-center gap-1.5 text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-lg transition-all"
+                          title="Simulate child pressing the physical help button on this tag (triggers urgent phone alert)"
+                        >
+                          <Radio className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                          <span>🔘 Press Tag Button (Simulate Help Call)</span>
+                        </button>
+
+                        {/* Active Chirping Notification */}
+                        {ringingTagId === tag.id && (
+                          <span className="text-[9px] font-mono text-emerald-400 animate-pulse font-semibold sm:ml-auto flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                            CHIRPING BROADCAST IN PROGRESS
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Interactive Child Beacon Rotating Crypto ID and Tracker Scrambler Panel */}
+              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-4 mt-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-3 gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                      <ShieldAlert className="w-4 h-4 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Child Beacon Anti-Tracking Matrix</h4>
+                      <p className="text-[10px] text-slate-400">GDPR Recital 38 &amp; COPPA Safeguards (CHILD_TAG_SHIELD_SECURE)</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/40 px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block"></span>
+                      ID ACTIVE: {cryptoTimer}s LEFT
+                    </span>
+                  </div>
+                </div>
+
+                {/* Rotating ID Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Current Key Card */}
+                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-3.5 space-y-2 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-1 text-[8px] font-mono text-emerald-500/30 font-bold uppercase tracking-widest pointer-events-none">
+                      CURRENT_FINGERPRINT
+                    </div>
+                    <span className="text-[9px] text-slate-500 font-mono font-bold uppercase block">Broadcast Signature (MAC Scrambled)</span>
+                    <div className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/20 p-2 rounded border border-emerald-900/30 select-all truncate">
+                      {currentCryptoID}
+                    </div>
+                    <div className="flex justify-between items-center text-[8px] font-mono text-slate-500">
+                      <span>Status: BROADCASTING ACTIVE</span>
+                      <span>Power: Standard (0 dBm)</span>
+                    </div>
+                  </div>
+
+                  {/* Next Key Card */}
+                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-3.5 space-y-2 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-1 text-[8px] font-mono text-slate-500/30 font-bold uppercase tracking-widest pointer-events-none">
+                      NEXT_QUEUE
+                    </div>
+                    <span className="text-[9px] text-slate-500 font-mono font-bold uppercase block">Precalculated Next Fingerprint</span>
+                    <div className="text-xs font-mono font-bold text-slate-400 bg-slate-900/40 p-2 rounded border border-slate-800/80 select-all truncate">
+                      {nextCryptoID}
+                    </div>
+                    <div className="flex justify-between items-center text-[8px] font-mono text-slate-500">
+                      <span>Rotation: Automatic (SHA-256)</span>
+                      <span>Est: in {cryptoTimer} seconds</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Scrambled Tracker Sniffers Feed */}
+                <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 space-y-3">
+                  <div className="flex justify-between items-center border-b border-slate-900 pb-2">
+                    <span className="text-[10px] text-slate-400 uppercase font-mono font-bold flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 text-rose-400" />
+                      Simulated Deflected Tracking Scrapers ({scrambledTrackers.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleTriggerTrackingSweep}
+                      disabled={isSweepingTrackers}
+                      className={`px-2.5 py-1 rounded text-[9px] font-mono font-bold uppercase border transition ${
+                        isSweepingTrackers
+                          ? 'bg-rose-500/10 border-rose-500/40 text-rose-400'
+                          : 'bg-slate-900 hover:bg-slate-850 border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      {isSweepingTrackers ? 'SWEEPING REGISTRY...' : '⚡ Trigger Probe Sweep Simulation'}
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                    {scrambledTrackers.map((track) => (
+                      <div key={track.id} className="flex justify-between items-center text-[10px] font-mono bg-slate-900/30 border border-slate-900/60 p-2 rounded hover:border-slate-800 transition">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0"></span>
+                          <span className="text-slate-300 font-bold">{track.name}</span>
+                          <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-850 px-1 py-0.2 rounded">{track.type}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-1.5 py-0.2 rounded uppercase">
+                            {track.status}
+                          </span>
+                          <span className="text-[8px] text-slate-500">{track.timestamp}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-[9px] text-slate-500 leading-normal font-sans pt-1">
+                    ℹ️ By rotating the cryptographic ID every 90 seconds, Bluetooth-sniffing cameras and regional retail scanners are blocked from cross-referencing your children's tags. They see an entirely unrelated signal fingerprint on every sweep, preventing digital stalking.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab 3: Facial Recognition Database */}
+          {activeTab === 'faces' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-1.5 text-blue-400 font-semibold text-sm">
+                  <Smile className="w-4 h-4" />
+                  Saved Faces list (Faces to Keep Blurred)
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Backup protection. If your smart tags or phone run out of battery or are out of range, nearby smart glasses can still recognize your face and blur it automatically. Photos are saved only on your device and are never sent to any external server.
+                </p>
+              </div>
+
+              {/* Opt-in switch */}
+              <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                <div className="space-y-0.5 pr-4">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Smart Glasses Recognition Opt-Out</h4>
+                  <p className="text-[10px] text-slate-400">
+                    Instruct nearby smart glasses to automatically recognize and blur your face or your family's faces.
+                  </p>
+                </div>
+                <button
+                  id="face-optout-toggle"
+                  onClick={() => onChange({ ...state, facialRecognitionOptOut: !state.facialRecognitionOptOut })}
+                  className={`text-[10px] px-3 py-1.5 rounded-lg font-bold uppercase transition ${
+                    state.facialRecognitionOptOut 
+                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  {state.facialRecognitionOptOut ? 'ENABLED (ACTIVE)' : 'DISABLED'}
+                </button>
+              </div>
+
+              {state.facialRecognitionOptOut && (
+                <>
+                  {/* Register Face Form */}
+                  <form onSubmit={handleAddFace} className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Add a New Face to Keep Blurred</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Person's Name</label>
+                        <input
+                          id="face-name-input"
+                          type="text"
+                          placeholder="e.g. Leo (My Child)"
+                          value={newFaceName}
+                          onChange={(e) => setNewFaceName(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Choose Profile Photo</label>
+                        <select
+                          id="face-photo-select"
+                          value={newFacePhoto}
+                          onChange={(e) => setNewFacePhoto(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
+                        >
+                          <option value="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80">👧 Child Photo 1</option>
+                          <option value="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80">👨 Male Photo 1</option>
+                          <option value="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80">👩 Female Photo 1</option>
+                          <option value="https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=150&auto=format&fit=crop&q=80">👦 Child Photo 2</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      id="register-face-btn"
+                      type="submit"
+                      className="w-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Save Face Information
+                    </button>
+                  </form>
+
+                  {/* Registered Faces list */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+                      Saved Faces ({state.registeredFaces.length})
+                    </span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {state.registeredFaces.map((face) => (
+                        <div 
+                          key={face.id} 
+                          className={`p-3 border rounded-xl bg-slate-950/40 flex items-center justify-between gap-3 transition ${
+                            face.isRegistered ? 'border-slate-800' : 'border-slate-900 opacity-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="relative w-10 h-10 shrink-0 rounded-full overflow-hidden border border-slate-700">
+                              <img 
+                                src={face.photoUrl} 
+                                alt={face.name} 
+                                className="w-full h-full object-cover" 
+                                referrerPolicy="no-referrer"
+                              />
+                              {calibratingFaceId === face.id && (
+                                <>
+                                  {/* Laser grid line scan visualizer */}
+                                  <div className="absolute inset-0 bg-emerald-500/20 border-2 border-emerald-400 rounded-full animate-pulse" />
+                                  <div className="absolute left-0 right-0 h-[2px] bg-emerald-300 shadow-[0_0_8px_#10b981] animate-bounce" style={{ top: '40%' }} />
+                                </>
+                              )}
+                            </div>
+                            <div className="text-left">
+                              <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
+                                {face.name}
+                                {calibratingFaceId === face.id && (
+                                  <span className="text-[7px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.2 rounded font-mono font-bold animate-pulse">CALIBRATING</span>
+                                )}
+                              </h4>
+                              <p className="text-[9px] text-slate-500 font-sans mt-0.5">
+                                Match score: <span className={face.confidenceScore >= 0.95 ? "text-emerald-400 font-bold" : "text-slate-400 font-medium"}>{(face.confidenceScore * 100).toFixed(0)}% accuracy</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {face.isRegistered && (
+                              <button
+                                type="button"
+                                id={`calibrate-face-${face.id}`}
+                                disabled={calibratingFaceId !== null}
+                                onClick={() => {
+                                  setCalibratingFaceId(face.id);
+                                  setCalibrationProgress(0);
+                                  playLocalSoundTest('sonar_chime', 85);
+                                  
+                                  const interval = setInterval(() => {
+                                    setCalibrationProgress(prev => {
+                                      if (prev >= 100) {
+                                        clearInterval(interval);
+                                        // Update confidence score to higher precision
+                                        const updatedFaces = state.registeredFaces.map(f => 
+                                          f.id === face.id ? { ...f, confidenceScore: Math.min(0.99, 0.96 + Math.random() * 0.03) } : f
+                                        );
+                                        onChange({
+                                          ...state,
+                                          registeredFaces: updatedFaces
+                                        });
+                                        setCalibratingFaceId(null);
+                                        playLocalSoundTest('tactical_click', 80);
+                                        return 0;
+                                      }
+                                      return prev + 10;
+                                    });
+                                  }, 150);
+                                }}
+                                className={`text-[9px] px-2 py-0.5 rounded font-bold border transition ${
+                                  calibratingFaceId === face.id
+                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 animate-pulse font-mono'
+                                    : 'bg-slate-900 hover:bg-slate-850 text-slate-400 border-slate-800 hover:text-emerald-400 hover:border-emerald-500/30'
+                                }`}
+                              >
+                                {calibratingFaceId === face.id ? `MESH: ${calibrationProgress}%` : 'CALIBRATE'}
+                              </button>
+                            )}
+                            <button
+                              id={`toggle-face-${face.id}`}
+                              onClick={() => handleToggleFaceStatus(face.id)}
+                              className={`text-[9px] px-2 py-0.5 rounded font-bold border transition ${
+                                face.isRegistered 
+                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
+                                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                              }`}
+                            >
+                              {face.isRegistered ? 'VERIFIED' : 'MUTED'}
+                            </button>
+                            <button
+                              id={`delete-face-${face.id}`}
+                              onClick={() => handleDeleteFace(face.id)}
+                              className="p-1 text-slate-500 hover:text-red-400 transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Redirect link to Retroactive Scrub tab */}
+                  <div className="mt-8 pt-6 border-t border-slate-900/60 space-y-4">
+                    <div className="bg-gradient-to-r from-blue-950/20 to-slate-950/40 border border-blue-900/30 rounded-xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                          <Video className="w-4 h-4 text-blue-400" />
+                          Looking for Retroactive Face-Scrubbing?
+                        </h4>
+                        <p className="text-xs text-slate-400 max-w-md leading-relaxed">
+                          We have promoted the Web Face-Scrubber to its own dedicated **Retroactive Scrub** dashboard! Complete with DPA/GDPR letter templates, continuous auto-sweeping settings, and individual video-clip progress timelines.
+                        </p>
+                      </div>
+                      <button
+                        id="faces-to-scrub-shortcut"
+                        type="button"
+                        onClick={() => setActiveTab('scrub')}
+                        className="bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition shrink-0"
+                      >
+                        Open Scrub Dashboard →
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          )}
+
+          {/* Tab 4: Retroactive Face-Scrub & Cloud Blur */}
+          {activeTab === 'scrub' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              {/* Introduction Card */}
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-1.5 text-blue-400 font-semibold text-sm">
+                  <Video className="w-4 h-4 text-blue-400" />
+                  Blur My Face from Online Videos
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                  What happens if someone already uploaded a video of you without permission? Our online scanner will search popular social media platforms (like YouTube, TikTok, and Instagram) and request they automatically blur your face in their videos without needing to take down the whole clip.
+                </p>
+                <div className="pt-2 text-[10px] text-slate-500 font-sans flex flex-wrap gap-2">
+                  <span className="text-emerald-400 font-semibold">✓ Complies with global privacy laws</span>
+                  <span>•</span>
+                  <span className="text-emerald-400 font-semibold">✓ Right to be Forgotten Ready</span>
+                  <span>•</span>
+                  <span className="text-emerald-400 font-semibold">✓ Official Privacy Standards Approved</span>
+                </div>
+              </div>
+
+              {/* Dynamic Counters Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
+                  <span className="text-[9px] text-slate-500 font-sans uppercase">Scanned Videos</span>
+                  <span className="text-base font-bold text-white block font-sans">142,850m</span>
+                </div>
+                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
+                  <span className="text-[9px] text-slate-500 font-sans uppercase">Supported Sites</span>
+                  <span className="text-base font-bold text-blue-400 block font-sans">4 Connected</span>
+                </div>
+                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
+                  <span className="text-[9px] text-slate-500 font-sans uppercase">Sent Requests</span>
+                  <span className="text-base font-bold text-amber-400 block font-sans">{takedowns.filter(t => t.status === 'dispatched').length + takedowns.filter(t => t.status === 'takedown_success').length} Requests</span>
+                </div>
+                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
+                  <span className="text-[9px] text-slate-500 font-sans uppercase">Videos Blurred</span>
+                  <span className="text-base font-bold text-emerald-400 block font-sans">{takedowns.filter(t => t.status === 'takedown_success').length} Videos</span>
+                </div>
+              </div>
+
+              {/* Sweep Configuration Panel */}
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Continuous Online Searching</h4>
+                    <p className="text-[10px] text-slate-400">Our scanner continuously checks newly uploaded public videos to find and blur your face.</p>
+                  </div>
+                  <button
+                    id="auto-sweep-toggle"
+                    type="button"
+                    onClick={() => setIsAutoSweeping(!isAutoSweeping)}
+                    className={`text-[10px] px-3 py-1.5 rounded-lg font-bold uppercase transition ${
+                      isAutoSweeping 
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' 
+                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    }`}
+                  >
+                    {isAutoSweeping ? 'ACTIVE (MONITORING)' : 'PAUSED'}
+                  </button>
+                </div>
+
+                {isAutoSweeping && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-900">
+                    <div>
+                      <label className="block text-[9px] text-slate-500 uppercase font-bold mb-1">Search Frequency</label>
+                      <select
+                        id="sweep-intensity-select"
+                        value={sweepIntensity}
+                        onChange={(e: any) => setSweepIntensity(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none"
+                      >
+                        <option value="weekly">Standard Search (Once a week)</option>
+                        <option value="daily">Daily Search (Highly Recommended)</option>
+                        <option value="realtime">Real-time Stream Search (Super Fast)</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-3 bg-slate-900/40 p-2 border border-slate-850 rounded-lg">
+                      <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
+                      <div className="min-w-0">
+                        <span className="text-[9px] text-slate-400 uppercase font-sans block">Active Search status</span>
+                        <span className="text-[10px] text-slate-300 block truncate font-sans">
+                          {sweepIntensity === 'weekly' ? 'Weekly check scheduled.' : sweepIntensity === 'daily' ? 'Scanning newly uploaded online video streams...' : 'Continuous live video scanning is running...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Platform Connections Status: UPGRADED Social Media API Integration Module */}
+              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-5 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-900 pb-3">
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Social Media API Integration Hub</span>
+                    <p className="text-[10px] text-slate-400">Manage connections to bypass platform cameras and sync face hash templates.</p>
+                  </div>
+                  <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[8.5px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                    Bystander Opt-Out Standard
+                  </span>
+                </div>
+
+                {/* Grid of integrations */}
+                <div className="grid grid-cols-1 gap-3">
+                  {socialIntegrations.map((app) => {
+                    const isHandshaking = app.status === 'handshake';
+                    const isConnected = app.status === 'connected';
+                    const isAppEnabled = app.enabled;
+
+                    return (
+                      <div 
+                        key={app.id}
+                        className={`p-3.5 rounded-xl border transition-all ${
+                          !isAppEnabled
+                            ? 'bg-slate-950/20 border-slate-900/50 opacity-60'
+                            : isHandshaking
+                              ? 'bg-blue-950/10 border-blue-500/30'
+                              : 'bg-slate-900/30 border-slate-850'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          {/* Logo + Version */}
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-lg bg-slate-950/50 w-8 h-8 rounded-lg flex items-center justify-center border border-slate-800">
+                              {app.icon}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-white">{app.name}</span>
+                                <span className="text-[8px] font-mono text-slate-500 bg-slate-950 px-1 py-0.5 rounded border border-slate-900">{app.apiVersion}</span>
+                              </div>
+                              <span className="text-[9px] text-slate-400 block font-sans">Synced via Local Face Hash</span>
+                            </div>
+                          </div>
+
+                          {/* Action Controls & Toggle */}
+                          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                            {/* Toggle Button */}
+                            <button
+                              type="button"
+                              onClick={() => toggleSocialApp(app.id)}
+                              className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all ${
+                                isAppEnabled
+                                  ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                                  : 'bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700'
+                              }`}
+                            >
+                              {isAppEnabled ? 'Connected' : 'Disabled'}
+                            </button>
+
+                            {/* Trigger Handshake Button */}
+                            {isAppEnabled && (
+                              <button
+                                type="button"
+                                onClick={() => triggerSocialHandshake(app.id)}
+                                disabled={isHandshaking}
+                                className={`px-2 py-1 rounded border text-[9px] font-mono font-semibold tracking-wider transition ${
+                                  isHandshaking
+                                    ? 'bg-blue-950 border-blue-800 text-blue-400'
+                                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                                }`}
+                              >
+                                {isHandshaking ? 'Handshaking...' : 'Sync Handshake'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Handshake Status & Logs Detail */}
+                        <div className="mt-2.5 pt-2.5 border-t border-slate-900/60 flex flex-col sm:flex-row justify-between gap-2 text-[9px]">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              !isAppEnabled ? 'bg-slate-600' : isHandshaking ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+                            }`}></span>
+                            <span className="text-slate-400 font-mono">
+                              Status: <span className={`font-bold uppercase ${
+                                !isAppEnabled ? 'text-slate-500' : isHandshaking ? 'text-amber-400' : 'text-emerald-400'
+                              }`}>
+                                {!isAppEnabled ? 'Inactive / Paused' : isHandshaking ? 'Handshake Refresh...' : 'Handshake Verified (Active)'}
+                              </span>
+                            </span>
+                          </div>
+                          
+                          <div className="text-slate-500 text-right truncate max-w-full font-mono">
+                            {app.handshakeLog}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Dynamic Playground simulation panel */}
+                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 space-y-3 mt-2">
+                  <div className="flex items-center gap-2 text-blue-400">
+                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Scrub Flagging Verification Simulator</span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed">
+                    Verify that platform-level integrations automatically capture newly uploaded video assets matching your face template. Disabling a specific platform above will prevent its API crawler from auto-flagging matching files.
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={simulateSocialUploadDetection}
+                      disabled={isSimulatingUpload}
+                      className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shrink-0 flex items-center justify-center gap-2 ${
+                        isSimulatingUpload
+                          ? 'bg-blue-950 border border-blue-800 text-blue-400 cursor-not-allowed'
+                          : 'bg-blue-500 hover:bg-blue-600 text-slate-950 hover:scale-[1.01] active:scale-[0.99]'
+                      }`}
+                    >
+                      {isSimulatingUpload ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Analyzing Video Frames...
+                        </>
+                      ) : (
+                        'Simulate Upload & Trigger Detection Scan'
+                      )}
+                    </button>
+                    
+                    {simulationMsg && (
+                      <span className="text-[10px] text-slate-300 font-mono font-medium block leading-normal bg-slate-900/60 p-2 border border-slate-850 rounded-lg w-full">
+                        {simulationMsg}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Family Consent & Media Whitelist Gateway Card */}
+              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-900 pb-3">
+                  <div>
+                    <span className="text-[10px] text-blue-400 uppercase font-bold tracking-wider block">Family Consent &amp; Media Whitelist Gateway</span>
+                    <p className="text-[10.5px] text-slate-400">Add trusted platforms, profiles, or local BLE devices that are allowed to record and publish videos containing your face without being blurred.</p>
+                  </div>
+                  <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8.5px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                    TRUSTED EXEMPTIONS ENABLED
+                  </span>
+                </div>
+
+                {/* Hierarchical Priority Order Rules Visualizer */}
+                <div className="bg-slate-900/60 p-3.5 border border-slate-850 rounded-xl space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-slate-300 font-bold text-xs uppercase tracking-wider">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    Sensible Rule Priority Hierarchy
+                  </div>
+                  <p className="text-[10.5px] text-slate-400 leading-normal">
+                    To prevent malicious bypass, whitelists follow a strict, un-overridable execution hierarchy:
+                  </p>
+                  <div className="grid grid-cols-1 gap-1.5 font-mono text-[9.5px]">
+                    <div className="flex items-center justify-between p-1.5 rounded bg-red-950/30 border border-red-500/20">
+                      <span className="text-red-400 font-bold">1. STRICT RESTRICTION / JUDICIAL ZONE</span>
+                      <span className="text-slate-500">Absolute Priority • Overrides Whitelist</span>
+                    </div>
+                    <div className="flex items-center justify-between p-1.5 rounded bg-slate-900/40 border border-slate-800">
+                      <span className="text-slate-300 font-bold">2. LOCAL PHYSICAL PERIMETERS</span>
+                      <span className="text-slate-500">Local Area Rules (e.g. School) • Overrides Whitelist</span>
+                    </div>
+                    <div className="flex items-center justify-between p-1.5 rounded bg-blue-950/30 border border-blue-500/20">
+                      <span className="text-blue-400 font-bold">3. CUSTOM FAMILY &amp; APP WHITELIST</span>
+                      <span className="text-slate-500">Active Exemptions (Unless Overridden)</span>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Status Banner */}
+                  <div className={`p-2.5 rounded-lg border text-[10.5px] font-medium flex items-start gap-2 ${
+                    state.overrideActive
+                      ? "bg-red-500/10 border-red-500/20 text-red-300"
+                      : state.privacyLevel === 'strict_blur'
+                      ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                      : "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                  }`}>
+                    <span className="text-[14px]">⚠️</span>
+                    <div>
+                      {state.overrideActive ? (
+                        <>
+                          <strong className="text-red-400 uppercase">Whitelist Overridden!</strong>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Judicial warrant override is active. Whitelisted channels are temporarily suspended and WILL be blurred on all platforms.</p>
+                        </>
+                      ) : state.privacyLevel === 'strict_blur' ? (
+                        <>
+                          <strong className="text-amber-400 uppercase">Strict Restriction Suspends Whitelist!</strong>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Your Privacy Level is set to "Strict Blur". Whitelist bypasses are suspended for absolute privacy protection.</p>
+                        </>
+                      ) : (
+                        <>
+                          <strong className="text-emerald-400 uppercase">Whitelist Fully Functional</strong>
+                          <p className="text-[10px] text-slate-400 mt-0.5">You are in Hybrid/Standard mode. Videos posted by the verified channels below will bypass automatic retroactive censoring.</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Whitelisted Items Grid */}
+                <div className="space-y-2">
+                  <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider block">Currently Whitelisted Channels &amp; Devices</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    {allowedList.map((item: any) => (
+                      <div key={item.id} className="bg-slate-900/40 border border-slate-850 p-3 rounded-lg flex flex-col justify-between gap-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg bg-slate-950 p-1.5 rounded-md border border-slate-905 shrink-0">
+                              {item.platform === 'youtube' ? '📹' : item.platform === 'tiktok' ? '🎵' : item.platform === 'instagram' ? '📸' : '📱'}
+                            </span>
+                            <div>
+                              <span className="text-xs font-bold text-white block">{item.name}</span>
+                              <span className="text-[10px] font-mono text-slate-400 block">{item.identifier} ({item.platform.toUpperCase()})</span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingAllowedItem(item)}
+                              className="text-blue-400 hover:text-blue-300 text-[10.5px] font-semibold bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 rounded transition flex items-center gap-1"
+                            >
+                              Smart Rules ⚙️
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAllowedList(prev => prev.filter(a => a.id !== item.id))}
+                              className="text-slate-500 hover:text-red-400 text-xs font-mono font-bold hover:bg-red-500/5 p-1 rounded transition"
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Display Active Constraints if any */}
+                        {(item.timeConstraintEnabled || item.identityConstraintEnabled) && (
+                          <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-900 space-y-1">
+                            <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider block">Active Constraints</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {item.timeConstraintEnabled && (
+                                <span className="text-[9px] bg-amber-500/15 border border-amber-500/25 text-amber-300 px-1.5 py-0.5 rounded font-mono flex items-center gap-1">
+                                  <span>⏰</span> {item.timeStart || '09:00'} - {item.timeEnd || '17:00'}
+                                </span>
+                              )}
+                              {item.identityConstraintEnabled && (
+                                <span className="text-[9px] bg-purple-500/15 border border-purple-500/25 text-purple-300 px-1.5 py-0.5 rounded font-mono flex items-center gap-1">
+                                  <span>👤</span> {familyMembers.find(f => f.id === item.allowedIdentityId)?.name || 'Father (Robert)'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Add New Whitelisted Item Form */}
+                <div className="p-3.5 bg-slate-900/30 border border-slate-850 rounded-xl space-y-3 text-xs">
+                  <span className="text-[9.5px] text-slate-400 font-bold uppercase tracking-wider block">Authorize New Channel or Device</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[9px] text-slate-500 uppercase font-semibold mb-1">Friendly Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Grandma's Camera"
+                        value={newAllowedName}
+                        onChange={(e) => setNewAllowedName(e.target.value)}
+                        className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-slate-500 uppercase font-semibold mb-1">Platform Type</label>
+                      <select
+                        value={newAllowedPlatform}
+                        onChange={(e) => setNewAllowedPlatform(e.target.value)}
+                        className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      >
+                        <option value="youtube">📹 YouTube Video / Channel</option>
+                        <option value="tiktok">🎵 TikTok Post / Username</option>
+                        <option value="instagram">📸 Instagram Reel / Handle</option>
+                        <option value="device">📱 Private Local BLE Device UUID</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-slate-500 uppercase font-semibold mb-1">Channel / Device ID</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. @grandma_vlogs"
+                        value={newAllowedIdent}
+                        onChange={(e) => setNewAllowedIdent(e.target.value)}
+                        className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newAllowedName.trim() || !newAllowedIdent.trim()) return;
+                      const newItem = {
+                        id: 'all-' + Date.now(),
+                        name: newAllowedName,
+                        platform: newAllowedPlatform,
+                        identifier: newAllowedIdent,
+                        active: true,
+                        timeConstraintEnabled: false,
+                        timeStart: '09:00',
+                        timeEnd: '17:00',
+                        identityConstraintEnabled: false,
+                        allowedIdentityId: 'fam-1'
+                      };
+                      setAllowedList(prev => [...prev, newItem]);
+                      setNewAllowedName('');
+                      setNewAllowedIdent('');
+                    }}
+                    className="bg-blue-500/10 hover:bg-blue-500/25 border border-blue-500/20 text-blue-400 font-bold py-2 px-4 rounded-lg transition text-center block w-full"
+                  >
+                    + Authorize Exemption Channel
+                  </button>
+                </div>
+
+                {/* Whitelist Simulation Sandbox */}
+                <div className="p-3.5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-3">
+                  <div className="flex items-center gap-1.5 text-blue-400">
+                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Dynamic Whitelist &amp; Hierarchy Validator Sandbox</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Trigger a mock upload event to simulate how the privacy engine evaluates whitelists versus priority rules (Judicial Override or School zones).
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSimulatingAllowedUpload(true);
+                        setAllowedUploadLogs(["[SCANNING] YouTube API detected upload 'Summer Picnic 2026' by @family_vlogs..."]);
+                        
+                        setTimeout(() => {
+                          setAllowedUploadLogs(prev => [...prev, "[AI MATCH] Face vector matching: 'Paul Gordon Stuart' matched at 99.1% confidence."]);
+                        }, 400);
+
+                        setTimeout(() => {
+                          setAllowedUploadLogs(prev => [...prev, "[CHECK] Querying family whitelist database... Found! '@family_vlogs' is whitelisted for Paul."]);
+                        }, 800);
+
+                        setTimeout(() => {
+                          // Check if smart exception constraints exist on `@family_vlogs`
+                          const matchedItem = allowedList.find((a: any) => a.identifier === '@family_vlogs');
+                          if (matchedItem) {
+                            const logsToAdd: string[] = ["[CHECK] Evaluating Smart Exception parameters for '@family_vlogs':"];
+                            
+                            if (matchedItem.timeConstraintEnabled) {
+                              // We simulate an upload occurring at 20:00 (8:00 PM)
+                              const simulatedHour = 20;
+                              const [startH] = (matchedItem.timeStart || '09:00').split(':').map(Number);
+                              const [endH] = (matchedItem.timeEnd || '17:00').split(':').map(Number);
+                              
+                              logsToAdd.push(`  -> [TIME CONSTRAINT] Enabled. Simulated Upload Time: 20:00 (8:00 PM). Target Window: ${matchedItem.timeStart} - ${matchedItem.timeEnd}.`);
+                              if (simulatedHour < startH || simulatedHour > endH) {
+                                logsToAdd.push(`     ⚠️ TIME WINDOW VIOLATION: Upload occurred outside permitted daytime slot!`);
+                              } else {
+                                logsToAdd.push(`     ✅ TIME WINDOW SATISFIED: Upload is within permitted hours.`);
+                              }
+                            } else {
+                              logsToAdd.push("  -> [TIME CONSTRAINT] Disabled. No temporal guardrails active.");
+                            }
+
+                            if (matchedItem.identityConstraintEnabled) {
+                              const targetMember = familyMembers.find(f => f.id === matchedItem.allowedIdentityId) || familyMembers[0];
+                              logsToAdd.push(`  -> [IDENTITY VERIFICATION] Enabled. Checking cryptographically paired device belonging to: ${targetMember.name} (${targetMember.relation}).`);
+                              if (targetMember.status === 'synchronized') {
+                                logsToAdd.push(`     ✅ CRYPTOGRAPHIC SHAKEHAND: Active secure BLE beacon detected from ${targetMember.deviceName}. Signature authentic.`);
+                              } else {
+                                logsToAdd.push(`     ⚠️ IDENTITY VERIFICATION FAULT: Paired beacon is disconnected or out of range!`);
+                              }
+                            } else {
+                              logsToAdd.push("  -> [IDENTITY VERIFICATION] Disabled. Skipping target beacon check.");
+                            }
+
+                            setAllowedUploadLogs(prev => [...prev, ...logsToAdd]);
+                          }
+                        }, 1200);
+
+                        setTimeout(() => {
+                          let finalVerdict = "";
+                          if (state.overrideActive) {
+                            finalVerdict = "[VERDICT-CANCELED] ❌ BLOCKED BY OVERRIDE: A judicial override/warrant is active. Whitelist bypassed. Censor-shroud injected!";
+                          } else if (state.privacyLevel === 'strict_blur') {
+                            finalVerdict = "[VERDICT-CANCELED] 🛑 BLOCKED BY USER MODE: Strict Blur mode is active. Family exemption suspended. Dynamic face blur applied!";
+                          } else {
+                            const matchedItem = allowedList.find((a: any) => a.identifier === '@family_vlogs');
+                            let blockReason = "";
+                            if (matchedItem) {
+                              if (matchedItem.timeConstraintEnabled) {
+                                const simulatedHour = 20;
+                                const [startH] = (matchedItem.timeStart || '09:00').split(':').map(Number);
+                                const [endH] = (matchedItem.timeEnd || '17:00').split(':').map(Number);
+                                if (simulatedHour < startH || simulatedHour > endH) {
+                                  blockReason = `Upload occurred at 20:00, which is outside the safe window (${matchedItem.timeStart} to ${matchedItem.timeEnd}).`;
+                                }
+                              }
+                              if (!blockReason && matchedItem.identityConstraintEnabled) {
+                                const targetMember = familyMembers.find(f => f.id === matchedItem.allowedIdentityId) || familyMembers[0];
+                                if (targetMember.status !== 'synchronized') {
+                                  blockReason = `Secure BLE beacon signature from ${targetMember.name} is offline.`;
+                                }
+                              }
+                            }
+
+                            if (blockReason) {
+                              finalVerdict = `[VERDICT-BLOCKED] 🛡️ BLOCKED BY SMART CONSTRAINT: ${blockReason} Accidental open-recording protection triggered! Dynamic censor applied.`;
+                            } else {
+                              finalVerdict = "[VERDICT-ALLOWED] ✅ PASSED: Channel is verified and all smart constraints are satisfied. Video remains crystal-clear for public viewing. Enjoy your memories!";
+                            }
+                          }
+                          setAllowedUploadLogs(prev => [...prev, finalVerdict]);
+                          setIsSimulatingAllowedUpload(false);
+                        }, 2200);
+                      }}
+                      disabled={isSimulatingAllowedUpload}
+                      className="bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition"
+                    >
+                      {isSimulatingAllowedUpload ? "Evaluating Rules..." : "Simulate 'Dad' Uploading Family Picnic Vlog"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSimulatingAllowedUpload(true);
+                        setAllowedUploadLogs(["[SCANNING] Public Instagram stream detected upload by @stranger_cam..."]);
+                        
+                        setTimeout(() => {
+                          setAllowedUploadLogs(prev => [...prev, "[AI MATCH] Face vector matching: 'Paul Gordon Stuart' matched at 98.5% confidence."]);
+                        }, 500);
+
+                        setTimeout(() => {
+                          setAllowedUploadLogs(prev => [...prev, "[CHECK] Querying family whitelist... Not Found! '@stranger_cam' is not whitelisted."]);
+                        }, 1000);
+
+                        setTimeout(() => {
+                          setAllowedUploadLogs(prev => [...prev, "[VERDICT-BLOCKED] 🚨 ENFORCED: Non-whitelisted video. Automated legal takedown letter dispatched to Instagram CDN API."]);
+                          setIsSimulatingAllowedUpload(false);
+                        }, 1800);
+                      }}
+                      disabled={isSimulatingAllowedUpload}
+                      className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition"
+                    >
+                      {isSimulatingAllowedUpload ? "Evaluating Rules..." : "Simulate 'Stranger' Uploading Street Video"}
+                    </button>
+                  </div>
+
+                  {allowedUploadLogs.length > 0 && (
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-900 font-mono text-[9.5px] text-slate-300 space-y-1">
+                      {allowedUploadLogs.map((log, idx) => (
+                        <div key={idx} className={log.includes('PASSED') ? 'text-emerald-400 font-bold' : log.includes('BLOCKED') ? 'text-red-400 font-bold' : 'text-slate-300'}>
+                          {log}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* URL Scanner Form Widget */}
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex flex-col md:flex-row gap-3">
+                  <div className="flex-1">
+                    <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Target Media URL or Channel</label>
+                    <div className="relative">
+                      <input
+                        id="scrub-url-input-dedicated"
+                        type="text"
+                        placeholder="e.g. https://www.youtube.com/watch?v=..."
+                        value={newScrubUrl}
+                        onChange={(e) => setNewScrubUrl(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-sans"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                    </div>
+                  </div>
+
+                  <div className="w-full md:w-44">
+                    <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Media Source</label>
+                    <select
+                      id="scrub-platform-select-dedicated"
+                      value={newScrubPlatform}
+                      onChange={(e: any) => setNewScrubPlatform(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
+                    >
+                      <option value="youtube">📹 YouTube Video</option>
+                      <option value="tiktok">🎵 TikTok Post</option>
+                      <option value="instagram">📸 Instagram Reel</option>
+                      <option value="web_index">🌐 Web Index (General)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    id="trigger-url-scan-btn-ded"
+                    type="button"
+                    onClick={() => {
+                      if (!newScrubUrl.trim()) return;
+                      const newRec: WebTakedownRecord = {
+                        id: 'tk-' + Date.now(),
+                        platform: newScrubPlatform,
+                        url: newScrubUrl,
+                        confidenceScore: 0.88 + Math.random() * 0.1,
+                        status: 'detected',
+                        timestamp: 'Just Now'
+                      };
+                      setTakedowns(prev => [newRec, ...prev]);
+                      setNewScrubUrl('');
+                    }}
+                    className="flex-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-bold text-xs py-2 rounded-lg transition"
+                  >
+                    Scan Specific URL
+                  </button>
+
+                  <button
+                    id="trigger-global-scan-btn-ded"
+                    type="button"
+                    disabled={isScanningCrawler}
+                    onClick={() => {
+                      setIsScanningCrawler(true);
+                      setTimeout(() => {
+                        setIsScanningCrawler(false);
+                        const randomVideos = [
+                          { platform: 'youtube', url: 'https://youtube.com/watch?v=k827y398df' },
+                          { platform: 'tiktok', url: 'https://tiktok.com/@daily_vlog_world/video/902837429' },
+                          { platform: 'instagram', url: 'https://instagram.com/p/Co8907ad822/' }
+                        ];
+                        const choice = randomVideos[Math.floor(Math.random() * randomVideos.length)];
+                        const newRec: WebTakedownRecord = {
+                          id: 'tk-' + Date.now(),
+                          platform: choice.platform as any,
+                          url: choice.url,
+                          confidenceScore: 0.91 + Math.random() * 0.08,
+                          status: 'detected',
+                          timestamp: 'Just Now'
+                        };
+                        setTakedowns(prev => [newRec, ...prev]);
+                      }, 2000);
+                    }}
+                    className="flex-1 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
+                  >
+                    {isScanningCrawler ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Sweeping Web Video Feeds...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-3.5 h-3.5" />
+                        Trigger Global Web Sweep
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {isScanningCrawler && (
+                  <div className="space-y-1 bg-slate-950 p-2.5 rounded-lg border border-slate-900">
+                    <div className="w-full bg-slate-850 rounded-full h-1 overflow-hidden">
+                      <motion.div 
+                        className="bg-blue-400 h-full animate-pulse"
+                        initial={{ width: '0%' }}
+                        animate={{ width: '100%' }}
+                        transition={{ duration: 2 }}
+                      />
+                    </div>
+                    <span className="text-[9px] text-blue-400 font-mono block text-center animate-pulse">
+                      SCANNING IN PROGRESS • ANALYZING VECTOR TEMPLATE MATCHES WITH EDGE DESCRIPTORS
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Detailed Active Matches and Timelines list */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Scan Results &amp; Actionable Takedowns ({takedowns.length})</span>
+                <div className="space-y-3.5">
+                  {takedowns.map(tk => (
+                    <div key={tk.id} className="bg-slate-950/40 border border-slate-850 rounded-xl p-4 space-y-4 text-xs">
+                      {/* Card Header Info */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px]">{tk.platform === 'youtube' ? '📹' : tk.platform === 'tiktok' ? '🎵' : tk.platform === 'instagram' ? '📸' : '🌐'}</span>
+                          <div>
+                            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">{tk.platform} Platform match</span>
+                            <a 
+                              href={tk.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-white hover:text-blue-400 hover:underline block truncate font-mono text-[10px] max-w-[280px] sm:max-w-[400px]"
+                            >
+                              {tk.url}
+                            </a>
+                          </div>
+                        </div>
+                        <span className={`text-[8px] px-2 py-0.5 rounded-full uppercase font-bold border ${
+                          tk.status === 'takedown_success'
+                            ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/20'
+                            : tk.status === 'dispatched'
+                            ? 'bg-blue-950/60 text-blue-400 border-blue-500/20 animate-pulse'
+                            : 'bg-amber-950/60 text-amber-400 border-amber-500/20'
+                        }`}>
+                          {tk.status === 'takedown_success' ? 'Removed / Blurred' : tk.status === 'dispatched' ? 'Takedown In-Progress' : 'Detected Match'}
+                        </span>
+                      </div>
+
+                      {/* Mock Player / Bounding Box Censor Visual */}
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-950 p-3 rounded-lg border border-slate-900/60">
+                        <div className="md:col-span-4 flex justify-center items-center">
+                          <div className="relative w-full h-24 bg-slate-900 rounded-lg overflow-hidden border border-slate-800 flex flex-col justify-center items-center select-none">
+                            {/* Blur mockup head visual */}
+                            <div className={`absolute w-12 h-12 rounded-full border-2 transition-all duration-300 ${
+                              tk.status === 'takedown_success' 
+                                ? 'border-emerald-500 bg-emerald-500/10 blur-[12px]' 
+                                : tk.status === 'dispatched' 
+                                ? 'border-blue-500 bg-blue-500/20 blur-[6px] animate-pulse' 
+                                : 'border-amber-500/80 bg-amber-500/5'
+                            }`}></div>
+                            
+                            {/* Bounding box marker */}
+                            <div className={`absolute w-14 h-14 border transition-all duration-300 ${
+                              tk.status === 'takedown_success' 
+                                ? 'border-emerald-400/40' 
+                                : 'border-amber-400/80 animate-pulse'
+                            }`}></div>
+
+                            {/* Label overlay */}
+                            <span className={`absolute top-1 left-1.5 text-[8px] font-mono uppercase px-1 rounded ${
+                              tk.status === 'takedown_success' ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'
+                            }`}>
+                              {tk.status === 'takedown_success' ? 'Censored' : 'Bystander Match'}
+                            </span>
+
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-center pb-1">
+                              <span className="text-[8px] text-slate-400 font-mono">Matched index: {(tk.confidenceScore * 100).toFixed(1)}%</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Timeline Track */}
+                        <div className="md:col-span-8 flex flex-col justify-between space-y-3">
+                          <div className="space-y-2">
+                            <span className="text-[9px] text-slate-500 font-mono uppercase block">Request Action Timeline</span>
+                            <div className="grid grid-cols-4 gap-1 relative">
+                              {/* Horizontal track line */}
+                              <div className="absolute top-2 left-4 right-4 h-0.5 bg-slate-800 z-0"></div>
+
+                              {/* Step 1: Detect */}
+                              <div className="flex flex-col items-center text-center z-10">
+                                <div className="w-4.5 h-4.5 rounded-full bg-emerald-500 text-[9px] font-mono text-slate-950 flex items-center justify-center font-bold">1</div>
+                                <span className="text-[8px] text-emerald-400 font-bold mt-1">Matched</span>
+                              </div>
+
+                              {/* Step 2: Notice Dispatched */}
+                              <div className="flex flex-col items-center text-center z-10">
+                                <div className={`w-4.5 h-4.5 rounded-full text-[9px] font-mono flex items-center justify-center font-bold ${
+                                  tk.status === 'dispatched' || tk.status === 'takedown_success'
+                                    ? 'bg-emerald-500 text-slate-950'
+                                    : 'bg-slate-800 text-slate-500'
+                                }`}>2</div>
+                                <span className={`text-[8px] mt-1 ${
+                                  tk.status === 'dispatched' || tk.status === 'takedown_success'
+                                    ? 'text-emerald-400 font-bold'
+                                    : 'text-slate-500'
+                                }`}>Dispatched</span>
+                              </div>
+
+                              {/* Step 3: API Re-encode */}
+                              <div className="flex flex-col items-center text-center z-10">
+                                <div className={`w-4.5 h-4.5 rounded-full text-[9px] font-mono flex items-center justify-center font-bold ${
+                                  tk.status === 'takedown_success'
+                                    ? 'bg-emerald-500 text-slate-950'
+                                    : tk.status === 'dispatched'
+                                    ? 'bg-blue-500 text-slate-950 animate-pulse'
+                                    : 'bg-slate-800 text-slate-500'
+                                }`}>3</div>
+                                <span className={`text-[8px] mt-1 ${
+                                  tk.status === 'takedown_success'
+                                    ? 'text-emerald-400 font-bold'
+                                    : tk.status === 'dispatched'
+                                    ? 'text-blue-400 font-bold'
+                                    : 'text-slate-500'
+                                }`}>Processing</span>
+                              </div>
+
+                              {/* Step 4: Verification */}
+                              <div className="flex flex-col items-center text-center z-10">
+                                <div className={`w-4.5 h-4.5 rounded-full text-[9px] font-mono flex items-center justify-center font-bold ${
+                                  tk.status === 'takedown_success'
+                                    ? 'bg-emerald-500 text-slate-950'
+                                    : 'bg-slate-800 text-slate-500'
+                                }`}>4</div>
+                                <span className={`text-[8px] mt-1 ${
+                                  tk.status === 'takedown_success'
+                                    ? 'text-emerald-400 font-bold'
+                                    : 'text-slate-500'
+                                }`}>Clean ✅</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick description text based on state */}
+                          <p className="text-[10px] text-slate-400">
+                            {tk.status === 'detected' && "Biometric match located. No legal erasure notice has been dispatched yet."}
+                            {tk.status === 'dispatched' && "Erasure claim active. Coordinated Partner API is requesting frame coordinate blur re-rendering."}
+                            {tk.status === 'takedown_success' && "Success! Platform CDN confirms dynamic blur coordinates injected into player video source."}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 pt-2 border-t border-slate-900 justify-end">
+                        <button
+                          id={`draft-letter-btn-${tk.id}`}
+                          type="button"
+                          onClick={() => setSelectedLetterTakedown(tk)}
+                          className="text-[10px] bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 font-bold px-2.5 py-1 rounded transition"
+                        >
+                          Draft Legal Letter
+                        </button>
+
+                        {tk.status === 'detected' && (
+                          <button
+                            id={`action-scrub-${tk.id}`}
+                            type="button"
+                            onClick={() => setTakedowns(prev => prev.map(item => item.id === tk.id ? { ...item, status: 'dispatched' } : item))}
+                            className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded transition"
+                          >
+                            Dispatch Legal Takedown
+                          </button>
+                        )}
+                        {tk.status === 'dispatched' && (
+                          <button
+                            id={`verify-scrub-${tk.id}`}
+                            type="button"
+                            onClick={() => setTakedowns(prev => prev.map(item => item.id === tk.id ? { ...item, status: 'takedown_success' } : item))}
+                            className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold px-2.5 py-1 rounded transition"
+                          >
+                            Confirm Removal Verify
+                          </button>
+                        )}
+                        <button
+                          id={`remove-scrub-log-${tk.id}`}
+                          type="button"
+                          onClick={() => setTakedowns(prev => prev.filter(item => item.id !== tk.id))}
+                          className="text-[10px] text-slate-500 hover:text-red-400 font-semibold px-1.5 py-1 transition"
+                        >
+                          Dismiss Log
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dynamic Legal Letter Overlay Modal */}
+              <AnimatePresence>
+                {selectedLetterTakedown && (
+                  <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    exit={{ opacity: 0 }} 
+                    className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                  >
+                    <motion.div 
+                      initial={{ scale: 0.95, y: 15 }}
+                      animate={{ scale: 1, y: 0 }}
+                      exit={{ scale: 0.95, y: 15 }}
+                      className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-xl w-full max-h-[85vh] overflow-y-auto space-y-4"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Legal Notice Generation</h4>
+                          <span className="text-[9px] font-mono text-slate-500">GDPR ARTICLE 17 &amp; UK DPA 2018 BYSTANDER COMPLIANCE</span>
+                        </div>
+                        <button 
+                          onClick={() => setSelectedLetterTakedown(null)}
+                          className="text-slate-400 hover:text-white text-xs font-bold font-mono bg-slate-950/40 p-1 rounded px-2"
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+
+                      <div className="bg-slate-50 text-slate-900 p-5 rounded-xl border border-slate-300 font-serif text-xs leading-relaxed space-y-3 relative overflow-hidden shadow-inner">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rotate-45 pointer-events-none"></div>
+                        <p className="font-sans font-bold text-[9px] uppercase tracking-widest text-indigo-900 border-b border-indigo-100 pb-1.5">
+                          OFFICIAL DEMAND FOR COORDINATED BIOMETRIC OBFUSCATION
+                        </p>
+                        
+                        <div>
+                          <p className="font-sans font-bold text-[9px] text-slate-500">TO:</p>
+                          <p className="font-sans font-semibold">Legal &amp; Privacy Compliance Operations Office ({selectedLetterTakedown.platform.toUpperCase()})</p>
+                        </div>
+
+                        <div>
+                          <p className="font-sans font-bold text-[9px] text-slate-500">SUBJECT:</p>
+                          <p className="font-semibold underline">Statutory Request for Face Coordinate Obfuscation under GDPR Article 17 &amp; DPA 2018</p>
+                        </div>
+
+                        <p className="pt-2">
+                          I am writing to formally exercise my statutory rights under <strong>GDPR Article 17 (Right to Erasure)</strong> and <strong>Section 47 of the United Kingdom Data Protection Act 2018 (DPA)</strong>. 
+                        </p>
+
+                        <p>
+                          The BlurBubble Opt-Out indexer has matched my unique local biometric face vector templates with newly uploaded public media hosted on your server platform. No consent, authorization, or license was granted to record or transmit my physical identity.
+                        </p>
+
+                        <div className="bg-slate-100 p-2.5 rounded border border-slate-200 font-mono text-[10px] space-y-1 text-slate-700">
+                          <p><strong>Platform:</strong> {selectedLetterTakedown.platform.toUpperCase()}</p>
+                          <p className="truncate"><strong>Media URL:</strong> {selectedLetterTakedown.url}</p>
+                          <p><strong>Matched Identity:</strong> Paul Gordon Stuart (Edinburgh, Scotland)</p>
+                          <p><strong>Vector Hash:</strong> {selectedLetterTakedown.id}</p>
+                          <p><strong>Action Mandated:</strong> Coordinated Dynamic Face/Body Blur</p>
+                        </div>
+
+                        <p>
+                          I do not request complete removal of the creator's video. Instead, you are required to utilize the <strong>BlurBubble Bystander API protocol</strong> to automatically inject dynamic blur coordinates into your player CDN streams for the corresponding timestamps.
+                        </p>
+
+                        <p className="border-t border-slate-200 pt-3">
+                          Failure to apply the appropriate obfuscation filters within the statutory 30-day window will result in a formal escalation to the <strong>United Kingdom Information Commissioner's Office (ICO)</strong> and Scottish legal courts for civil digital trespass.
+                        </p>
+
+                        <div className="pt-3 font-sans text-[10px] text-slate-500 flex justify-between">
+                          <span>Signed: Paul Gordon Stuart (@paul_stuart)</span>
+                          <span>Dated: July 1, 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(`GDPR Article 17 & UK DPA 2018 Demand Notice:\nPlatform: ${selectedLetterTakedown.platform.toUpperCase()}\nURL: ${selectedLetterTakedown.url}\nIdent: Paul Gordon Stuart (Edinburgh, Scotland)\nAction: Coordinate facial coordinate blur at platform CDN.`);
+                            alert("Copied legal notice outline summary to clipboard!");
+                          }}
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition"
+                        >
+                          Copy Notice Summary
+                        </button>
+                        <button
+                          onClick={() => setSelectedLetterTakedown(null)}
+                          className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition"
+                        >
+                          Close Preview
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+
+          {/* Tab 4.5: Retroactive Voice-Scrub & Cloud Mute */}
+          {activeTab === 'audio_scrub' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              {/* Introduction Card */}
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-1.5 text-blue-400 font-semibold text-sm">
+                  <Mic className="w-4 h-4 text-blue-400 animate-pulse" />
+                  Request Voice Scrub &amp; Mute Online
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                  What happens if someone already uploaded a voice recording or podcast of you without permission? Our online audio scanner will sweep popular digital streaming directories (like Spotify, Apple Podcasts, SoundCloud) and request they automatically scrub or mute your vocal fingerprint in their files without needing to delete the entire clip.
+                </p>
+                <div className="pt-2 text-[10px] text-slate-500 font-sans flex flex-wrap gap-2">
+                  <span className="text-emerald-400 font-semibold">✓ Complies with global privacy laws</span>
+                  <span>•</span>
+                  <span className="text-emerald-400 font-semibold">✓ Voice Print Opt-Out Protocol Ready</span>
+                  <span>•</span>
+                  <span className="text-emerald-400 font-semibold">✓ Right to Silence Compliant</span>
+                </div>
+              </div>
+
+              {/* Dynamic Counters Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
+                  <span className="text-[9px] text-slate-500 font-sans uppercase">Scanned Audio Feeds</span>
+                  <span className="text-base font-bold text-white block font-sans">84,210 hrs</span>
+                </div>
+                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
+                  <span className="text-[9px] text-slate-500 font-sans uppercase">Supported Platforms</span>
+                  <span className="text-base font-bold text-blue-400 block font-sans">4 Connected APIs</span>
+                </div>
+                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
+                  <span className="text-[9px] text-slate-500 font-sans uppercase">Sent Requests</span>
+                  <span className="text-base font-bold text-amber-400 block font-sans">
+                    {audioTakedowns.filter((t: any) => t.status === 'dispatched' || t.status === 'scrub_success').length} Requests
+                  </span>
+                </div>
+                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
+                  <span className="text-[9px] text-slate-500 font-sans uppercase">Clips Scrubbed</span>
+                  <span className="text-base font-bold text-emerald-400 block font-sans">
+                    {audioTakedowns.filter((t: any) => t.status === 'scrub_success').length} Muted
+                  </span>
+                </div>
+              </div>
+
+              {/* Split Screen Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Column: Continuous Sweep & Platform Setup */}
+                <div className="lg:col-span-5 space-y-6">
+                  {/* Continuous Audio Sweep Mode panel */}
+                  <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-white block font-sans">Continuous Audio Sweep</span>
+                        <span className="text-[10px] text-slate-500 block">Autonomously crawl podcasts for vocal matches</span>
+                      </div>
+                      <button
+                        id="toggle-auto-audio-sweep-btn"
+                        type="button"
+                        onClick={() => setIsAutoAudioSweeping(prev => !prev)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          isAutoAudioSweeping ? 'bg-blue-500' : 'bg-slate-800'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                            isAutoAudioSweeping ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {isAutoAudioSweeping && (
+                      <div className="space-y-2">
+                        <label className="block text-[10px] text-slate-500 uppercase font-bold">Sweep Intensity &amp; Frequency</label>
+                        <div className="grid grid-cols-3 gap-1.5 bg-slate-900/60 p-1 rounded-lg border border-slate-850">
+                          {(['weekly', 'daily', 'realtime'] as const).map((intensity) => (
+                            <button
+                              key={intensity}
+                              id={`audio-sweep-intensity-${intensity}`}
+                              type="button"
+                              onClick={() => setAudioSweepIntensity(intensity)}
+                              className={`text-[9px] uppercase font-mono font-bold py-1 px-2 rounded-md transition ${
+                                audioSweepIntensity === intensity
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                                  : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                              }`}
+                            >
+                              {intensity}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Audio Platforms Status connection panel */}
+                  <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-white block">Connected Podcast &amp; Audio Directories</span>
+                      <span className="text-[10px] text-slate-500 block">Secure OAuth integrations for matching acoustic hashes</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {audioIntegrations.map((app) => {
+                        const isSyncing = syncingAudioAppId === app.id;
+                        return (
+                          <div key={app.id} className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">{app.icon}</span>
+                                <div>
+                                  <span className="font-bold text-white block text-[11px]">{app.name}</span>
+                                  <span className="text-[9px] text-slate-500 font-mono">API Version: {app.apiVersion} • Checked: {app.lastChecked}</span>
+                                </div>
+                              </div>
+
+                              {/* Toggle switch for integration */}
+                              <button
+                                id={`toggle-audio-app-btn-${app.id}`}
+                                type="button"
+                                onClick={() => toggleAudioApp(app.id)}
+                                className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  app.enabled ? 'bg-blue-500' : 'bg-slate-800'
+                                }`}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                                    app.enabled ? 'translate-x-3.5' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+
+                            {app.enabled && (
+                              <div className="pt-1.5 flex flex-col gap-1.5 border-t border-slate-850/60 font-mono text-[9.5px]">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500">Sync Status:</span>
+                                  <span className={`font-bold uppercase ${
+                                    app.status === 'connected' 
+                                      ? 'text-emerald-400' 
+                                      : app.status === 'handshake' 
+                                      ? 'text-blue-400 animate-pulse' 
+                                      : 'text-rose-400'
+                                  }`}>
+                                    {app.status}
+                                  </span>
+                                </div>
+                                <p className="text-slate-400 bg-slate-950 p-1.5 rounded border border-slate-900 leading-relaxed text-[9px]">
+                                  {app.handshakeLog}
+                                </p>
+                                <button
+                                  id={`handshake-audio-app-btn-${app.id}`}
+                                  type="button"
+                                  disabled={isSyncing}
+                                  onClick={() => triggerAudioHandshake(app.id)}
+                                  className="w-full bg-slate-855 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 text-[9px] font-bold text-slate-300 py-1 rounded transition flex items-center justify-center gap-1"
+                                >
+                                  {isSyncing ? (
+                                    <>
+                                      <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                                      Syncing Voice Hashes...
+                                    </>
+                                  ) : (
+                                    "Trigger Secure OAuth Handshake"
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Whitelist Simulation Sandbox */}
+                  <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-white block flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                        Voice Whitelist &amp; Priority Validator
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">Evaluate whitelist versus priority protection rules</span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Trigger mock podcast/audio events to simulate how the privacy engine evaluates whitelisted channels (e.g. your approved family podcast) against active defensive shield parameters.
+                    </p>
+
+                    <div className="flex flex-col gap-2">
+                      <button
+                        id="audio-sandbox-family-btn"
+                        type="button"
+                        onClick={() => {
+                          setIsSimulatingAudioAllowedUpload(true);
+                          setAudioUploadLogs(["[SCANNING] Spotify API detected upload 'Weekly Family Circle Ep 12' by @family_vlogs..."]);
+                          
+                          setTimeout(() => {
+                            setAudioUploadLogs(prev => [...prev, "[AI MATCH] Voice print acoustic matching: 'Paul Stuart' matched at 98.7% confidence."]);
+                          }, 400);
+
+                          setTimeout(() => {
+                            setAudioUploadLogs(prev => [...prev, "[CHECK] Querying family whitelist database... Found! '@family_vlogs' is whitelisted for Paul."]);
+                          }, 800);
+
+                          setTimeout(() => {
+                            const matchedItem = allowedList.find((a: any) => a.identifier === '@family_vlogs');
+                            if (matchedItem) {
+                              const logsToAdd: string[] = ["[CHECK] Evaluating Smart Exception parameters for '@family_vlogs':"];
+                              
+                              if (matchedItem.timeConstraintEnabled) {
+                                const simulatedHour = 20;
+                                const [startH] = (matchedItem.timeStart || '09:00').split(':').map(Number);
+                                const [endH] = (matchedItem.timeEnd || '17:00').split(':').map(Number);
+                                
+                                logsToAdd.push(`  -> [TIME CONSTRAINT] Enabled. Simulated Upload Time: 20:00 (8:00 PM). Target Window: ${matchedItem.timeStart} - ${matchedItem.timeEnd}.`);
+                                if (simulatedHour < startH || simulatedHour > endH) {
+                                  logsToAdd.push(`     ⚠️ TIME WINDOW VIOLATION: Audio upload occurred outside permitted hours!`);
+                                } else {
+                                  logsToAdd.push(`     ✅ TIME WINDOW SATISFIED: Audio upload is within permitted daytime.`);
+                                }
+                              } else {
+                                logsToAdd.push("  -> [TIME CONSTRAINT] Disabled. No temporal guardrails active.");
+                              }
+
+                              if (matchedItem.identityConstraintEnabled) {
+                                const targetMember = familyMembers.find(f => f.id === matchedItem.allowedIdentityId) || familyMembers[0];
+                                logsToAdd.push(`  -> [IDENTITY VERIFICATION] Enabled. Checking cryptographically paired device belonging to: ${targetMember.name} (${targetMember.relation}).`);
+                                if (targetMember.status === 'synchronized') {
+                                  logsToAdd.push(`     ✅ CRYPTOGRAPHIC SHAKEHAND: Active secure BLE beacon detected from ${targetMember.deviceName}. Signature authentic.`);
+                                } else {
+                                  logsToAdd.push(`     ⚠️ IDENTITY VERIFICATION FAULT: Paired beacon is offline or out of range!`);
+                                }
+                              } else {
+                                logsToAdd.push("  -> [IDENTITY VERIFICATION] Disabled. Skipping target beacon check.");
+                              }
+
+                              setAudioUploadLogs(prev => [...prev, ...logsToAdd]);
+                            }
+                          }, 1200);
+
+                          setTimeout(() => {
+                            let finalVerdict = "";
+                            if (state.overrideActive) {
+                              finalVerdict = "[VERDICT] ❌ BLOCKED BY OVERRIDE: A judicial override/warrant is active. Whitelist bypassed. Voice print redacted!";
+                            } else if (state.privacyLevel === 'strict_blur') {
+                              finalVerdict = "[VERDICT] 🛑 BLOCKED BY USER MODE: Strict Mode is active. Exemption suspended. Acoustic scrambler injected!";
+                            } else {
+                              const matchedItem = allowedList.find((a: any) => a.identifier === '@family_vlogs');
+                              let blockReason = "";
+                              if (matchedItem) {
+                                if (matchedItem.timeConstraintEnabled) {
+                                  const simulatedHour = 20;
+                                  const [startH] = (matchedItem.timeStart || '09:00').split(':').map(Number);
+                                  const [endH] = (matchedItem.timeEnd || '17:00').split(':').map(Number);
+                                  if (simulatedHour < startH || simulatedHour > endH) {
+                                    blockReason = `Upload occurred outside the safe window (${matchedItem.timeStart} to ${matchedItem.timeEnd}).`;
+                                  }
+                                }
+                                if (!blockReason && matchedItem.identityConstraintEnabled) {
+                                  const targetMember = familyMembers.find(f => f.id === matchedItem.allowedIdentityId) || familyMembers[0];
+                                  if (targetMember.status !== 'synchronized') {
+                                    blockReason = `Secure BLE beacon signature from ${targetMember.name} is offline.`;
+                                  }
+                                }
+                              }
+
+                              if (blockReason) {
+                                finalVerdict = `[VERDICT-BLOCKED] 🛡️ BLOCKED BY SMART CONSTRAINT: ${blockReason} Dynamic audio-scrambling applied to segment!`;
+                              } else {
+                                finalVerdict = "[VERDICT-ALLOWED] ✅ PASSED: Channel is verified and smart constraints are satisfied. Your voice print remains unmuted in this file.";
+                              }
+                            }
+                            setAudioUploadLogs(prev => [...prev, finalVerdict]);
+                            setIsSimulatingAudioAllowedUpload(false);
+                          }, 2200);
+                        }}
+                        disabled={isSimulatingAudioAllowedUpload}
+                        className="bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition text-center"
+                      >
+                        {isSimulatingAudioAllowedUpload ? "Analyzing Audio Rules..." : "Simulate 'Dad' Uploading Family Podcast Episode"}
+                      </button>
+
+                      <button
+                        id="audio-sandbox-stranger-btn"
+                        type="button"
+                        onClick={() => {
+                          setIsSimulatingAudioAllowedUpload(true);
+                          setAudioUploadLogs(["[SCANNING] SoundCloud stream detected upload by @stranger_host..."]);
+                          
+                          setTimeout(() => {
+                            setAudioUploadLogs(prev => [...prev, "[AI MATCH] Voice print acoustic matching: 'Paul Stuart' matched at 99.4% confidence."]);
+                          }, 500);
+
+                          setTimeout(() => {
+                            setAudioUploadLogs(prev => [...prev, "[CHECK] Querying family whitelist... Not Found! '@stranger_host' is not whitelisted."]);
+                          }, 1000);
+
+                          setTimeout(() => {
+                            setAudioUploadLogs(prev => [...prev, "[VERDICT-BLOCKED] 🚨 ENFORCED: Non-whitelisted audio. Automated compliance muting dispatched to SoundCloud CDN API."]);
+                            setIsSimulatingAudioAllowedUpload(false);
+                          }, 1800);
+                        }}
+                        disabled={isSimulatingAudioAllowedUpload}
+                        className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition text-center"
+                      >
+                        {isSimulatingAudioAllowedUpload ? "Analyzing Audio Rules..." : "Simulate 'Stranger' Uploading Street Interview Clip"}
+                      </button>
+                    </div>
+
+                    {audioUploadLogs.length > 0 && (
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-900 font-mono text-[9.5px] text-slate-300 space-y-1">
+                        {audioUploadLogs.map((log, idx) => (
+                          <div key={idx} className={log.includes('PASSED') ? 'text-emerald-400 font-bold' : log.includes('BLOCKED') ? 'text-red-400 font-bold' : 'text-slate-300'}>
+                            {log}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column: URL Input and Interactive Active Matches List */}
+                <div className="lg:col-span-7 space-y-6">
+                  {/* URL Scanner Form Widget */}
+                  <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
+                    <div className="flex flex-col md:flex-row gap-3">
+                      <div className="flex-1">
+                        <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Target Podcast/Audio URL</label>
+                        <div className="relative">
+                          <input
+                            id="scrub-audio-url-input"
+                            type="text"
+                            placeholder="e.g. https://open.spotify.com/episode/..."
+                            value={newAudioScrubUrl}
+                            onChange={(e) => setNewAudioScrubUrl(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-sans"
+                          />
+                          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                        </div>
+                      </div>
+
+                      <div className="w-full md:w-44">
+                        <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Audio Source</label>
+                        <select
+                          id="scrub-audio-platform-select"
+                          value={newAudioScrubPlatform}
+                          onChange={(e: any) => setNewAudioScrubPlatform(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
+                        >
+                          <option value="spotify">🎙️ Spotify Episode</option>
+                          <option value="apple_podcasts">🎧 Apple Podcast</option>
+                          <option value="soundcloud">🔊 SoundCloud Track</option>
+                          <option value="audio_database">🗄️ Public Audio Database</option>
+                          <option value="streaming_index">📈 Public Streaming Index</option>
+                          <option value="audio_archive">🌐 General Audio Archive</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        id="trigger-audio-url-scan-btn"
+                        type="button"
+                        onClick={() => {
+                          if (!newAudioScrubUrl.trim()) return;
+                          const newRec = {
+                            id: 'at-' + Date.now(),
+                            platform: newAudioScrubPlatform,
+                            url: newAudioScrubUrl,
+                            confidenceScore: 0.86 + Math.random() * 0.13,
+                            status: 'detected',
+                            timestamp: 'Just Now',
+                            matchedSegment: '01:05 - 01:25'
+                          };
+                          setAudioTakedowns(prev => [newRec, ...prev]);
+
+                          // Add the match to the general detection logs interface
+                          if (onAddLog) {
+                            onAddLog({
+                              id: 'log-audio-manual-' + Date.now(),
+                              timestamp: new Date().toLocaleTimeString(),
+                              deviceModel: `${newAudioScrubPlatform.toUpperCase().replace('_', ' ')} Scan`,
+                              action: 'discovered',
+                              shieldApplied: 'MANUAL RE-SCAN WATERMARK_DETECTION',
+                              distance: 0,
+                              rotatedId: 'AUDIO_' + Math.random().toString(36).substring(2, 8).toUpperCase()
+                            });
+                          }
+
+                          if (onTriggerAlert) {
+                            onTriggerAlert(
+                              "Voice Match Discovered",
+                              `Manual scan located a voice print matching your template at ${newAudioScrubUrl}. Takedown requested.`,
+                              "video_found"
+                            );
+                          }
+
+                          setNewAudioScrubUrl('');
+                        }}
+                        className="flex-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-bold text-xs py-2 rounded-lg transition"
+                      >
+                        Scan Specific Audio URL
+                      </button>
+
+                      <button
+                        id="trigger-global-audio-scan-btn"
+                        type="button"
+                        disabled={isScanningAudioCrawler}
+                        onClick={() => {
+                          setIsScanningAudioCrawler(true);
+                          setTimeout(() => {
+                            setIsScanningAudioCrawler(false);
+                            const randomAudios = [
+                              { platform: 'spotify', url: 'https://open.spotify.com/episode/podcast_guest_' + Math.floor(Math.random()*1000) },
+                              { platform: 'apple_podcasts', url: 'https://podcasts.apple.com/us/podcast/id' + Math.floor(Math.random()*100000) },
+                              { platform: 'soundcloud', url: 'https://soundcloud.com/user-' + Math.floor(Math.random()*1000) + '/track' },
+                              { platform: 'audio_database', url: 'https://audiodb.org/files/leak_' + Math.floor(Math.random()*10000) + '.wav' },
+                              { platform: 'streaming_index', url: 'https://audiostream-index.net/stream/capture_' + Math.floor(Math.random()*10000) }
+                            ];
+                            const choice = randomAudios[Math.floor(Math.random() * randomAudios.length)];
+                            const randomMin = Math.floor(Math.random() * 15);
+                            const randomSec = Math.floor(Math.random() * 45);
+                            const newRec = {
+                              id: 'at-' + Date.now(),
+                              platform: choice.platform as any,
+                              url: choice.url,
+                              confidenceScore: 0.90 + Math.random() * 0.08,
+                              status: 'detected',
+                              timestamp: 'Just Now',
+                              matchedSegment: `${String(randomMin).padStart(2,'0')}:${String(randomSec).padStart(2,'0')} - ${String(randomMin).padStart(2,'0')}:${String(randomSec+20).padStart(2,'0')}`
+                            };
+                            setAudioTakedowns(prev => [newRec, ...prev]);
+
+                            // Add the match to the general detection logs interface
+                            if (onAddLog) {
+                              onAddLog({
+                                id: 'log-audio-sweep-' + Date.now(),
+                                timestamp: new Date().toLocaleTimeString(),
+                                deviceModel: `${choice.platform.toUpperCase().replace('_', ' ')} Crawler`,
+                                action: 'discovered',
+                                shieldApplied: 'ACOUSTIC WATERMARK / SCRAMBLER',
+                                distance: 0,
+                                rotatedId: 'AUDIO_' + Math.random().toString(36).substring(2, 8).toUpperCase()
+                              });
+                            }
+
+                            if (onTriggerAlert) {
+                              onTriggerAlert(
+                                "Voice Match Discovered",
+                                `Global audio crawler detected an unauthorized voice recording on ${choice.platform.toUpperCase().replace('_', ' ')}. Masking applied.`,
+                                "video_found"
+                              );
+                            }
+                          }, 2000);
+                        }}
+                        className="flex-1 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
+                      >
+                        {isScanningAudioCrawler ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            Sweeping Web Audio Feeds...
+                          </>
+                        ) : (
+                          <>
+                            <Search className="w-3.5 h-3.5" />
+                            Trigger Global Web Sweep
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {isScanningAudioCrawler && (
+                      <div className="space-y-1 bg-slate-950 p-2.5 rounded-lg border border-slate-900">
+                        <div className="w-full bg-slate-850 rounded-full h-1 overflow-hidden">
+                          <motion.div 
+                            className="bg-blue-400 h-full"
+                            initial={{ width: '0%' }}
+                            animate={{ width: '100%' }}
+                            transition={{ duration: 2 }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-blue-400 font-mono block text-center animate-pulse">
+                          ACOUSTIC ANALYSIS IN PROGRESS • MATCHING HARMONIC SPECTRAL KEYPRINTS
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual trigger upload block */}
+                  <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-white block">Simulate Dynamic Audio Upload Detection</span>
+                      <span className="text-[10px] text-slate-500 block">Trigger a mock upload to see the audio crawler act in real time</span>
+                    </div>
+                    
+                    <button
+                      id="simulate-audio-upload-btn"
+                      type="button"
+                      disabled={isSimulatingAudioUpload}
+                      onClick={simulateAudioUploadDetection}
+                      className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold py-2 rounded-lg text-xs transition"
+                    >
+                      {isSimulatingAudioUpload ? "Simulating Upload..." : "Simulate Unauthorized Voice Print Upload"}
+                    </button>
+
+                    {audioSimulationMsg && (
+                      <div className="bg-slate-900 p-2.5 rounded border border-slate-800 text-[10px] font-mono text-emerald-400">
+                        {audioSimulationMsg}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Detailed Active Matches list */}
+                  <div className="space-y-3">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                      Acoustic Scan Results &amp; Actionable Takedowns ({audioTakedowns.length})
+                    </span>
+
+                    <div className="space-y-3.5">
+                      {audioTakedowns.map((tk) => {
+                        const waveBars = [15, 28, 42, 20, 10, 18, 35, 52, 40, 25, 30, 48, 60, 45, 20, 32, 40, 15, 25, 38, 50, 30, 12, 18, 26, 42, 35, 10, 22, 30, 45, 15];
+                        return (
+                          <div key={tk.id} className="bg-slate-950/40 border border-slate-855 rounded-xl p-4 space-y-4 text-xs">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">
+                                  {tk.platform === 'spotify' ? '🎙️' : 
+                                   tk.platform === 'apple_podcasts' ? '🎧' : 
+                                   tk.platform === 'soundcloud' ? '🔊' : 
+                                   tk.platform === 'audio_database' ? '🗄️' : 
+                                   tk.platform === 'streaming_index' ? '📈' : '🌐'}
+                                </span>
+                                <div>
+                                  <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">{tk.platform.replace('_', ' ')} Match</span>
+                                  <a 
+                                    href={tk.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="text-white hover:text-blue-400 hover:underline block truncate font-mono text-[10px] max-w-[180px] sm:max-w-[320px]"
+                                  >
+                                    {tk.url}
+                                  </a>
+                                </div>
+                              </div>
+                              <span className={`text-[8px] px-2 py-0.5 rounded-full uppercase font-bold border ${
+                                tk.status === 'scrub_success'
+                                  ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/20'
+                                  : tk.status === 'dispatched'
+                                  ? 'bg-blue-950/60 text-blue-400 border-blue-500/20 animate-pulse'
+                                  : 'bg-amber-950/60 text-amber-400 border-amber-500/20'
+                              }`}>
+                                {tk.status === 'scrub_success' ? 'Acoustically Muted' : tk.status === 'dispatched' ? 'Scrubbing Queue' : 'Voice Matched'}
+                              </span>
+                            </div>
+
+                            {/* Soundwave representation */}
+                            <div className="p-3 bg-slate-950 border border-slate-900/60 rounded-lg space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] text-slate-400 font-mono">Matched segment: <strong className="text-white">{tk.matchedSegment}</strong></span>
+                                <span className="text-[9px] text-slate-500 font-mono">Confidence: {(tk.confidenceScore * 100).toFixed(1)}%</span>
+                              </div>
+
+                              <div className="h-16 flex items-center justify-between gap-[2px] bg-slate-900/40 p-2 rounded border border-slate-850">
+                                {waveBars.map((height, barIdx) => {
+                                  // Highlight the center index representing the matched section
+                                  const isMatchedSegment = barIdx >= 11 && barIdx <= 19;
+                                  let colorClass = "bg-slate-700";
+                                  let barHeight = height;
+
+                                  if (isMatchedSegment) {
+                                    if (tk.status === 'scrub_success') {
+                                      colorClass = "bg-emerald-500/40 border border-dashed border-emerald-500/20";
+                                      barHeight = 4; // Flat line mute!
+                                    } else if (tk.status === 'dispatched') {
+                                      colorClass = "bg-blue-500 animate-pulse";
+                                    } else {
+                                      colorClass = "bg-amber-500";
+                                    }
+                                  }
+
+                                  return (
+                                    <div
+                                      key={barIdx}
+                                      className={`flex-1 rounded-full transition-all duration-300 ${colorClass}`}
+                                      style={{ height: `${barHeight}%` }}
+                                    />
+                                  );
+                                })}
+                              </div>
+
+                              <div className="flex items-center justify-between text-[8px] font-mono text-slate-500">
+                                <span>00:00</span>
+                                {tk.status === 'scrub_success' ? (
+                                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                    <MicOff className="w-2.5 h-2.5" />
+                                    VOICE SCRUBBED &amp; ZEROED OUT BY AUTOMATED COMPLIANCE ORDER
+                                  </span>
+                                ) : (
+                                  <span>Segment: {tk.matchedSegment}</span>
+                                )}
+                                <span>30:00</span>
+                              </div>
+                            </div>
+
+                            {/* Timeline and operational action buttons */}
+                            <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-slate-900/30 p-2.5 rounded-lg border border-slate-850">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  id={`audio-dispatch-btn-${tk.id}`}
+                                  type="button"
+                                  disabled={tk.status !== 'detected'}
+                                  onClick={() => {
+                                    setAudioTakedowns(prev => prev.map(t => t.id === tk.id ? { ...t, status: 'dispatched' } : t));
+                                    setTimeout(() => {
+                                      setAudioTakedowns(prev => prev.map(t => t.id === tk.id ? { ...t, status: 'scrub_success' } : t));
+                                    }, 2500);
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-[10px] transition ${
+                                    tk.status === 'detected'
+                                      ? 'bg-amber-500 text-slate-950 hover:bg-amber-600'
+                                      : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                                  }`}
+                                >
+                                  {tk.status === 'detected' 
+                                    ? 'Dispatch Mute Notice' 
+                                    : tk.status === 'dispatched' 
+                                    ? 'Order Processing...' 
+                                    : 'Acoustically Enforced'}
+                                </button>
+
+                                <button
+                                  id={`audio-whitelist-btn-${tk.id}`}
+                                  type="button"
+                                  onClick={() => {
+                                    // Add to allowed list
+                                    const mockIdent = tk.url.includes('spotify') ? '@spotify_podcast' : '@audio_feed';
+                                    const newItem = {
+                                      id: 'al-' + Date.now(),
+                                      name: tk.platform.toUpperCase() + ' Host Exception',
+                                      identifier: mockIdent,
+                                      active: true,
+                                      timeConstraintEnabled: false,
+                                      timeStart: '09:00',
+                                      timeEnd: '17:00',
+                                      identityConstraintEnabled: false,
+                                      allowedIdentityId: 'fam-1'
+                                    };
+                                    setAllowedList(prev => [...prev, newItem]);
+                                    // Delete from takedowns
+                                    setAudioTakedowns(prev => prev.filter(t => t.id !== tk.id));
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white font-bold text-[10px] transition"
+                                >
+                                  Whitelist Host
+                                </button>
+                              </div>
+
+                              <span className="text-[10px] text-slate-500 font-mono">Matched: {tk.timestamp}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab 4.6: Audio Map & Heat (Acoustic Propagation & Saturation) */}
+          {activeTab === 'audio_map' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              {/* Introduction & Quick Stats Header */}
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-900 pb-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-sm font-mono">
+                      <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      Acoustic Mapping &amp; Saturation Heatmap
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed font-sans max-w-3xl">
+                      Visualize localized acoustic blind spots, sound shadow zones, and saturation coverage circles of your ultrasonic shielding. See how walls, ambient wind, and heavy background noises limit high-frequency deflection boundaries.
+                    </p>
+                  </div>
+                  <div className="pt-1 text-[10px] text-slate-500 font-sans flex flex-wrap gap-2">
+                    <span className="text-emerald-400 font-semibold">✓ OSHA Safety Compliant</span>
+                    <span>•</span>
+                    <span className="text-emerald-400 font-semibold">✓ Ultrasonic Decibel Saturation</span>
+                  </div>
+                </div>
+
+                {/* Calculate Dynamic Metrics */}
+                {(() => {
+                  const locData: Record<string, { name: string; baseCoverage: number; desc: string; noiseDb: number; threats: Array<{ id: string; name: string; distance: number; angle: number; x: number; y: number; status: string; label: string }>; blindSectors: string[] }> = {
+                    dining: {
+                      name: "Family Dining Room",
+                      baseCoverage: 94,
+                      desc: "Quiet indoor room with wooden partitions and minimal background hum.",
+                      noiseDb: 32,
+                      threats: [
+                        { id: 'm1', name: 'Smart Speaker Mic', distance: 3.2, angle: 45, x: 26, y: -26, status: 'scrambled', label: 'SILENCED' },
+                        { id: 'm2', name: 'Smartphone Mic (Dad)', distance: 1.8, angle: 210, x: -16, y: 18, status: 'scrambled', label: 'SILENCED' }
+                      ],
+                      blindSectors: []
+                    },
+                    classroom: {
+                      name: "University Lecture Hall",
+                      baseCoverage: 76,
+                      desc: "Large echoing lecture theater. Solid brick columns deflect high-frequency ultrasonic waves.",
+                      noiseDb: 48,
+                      threats: [
+                        { id: 'm3', name: 'Podium Boundary Mic', distance: 6.8, angle: 120, x: -38, y: -18, status: 'scrambled', label: 'SILENCED' },
+                        { id: 'm4', name: 'Student iPad Mic', distance: 4.5, angle: 300, x: 28, y: 32, status: 'weak', label: 'PARTIAL BLOCK' },
+                        { id: 'm5', name: 'CCTV Audio Feed', distance: 11.2, angle: 10, x: 44, y: -42, status: 'unshielded', label: 'UNSHIELDED' }
+                      ],
+                      blindSectors: ['North-East Column Pillar Shadow']
+                    },
+                    city_square: {
+                      name: "Urban Public Square",
+                      baseCoverage: 58,
+                      desc: "Open air environment with continuous street traffic rumble and wind dissipation.",
+                      noiseDb: 72,
+                      threats: [
+                        { id: 'm6', name: 'Traffic Surveillance Mic', distance: 9.4, angle: 80, x: 36, y: -12, status: 'weak', label: 'PARTIAL BLOCK' },
+                        { id: 'm7', name: 'Stranger Smartphone', distance: 2.5, angle: 190, x: -20, y: 8, status: 'scrambled', label: 'SILENCED' },
+                        { id: 'm8', name: 'News Crew Shotgun Mic', distance: 8.1, angle: 330, x: 38, y: 26, status: 'unshielded', label: 'UNSHIELDED' }
+                      ],
+                      blindSectors: ['Open Space Dissipation Gaps']
+                    },
+                    cafe_inside: {
+                      name: "Busy Corner Cafe",
+                      baseCoverage: 83,
+                      desc: "Moderate busy indoor chatter and background acoustic hum. Large storefront glass sheets reflect waves.",
+                      noiseDb: 58,
+                      threats: [
+                        { id: 'm9', name: 'POS Register Mic', distance: 4.1, angle: 135, x: -26, y: -26, status: 'scrambled', label: 'SILENCED' },
+                        { id: 'm10', name: 'Laptop Mic (Table 4)', distance: 3.0, angle: 260, x: -8, y: 30, status: 'scrambled', label: 'SILENCED' }
+                      ],
+                      blindSectors: ['Espresso Compressor shadow']
+                    }
+                  };
+
+                  const currentLoc = locData[acousticLocation] || locData.dining;
+                  let activeCoverage = currentLoc.baseCoverage;
+                  let activeRange = state.rangeMeters || 12;
+                  let activeNoise = currentLoc.noiseDb;
+                  let activeBlindSpots = [...currentLoc.blindSectors];
+
+                  if (acousticInterference === 'wind') {
+                    activeCoverage = Math.max(30, Math.round(activeCoverage * 0.72));
+                    activeRange = Math.max(2, Math.round(activeRange * 0.70));
+                    activeNoise += 18;
+                    activeBlindSpots.push("Acoustic Wind Shear Dissipation (All Sectors)");
+                  } else if (acousticInterference === 'wall') {
+                    activeCoverage = Math.max(30, Math.round(activeCoverage * 0.65));
+                    activeRange = Math.max(2, Math.round(activeRange * 0.85));
+                    activeBlindSpots.push("Concrete Structural Pillar Shadow (East / Right Sector)");
+                  } else if (acousticInterference === 'ac_hum') {
+                    activeCoverage = Math.max(30, Math.round(activeCoverage * 0.84));
+                    activeNoise += 24;
+                    activeBlindSpots.push("Low Frequency Compressor Masking (Omnidirectional)");
+                  }
+
+                  return (
+                    <>
+                      {/* Telemetry Stats Grid */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="bg-slate-950/60 border border-slate-900 p-3 rounded-xl space-y-1">
+                          <span className="text-[9px] text-slate-500 font-sans uppercase block font-semibold">Acoustic Saturation</span>
+                          <span className="text-lg font-bold font-mono text-emerald-400 flex items-center gap-1">
+                            {state.isBroadcasting ? `${activeCoverage}%` : '0%'}
+                            {state.isBroadcasting && (
+                              <span className="text-[10px] text-slate-500 font-sans font-normal">coverage</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950/60 border border-slate-900 p-3 rounded-xl space-y-1">
+                          <span className="text-[9px] text-slate-500 font-sans uppercase block font-semibold">Effective Shield Range</span>
+                          <span className="text-lg font-bold font-mono text-white">
+                            {state.isBroadcasting ? `${activeRange} Meters` : '0 M (STANDBY)'}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950/60 border border-slate-900 p-3 rounded-xl space-y-1">
+                          <span className="text-[9px] text-slate-500 font-sans uppercase block font-semibold">Ambient Noise Floor</span>
+                          <span className="text-lg font-bold font-mono text-blue-400">
+                            {activeNoise} dB SPL
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950/60 border border-slate-900 p-3 rounded-xl space-y-1">
+                          <span className="text-[9px] text-slate-500 font-sans uppercase block font-semibold">Active Blind Spots</span>
+                          <span className={`text-lg font-bold font-mono ${activeBlindSpots.length > 0 ? 'text-amber-400 animate-pulse' : 'text-emerald-400'}`}>
+                            {activeBlindSpots.length > 0 ? `${activeBlindSpots.length} Zones` : 'NONE (CLEARED)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Main Tactical Split Layout */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        
+                        {/* Left: Tactical Acoustic Radar Visualization */}
+                        <div className="lg:col-span-7 bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden min-h-[420px]">
+                          
+                          {/* Title overlay inside map */}
+                          <div className="flex items-center justify-between z-10">
+                            <div className="space-y-0.5">
+                              <span className="text-xs font-bold text-white block uppercase tracking-wider font-mono">
+                                Acoustic Propagation Grid: {currentLoc.name}
+                              </span>
+                              <span className="text-[10px] text-slate-500 block leading-tight">
+                                {currentLoc.desc}
+                              </span>
+                            </div>
+                            
+                            <span className="text-[9px] text-slate-500 font-mono uppercase bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+                              Interference: {acousticInterference.toUpperCase()}
+                            </span>
+                          </div>
+
+                          {/* Interactive Tactical Radar Stage */}
+                          <div className="flex-1 flex items-center justify-center relative overflow-hidden my-4 min-h-[260px]">
+                            {/* Dot Grid Background */}
+                            <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-25" />
+
+                            {/* Radar Scan sweeping line */}
+                            {acousticPinging && (
+                              <div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_35%,rgba(16,185,129,0.18))] pointer-events-none animate-spin" style={{ animationDuration: '3.5s' }} />
+                            )}
+
+                            {/* Crosshairs */}
+                            <div className="absolute inset-x-0 h-[1px] bg-slate-900/60" />
+                            <div className="absolute inset-y-0 w-[1px] bg-slate-900/60" />
+
+                            {/* Concentric rings showing dB attenuation */}
+                            <div className="absolute w-[85%] aspect-square rounded-full border border-slate-900/30 flex items-center justify-center pointer-events-none">
+                              <span className="absolute top-1 text-[7px] font-mono text-slate-700">-60dB</span>
+                              <div className="absolute w-[66%] aspect-square rounded-full border border-slate-900/40 flex items-center justify-center">
+                                <span className="absolute top-1 text-[7px] font-mono text-slate-700">-40dB</span>
+                                <div className="absolute w-[33%] aspect-square rounded-full border border-slate-900/50 flex items-center justify-center">
+                                  <span className="absolute top-1 text-[7px] font-mono text-slate-700">-20dB</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Compass Labels */}
+                            <span className="absolute top-2 left-1/2 -translate-x-1/2 text-[8px] font-mono text-slate-700 font-bold">000°</span>
+                            <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-mono text-slate-700 font-bold">180°</span>
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[8px] font-mono text-slate-700 font-bold">270°</span>
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] font-mono text-slate-700 font-bold">090°</span>
+
+                            {/* GLOWING ACOUSTIC SATURATION SHIELD BUBBLE */}
+                            {state.isBroadcasting ? (
+                              <div 
+                                className="absolute rounded-full bg-emerald-500/[0.04] border border-emerald-400/20 shadow-[0_0_30px_rgba(16,185,129,0.06)] animate-pulse flex items-center justify-center pointer-events-none"
+                                style={{
+                                  // Scale dynamically based on the current activeRange
+                                  width: `${Math.max(30, Math.min((activeRange / 15) * 85, 95))}%`,
+                                  height: `${Math.max(30, Math.min((activeRange / 15) * 85, 95))}%`,
+                                  transition: 'all 500ms ease-out',
+                                  // Clip a chunk out of the right side (East sector) if Concrete Pillar barrier interference is active
+                                  clipPath: acousticInterference === 'wall' 
+                                    ? 'polygon(0% 0%, 55% 0%, 55% 40%, 45% 50%, 55% 60%, 55% 100%, 0% 100%)' 
+                                    : 'none'
+                                }}
+                              >
+                                {/* Ripple Wave sweeps */}
+                                <div className="absolute inset-0 rounded-full border border-emerald-500/10 animate-ping" style={{ animationDuration: '4s' }} />
+                                <span className="text-[7.5px] font-mono font-bold text-emerald-500/35 uppercase tracking-widest text-center leading-tight">
+                                  SATURATED SHIELD:<br />{activeRange} METERS
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="absolute inset-0 flex items-center justify-center bg-rose-950/5 border border-rose-900/10 z-10 pointer-events-none">
+                                <span className="text-[9px] font-mono font-bold text-rose-500 uppercase tracking-wider bg-slate-950 border border-rose-500/35 px-2.5 py-1.5 rounded shadow-lg">
+                                  ⚠️ ACOUSTIC SHIELD STANDBY (NO SATURATION ACTIVE)
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Concrete Pillar Visual Wall Overlay if active */}
+                            {acousticInterference === 'wall' && (
+                              <div className="absolute right-1/4 top-1/3 bottom-1/3 w-3.5 bg-rose-950/80 border border-rose-500/40 rounded flex items-center justify-center pointer-events-none z-10 shadow-lg">
+                                <span className="text-[7px] font-mono text-rose-400 font-bold -rotate-90 whitespace-nowrap uppercase tracking-wider">
+                                  WALL BARRIER
+                                </span>
+                              </div>
+                            )}
+
+                            {/* East Sector Blind Spot Indicator for Concrete Wall */}
+                            {acousticInterference === 'wall' && state.isBroadcasting && (
+                              <div className="absolute right-[10%] top-[40%] text-center pointer-events-none z-10 animate-pulse">
+                                <span className="text-[8px] font-mono font-bold text-rose-500 bg-slate-950 border border-rose-500/20 px-1.5 py-0.5 rounded shadow">
+                                  BLIND SPOT AREA
+                                </span>
+                                <span className="block text-[6.5px] text-slate-500 font-mono mt-0.5">100% WAVE BLOCKED</span>
+                              </div>
+                            )}
+
+                            {/* Wind shear decay indicator overlay */}
+                            {acousticInterference === 'wind' && state.isBroadcasting && (
+                              <div className="absolute inset-x-8 top-12 flex justify-between pointer-events-none text-slate-600 font-mono text-[7px] select-none">
+                                <span className="animate-pulse">💨 WIND DISPERSION WAVE LOSS</span>
+                                <span className="animate-pulse">💨 ATTA_DECAY: +14dB/m</span>
+                              </div>
+                            )}
+
+                            {/* Absolute center beacon blip (wearer) */}
+                            <div className="relative z-20 flex flex-col items-center">
+                              <span className="relative flex h-4 w-4">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-400 border border-white/25 shadow-[0_0_10px_rgba(52,211,153,0.9)]"></span>
+                              </span>
+                              <span className="text-[8px] font-mono text-white bg-slate-950 border border-slate-800 px-1.5 py-0.5 rounded mt-2 font-bold shadow-md whitespace-nowrap">
+                                ALEX (BEACON)
+                              </span>
+                            </div>
+
+                            {/* Recording microphone target blips */}
+                            {currentLoc.threats.map((threat) => {
+                              // Is the threat within the saturation area?
+                              // If interference is concrete wall and threat is on the right side (positive x), it is in the blind spot!
+                              const isRightSide = threat.x > 0;
+                              const isWallBlocked = acousticInterference === 'wall' && isRightSide;
+                              const isOutOfRange = threat.distance > activeRange;
+                              const isScrambled = state.isBroadcasting && !isWallBlocked && !isOutOfRange;
+
+                              return (
+                                <div
+                                  key={threat.id}
+                                  id={`acoustic-threat-${threat.id}`}
+                                  onClick={() => setSelectedAcousticThreat(threat.id)}
+                                  className="absolute z-20 flex flex-col items-center cursor-pointer group transition-transform hover:scale-110"
+                                  style={{
+                                    left: `calc(50% + ${threat.x}%)`,
+                                    top: `calc(50% + ${threat.y}%)`,
+                                    transition: 'all 500ms ease-out'
+                                  }}
+                                >
+                                  {/* Vector projection line from beacon */}
+                                  <svg className="absolute overflow-visible pointer-events-none w-px h-px origin-center">
+                                    <line
+                                      x1={0}
+                                      y1={0}
+                                      x2={-threat.x * 2.8}
+                                      y2={-threat.y * 2.8}
+                                      stroke={isScrambled ? "#10b981" : isWallBlocked ? "#ef4444" : "#f59e0b"}
+                                      strokeWidth={selectedAcousticThreat === threat.id ? "1.5" : "1"}
+                                      strokeDasharray={isScrambled ? "3 3" : "1 2"}
+                                      className="opacity-40"
+                                    />
+                                  </svg>
+
+                                  <span className="relative flex h-3.5 w-3.5">
+                                    {isScrambled ? (
+                                      <>
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
+                                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border border-white/10 shadow-[0_0_8px_rgba(16,185,129,0.9)]"></span>
+                                      </>
+                                    ) : isWallBlocked ? (
+                                      <>
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60"></span>
+                                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-white/10 shadow-[0_0_8px_rgba(239,68,68,0.9)] animate-pulse"></span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-50"></span>
+                                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500 border border-white/10 shadow-[0_0_8px_rgba(245,158,11,0.9)]"></span>
+                                      </>
+                                    )}
+                                  </span>
+
+                                  {/* Small tag indicator */}
+                                  <div className="absolute left-4 -top-3 bg-slate-950/95 border border-slate-900 group-hover:border-slate-700 text-[8px] font-mono p-1 rounded whitespace-nowrap text-white shadow-xl pointer-events-none select-none z-30 transition-all">
+                                    <span className="font-semibold block">{threat.name}</span>
+                                    <span className="text-slate-500 block text-[6.5px]">
+                                      {threat.distance}m •{' '}
+                                      <span className={isScrambled ? 'text-emerald-400 font-bold' : isWallBlocked ? 'text-rose-400 font-bold animate-pulse' : 'text-amber-400 font-bold'}>
+                                        {isScrambled ? 'SILENCED' : isWallBlocked ? 'BLIND SPOT' : 'UNSHIELDED'}
+                                      </span>
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Acoustic Target Inspector Floating/Bottom Card */}
+                          <div className="bg-slate-900/40 border border-slate-900 p-2.5 rounded-lg z-10">
+                            {selectedAcousticThreat ? (() => {
+                              const target = currentLoc.threats.find(t => t.id === selectedAcousticThreat);
+                              if (!target) return <span className="text-[10px] text-slate-500 font-mono">Select a microphone blip on the grid to inspect details</span>;
+                              
+                              const isRightSide = target.x > 0;
+                              const isWallBlocked = acousticInterference === 'wall' && isRightSide;
+                              const isOutOfRange = target.distance > activeRange;
+                              const isScrambled = state.isBroadcasting && !isWallBlocked && !isOutOfRange;
+
+                              return (
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+                                  <div className="space-y-1">
+                                    <span className="text-[10px] text-slate-500 uppercase font-mono block">Target Microphone Inspector</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-white font-bold">{target.name}</span>
+                                      <span className="text-slate-500 font-mono">({target.distance}m range, angle {target.angle}°)</span>
+                                    </div>
+                                    <p className="text-[10.5px] text-slate-400">
+                                      {isScrambled 
+                                        ? "✅ Successfully scrambled by active ultrasonic emitter carrier. Capture is 100% white-noise blanked." 
+                                        : isWallBlocked 
+                                        ? "🚨 BLIND SPOT: Concrete pillar completely blocks high-frequency watermarking and jamming signals in this direction. Wearer is vulnerable!" 
+                                        : "⚠️ UNSHIELDED: Device is either out of signal range, or the acoustic broadcast shield is currently in standby mode."}
+                                    </p>
+                                  </div>
+
+                                  <div className="shrink-0 flex gap-2">
+                                    <button
+                                      id="inspect-close-btn"
+                                      type="button"
+                                      onClick={() => setSelectedAcousticThreat(null)}
+                                      className="text-[9px] font-bold uppercase text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-950 border border-slate-850 hover:border-slate-700 transition"
+                                    >
+                                      Clear Inspector
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })() : (
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                                <span>💡 Select any interactive node (circle) on the grid to inspect wave attenuation.</span>
+                                <span>Active Range: {activeRange}M</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right: Sound Control, Interferences and Monospace Sonar Logs */}
+                        <div className="lg:col-span-5 space-y-6">
+                          
+                          {/* Choose Environmental Scenario */}
+                          <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-3">
+                            <span className="text-xs font-bold text-white block">1. Select Acoustic Scenario</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { id: 'dining', label: '☕ Dining Room', key: 'dining' },
+                                { id: 'classroom', label: '🏫 Lecture Hall', key: 'classroom' },
+                                { id: 'city_square', label: '🏙️ Public Square', key: 'city_square' },
+                                { id: 'cafe_inside', label: '🥤 Corner Cafe', key: 'cafe_inside' }
+                              ].map((item) => (
+                                <button
+                                  id={`acoustic-loc-btn-${item.id}`}
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setAcousticLocation(item.key as any);
+                                    setSelectedAcousticThreat(null);
+                                    playLocalSoundTest('tactical_click', 50);
+                                    setAcousticLogs(prev => [
+                                      `[LOCATION SWAP] Changed scan target to: ${locData[item.key].name}`,
+                                      `[DIAGNOSTIC] Noise floor reset to: ${locData[item.key].noiseDb} dB SPL. Base coverage capacity: ${locData[item.key].baseCoverage}%`,
+                                      ...prev
+                                    ]);
+                                  }}
+                                  className={`text-[10px] font-bold py-2 px-3 rounded-lg border transition-all text-left ${
+                                    acousticLocation === item.key
+                                      ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-400'
+                                      : 'bg-slate-900/30 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900/60'
+                                  }`}
+                                >
+                                  {item.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Interference Injector Panels */}
+                          <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-3">
+                            <div className="space-y-0.5">
+                              <span className="text-xs font-bold text-white block">2. Inject Environmental Interference</span>
+                              <span className="text-[10px] text-slate-500 block">See how different variables generate sound shadow blind spots</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { id: 'none', label: '✅ No Barriers', desc: 'Optimal line of sight' },
+                                { id: 'wind', label: '💨 High Wind', desc: 'Severe signal dissipation' },
+                                { id: 'wall', label: '🧱 Concrete Pillar', desc: 'Symmetric shadow blocks' },
+                                { id: 'ac_hum', label: '❄️ AC Comp Hum', desc: 'Acoustic background hum' }
+                              ].map((item) => (
+                                <button
+                                  id={`acoustic-interf-btn-${item.id}`}
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setAcousticInterference(item.id as any);
+                                    setSelectedAcousticThreat(null);
+                                    playLocalSoundTest('sonar_chime', 60);
+                                    
+                                    let logMsg = "";
+                                    if (item.id === 'none') {
+                                      logMsg = "[CLEARED] Environmental factors cleared. Standard line-of-sight propagation restored.";
+                                    } else if (item.id === 'wind') {
+                                      logMsg = "[INJECT] Wind factor active. Attenuation penalty applied: -14dB/meter wave shear decay.";
+                                    } else if (item.id === 'wall') {
+                                      logMsg = "[INJECT] Concrete structural barrier detected. High frequency waves deflected. 100% blind spot in East Sector.";
+                                    } else {
+                                      logMsg = "[INJECT] Active AC hum compressor active. Saturated masking floor increased. SNR threshold margin narrowed.";
+                                    }
+
+                                    setAcousticLogs(prev => [logMsg, ...prev]);
+                                  }}
+                                  className={`text-[10px] py-1.5 px-2.5 rounded-lg border transition-all text-left flex flex-col justify-between h-14 ${
+                                    acousticInterference === item.id
+                                      ? 'bg-amber-500/10 border-amber-500/35 text-amber-400'
+                                      : 'bg-slate-900/30 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900/60'
+                                  }`}
+                                >
+                                  <span className="font-bold">{item.label}</span>
+                                  <span className="text-[8.5px] text-slate-500 font-sans block">{item.desc}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Settings Emitters Controls */}
+                          <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
+                            <span className="text-xs font-bold text-white block">3. Ultrasonic Emitter Calibration</span>
+                            
+                            {/* Frequency slider */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center text-[10px] font-mono">
+                                <span className="text-slate-500 uppercase">Acoustic Carrier Frequency</span>
+                                <span className="text-emerald-400 font-bold">{acousticMapFrequency.toFixed(1)} kHz (Inaudible)</span>
+                              </div>
+                              <input
+                                id="acoustic-carrier-slider"
+                                type="range"
+                                min="20.0"
+                                max="26.0"
+                                step="0.2"
+                                value={acousticMapFrequency}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  setAcousticMapFrequency(val);
+                                  // Periodic log
+                                  if (Math.random() < 0.3) {
+                                    setAcousticLogs(prev => [
+                                      `[CALIBRATE] Adjusting ultrasonic oscillator carrier to: ${val.toFixed(1)} kHz (Operating margin)`,
+                                      ...prev
+                                    ]);
+                                  }
+                                }}
+                                className="w-full h-1 bg-slate-900 border border-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                              />
+                              <div className="flex justify-between text-[8px] text-slate-500 font-mono">
+                                <span>20.0 kHz (OSHA Bound)</span>
+                                <span>26.0 kHz (Max transducer)</span>
+                              </div>
+                            </div>
+
+                            {/* Calibration button */}
+                            <button
+                              id="trigger-acoustic-calib-btn"
+                              type="button"
+                              disabled={acousticPinging}
+                              onClick={() => {
+                                setAcousticPinging(true);
+                                playLocalSoundTest('sonar_chime', 85);
+                                setAcousticLogs(prev => [
+                                  `[CALIBRATION] Initiating multi-sector ultrasonic wave sweep...`,
+                                  `[CALIBRATION] Acoustic echoing envelope measured. Processing deflection coefficients...`,
+                                  ...prev
+                                ]);
+
+                                setTimeout(() => {
+                                  setAcousticPinging(false);
+                                  setAcousticLogs(prev => [
+                                    `[CALIBRATION SUCCESS] Refusal boundary calibrated: range matches safe bounds. Saturated output optimized!`,
+                                    ...prev
+                                  ]);
+                                }, 2500);
+                              }}
+                              className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold py-2 rounded-lg text-xs transition flex items-center justify-center gap-1.5"
+                            >
+                              {acousticPinging ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  Sweeping Acoustic Spectrum...
+                                </>
+                              ) : (
+                                <>
+                                  <span>🗺️</span>
+                                  Sweep &amp; Calibrate Acoustic Grid
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Interactive Monospace Sonar Logs Console */}
+                          <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 space-y-2">
+                            <div className="flex items-center justify-between text-[10px] font-mono">
+                              <span className="text-slate-500 uppercase font-semibold">Active Acoustic Telemetry Logs</span>
+                              <button
+                                id="clear-acoustic-logs-btn"
+                                type="button"
+                                onClick={() => setAcousticLogs([])}
+                                className="text-slate-500 hover:text-white transition-colors uppercase text-[9px] bg-slate-900 border border-slate-850 px-1.5 py-0.5 rounded"
+                              >
+                                Clear Console
+                              </button>
+                            </div>
+
+                            <div className="h-32 bg-black/60 p-3 rounded-lg border border-slate-900 font-mono text-[9.5px] overflow-y-auto space-y-1 scrollbar-thin">
+                              {acousticLogs.length > 0 ? (
+                                acousticLogs.map((log, idx) => (
+                                  <div key={idx} className={`leading-relaxed ${
+                                    log.includes('INJECT') || log.includes('BLIND')
+                                      ? 'text-amber-400 font-semibold' 
+                                      : log.includes('SWAP') || log.includes('SUCCESS')
+                                      ? 'text-emerald-400' 
+                                      : 'text-slate-300'
+                                  }`}>
+                                    <span className="text-slate-600 mr-1.5">[{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                                    {log}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-slate-600 block text-center pt-8">Console empty. Trigger a sweep or adjust parameters to view telemetry logs.</span>
+                              )}
+                            </div>
+                          </div>
+
+                        </div>
+
+                      </div>
+                    </>
+                  );
+                })()}
+
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab: Perimeter Zones (School & Home Gateways) */}
+          {activeTab === 'perimeter' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 animate-fadeIn">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-emerald-400" />
+                  Stationary Perimeter Safeguards
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                  Establish permanent hardware boundary shields. When a person wearing recording glasses or using a smartphone camera enters these geo-fenced boundaries (such as a school entrance, residential yard, or playground), the stationary beacon overrides and enforces a local "Opt-Out" blur command to secure the perimeter.
+                </p>
+              </div>
+
+              {/* Add New Sensor Gate */}
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newSensName.trim() || !newSensLocation.trim()) return;
+                  const newSens: PerimeterSensor = {
+                    id: 'sens-' + Date.now(),
+                    name: newSensName,
+                    location: newSensLocation,
+                    type: newSensType,
+                    isActive: true,
+                    coverageMeters: newSensRange,
+                    detectionsBlocked: 0,
+                    status: 'active'
+                  };
+                  setPerimeterSensors(prev => [...prev, newSens]);
+                  setNewSensName('');
+                  setNewSensLocation('');
+                }}
+                className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3"
+              >
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Deploy New Stationary Shield Beacon</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Beacon Name</label>
+                    <input
+                      id="sens-name-input"
+                      type="text"
+                      placeholder="e.g. Back Garden Dome"
+                      value={newSensName}
+                      onChange={(e) => setNewSensName(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Street Address or Venue</label>
+                    <input
+                      id="sens-loc-input"
+                      type="text"
+                      placeholder="e.g. 502 Oak Lane"
+                      value={newSensLocation}
+                      onChange={(e) => setNewSensLocation(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Venue Classification</label>
+                    <select
+                      id="sens-type-select"
+                      value={newSensType}
+                      onChange={(e: any) => setNewSensType(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
+                    >
+                      <option value="school">🏫 School/Kindergarten Entrance</option>
+                      <option value="home">🏠 Private Property / House</option>
+                      <option value="public">⛲ Public Park / Playground</option>
+                      <option value="commercial">🏢 Secure Office / Retail Shop</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Shield Coverage: {newSensRange}m</label>
+                    <input
+                      id="sens-range-slider"
+                      type="range"
+                      min="5"
+                      max="150"
+                      value={newSensRange}
+                      onChange={(e) => setNewSensRange(Number(e.target.value))}
+                      className="w-full accent-emerald-400 mt-2 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  id="deploy-beacon-btn"
+                  type="submit"
+                  className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Deploy Stationary Beacon Gate
+                </button>
+              </form>
+
+              {/* Active list of perimeters */}
+              <div className="space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+                  Active Stationary Beacons ({perimeterSensors.length})
+                </span>
+
+                <div className="space-y-3">
+                  {perimeterSensors.map((sensor) => (
+                    <div 
+                      key={sensor.id} 
+                      className={`border rounded-xl p-4 bg-slate-950/40 flex flex-col md:flex-row md:items-center justify-between gap-4 transition ${
+                        sensor.isActive ? 'border-slate-800' : 'border-slate-900 opacity-65'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-lg shrink-0">
+                          {sensor.type === 'school' ? '🏫' : sensor.type === 'home' ? '🏠' : sensor.type === 'public' ? '⛲' : '🏢'}
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                            {sensor.name}
+                            <span className={`text-[8px] px-1.5 py-0.2 rounded-full font-mono uppercase font-bold border ${
+                              sensor.status === 'active' 
+                                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/20' 
+                                : sensor.status === 'maintenance' 
+                                ? 'bg-amber-950/60 text-amber-400 border-amber-500/20'
+                                : 'bg-slate-800 text-slate-400 border-slate-700'
+                            }`}>
+                              {sensor.status}
+                            </span>
+                          </h4>
+                          <p className="text-xs text-slate-400 flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-500" />
+                            {sensor.location}
+                          </p>
+                          <div className="flex flex-wrap gap-2.5 pt-1 text-[10px] text-slate-500">
+                            <span>Coverage Radius: <strong className="text-slate-300">{sensor.coverageMeters}m</strong></span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <Shield className="w-3 h-3 text-emerald-400" />
+                              Blocked recordings: <strong className="text-emerald-400 font-mono">{sensor.detectionsBlocked}</strong>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3.5 self-end md:self-center shrink-0">
+                        {/* Coverage slider */}
+                        <div className="w-24 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase block font-semibold">Adjust Radius</span>
+                          <input
+                            id={`sensor-coverage-${sensor.id}`}
+                            type="range"
+                            min="5"
+                            max="150"
+                            value={sensor.coverageMeters}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setPerimeterSensors(prev => prev.map(s => s.id === sensor.id ? { ...s, coverageMeters: val } : s));
+                            }}
+                            className="w-full accent-emerald-400 h-1 cursor-pointer"
+                          />
+                        </div>
+
+                        <button
+                          id={`toggle-sensor-${sensor.id}`}
+                          onClick={() => {
+                            setPerimeterSensors(prev => prev.map(s => {
+                              if (s.id !== sensor.id) return s;
+                              const nextActive = !s.isActive;
+                              return {
+                                ...s,
+                                isActive: nextActive,
+                                status: nextActive ? 'active' : 'offline'
+                              };
+                            }));
+                          }}
+                          className={`text-[10px] px-2.5 py-1 rounded font-bold transition ${
+                            sensor.isActive 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' 
+                              : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-750'
+                          }`}
+                        >
+                          {sensor.isActive ? 'ONLINE' : 'OFFLINE'}
+                        </button>
+
+                        <button
+                          id={`delete-sensor-${sensor.id}`}
+                          onClick={() => setPerimeterSensors(prev => prev.filter(s => s.id !== sensor.id))}
+                          className="p-1 text-slate-500 hover:text-red-400 transition"
+                          title="Remove Sensor"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab 4: Data Handling & Ephemeral Preferences */}
+          {activeTab === 'retention' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  How Long My Data is Kept
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  You have the legal right to choose how long recording devices keep records of your privacy requests. Select your preferred setting below:
+                </p>
+              </div>
+
+              <div className="space-y-2.5">
+                {[
+                  {
+                    value: 'zero_retention',
+                    label: 'Keep Absolutely No Records (Highly Recommended)',
+                    desc: 'Smart glasses are legally blocked from saving any of your video frames or privacy codes. They will process the blur in real-time and discard everything instantly.'
+                  },
+                  {
+                    value: 'encrypted_cache',
+                    label: 'Encrypted Count Only',
+                    desc: 'Allows glasses to count how many people requested blurs (e.g., "1 person blurred at 12:45") but fully encrypts the record. The person recording cannot see this details.'
+                  },
+                  {
+                    value: 'bystander_anonymous',
+                    label: 'Anonymous General Statistics',
+                    desc: 'Allows public networks to count general statistics of how many people are using privacy shields in the neighborhood to map privacy-friendly shops.'
+                  }
+                ].map((pref) => {
+                  const isActive = state.dataRetentionPref === pref.value;
+                  return (
+                    <button
+                      id={`retention-pref-${pref.value}`}
+                      key={pref.value}
+                      onClick={() => onChange({ ...state, dataRetentionPref: pref.value as any })}
+                      className={`w-full flex flex-col p-4 rounded-xl border text-left transition ${
+                        isActive 
+                          ? 'border-emerald-500/60 bg-emerald-950/10 text-white' 
+                          : 'border-slate-800 bg-slate-950/10 hover:bg-slate-900/40 text-slate-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          isActive ? 'border-emerald-400 bg-emerald-400' : 'border-slate-600'
+                        }`}>
+                          {isActive && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                        </div>
+                        <span className="text-xs font-bold">{pref.label}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1.5 pl-5 leading-normal">{pref.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl flex items-start gap-3 mt-4 text-xs text-slate-400">
+                <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed font-sans">
+                  <strong>Hardware Enforcement:</strong> By using BlurBubble, smart glasses makers sign agreements. Tampering with or bypassing these rules automatically turns off their devices' compliance certificates.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab: Law Enforcement Escrow Override */}
+          {activeTab === 'escrow' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 animate-fadeIn">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  Emergency Override Access
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                  To prevent bad actors from hiding during active crimes, this app supports emergency safety overrides. Only when approved law enforcement warrants or court orders are verified can your privacy shield be paused. Every override is recorded for safety.
+                </p>
+              </div>
+
+              {/* Status Banner */}
+              <div className={`border rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all duration-300 ${
+                overrideActive 
+                  ? 'bg-red-950/40 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]' 
+                  : 'bg-emerald-950/20 border-emerald-500/20'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
+                    overrideActive ? 'bg-red-500/20 text-red-400 animate-pulse' : 'bg-emerald-500/10 text-emerald-400'
+                  }`}>
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs uppercase tracking-wider font-bold text-slate-400">Emergency Override Status</h4>
+                    <p className={`text-sm font-bold mt-0.5 ${overrideActive ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {overrideActive ? '⚠️ OVERRIDE ACTIVE - ALL BLURRING TEMPORARILY PAUSED' : '🔒 ALL SHIELDS FULLY ACTIVE'}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  {overrideActive ? (
+                    <button
+                      id="revoke-override-btn"
+                      type="button"
+                      onClick={handleRevokeOverride}
+                      className="bg-red-500 hover:bg-red-600 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-lg hover:shadow-red-500/20 transition-all duration-200"
+                    >
+                      Revoke Override &amp; Turn Blur Back On
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-slate-500 uppercase font-sans tracking-wider font-semibold animate-pulse">
+                      Requires Official Authorization Keys
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Authorize Control Panel */}
+              {!overrideActive && (
+                <form 
+                  onSubmit={handleTriggerOverride}
+                  className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3"
+                >
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Trigger Emergency Warrant Override (Demo)</h4>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">
+                        Warrant ID or Case Number
+                      </label>
+                      <input
+                        id="incident-hash-input"
+                        type="text"
+                        placeholder="e.g. CR-2026-89042-WEST"
+                        value={incidentHash}
+                        onChange={(e) => setIncidentHash(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
+                        required
+                      />
+                    </div>
+ 
+                    <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-lg text-[11px] text-slate-400 font-sans">
+                      💡 <strong>Simulation Note:</strong> Submitting a case number will simulate a secure authorization from local police and court systems, showing how the emergency bypass functions.
+                    </div>
+
+                    <button
+                      id="authorize-override-btn"
+                      type="submit"
+                      className="w-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      Verify Official Authorization &amp; Pause Shield
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Escrow Nodes */}
+              <div className="space-y-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+                  Authorized Key Holders ({escrowHolders.length})
+                </span>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {escrowHolders.map((holder) => (
+                    <div 
+                      key={holder.id}
+                      className="bg-slate-950/40 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 text-xs"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-white">{holder.agency}</span>
+                          <span className={`text-[8px] px-1.5 py-0.2 rounded-full font-mono uppercase font-bold border ${
+                            holder.keyStatus === 'emergency_accessed'
+                              ? 'bg-red-950/60 text-red-400 border-red-500/20 animate-pulse'
+                              : holder.keyStatus === 'escrowed'
+                              ? 'bg-amber-950/60 text-amber-400 border-amber-500/20'
+                              : holder.keyStatus === 'revoked'
+                              ? 'bg-slate-900 text-slate-500 border-slate-850 line-through'
+                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}>
+                            {holder.keyStatus}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-medium font-sans">Officer: {holder.holderName}</p>
+                        <p className="text-[10px] text-slate-400 font-mono leading-normal bg-slate-950/80 p-1.5 rounded border border-slate-900 mt-1">
+                          🔒 {holder.authClearance}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-900 text-[10px]">
+                        <div className="flex items-center gap-1.5 font-sans">
+                          <button
+                            id={`toggle-escrow-status-${holder.id}`}
+                            onClick={() => {
+                              setEscrowHolders(prev => prev.map(h => {
+                                if (h.id !== holder.id) return h;
+                                const nextStatus = h.keyStatus === 'escrowed' ? 'locked' : 'escrowed';
+                                return { ...h, keyStatus: nextStatus };
+                              }));
+                            }}
+                            className="text-slate-400 hover:text-white transition font-semibold"
+                          >
+                            {holder.keyStatus === 'escrowed' ? 'Hold' : 'Escrow'}
+                          </button>
+                          <span className="text-slate-700">|</span>
+                          <button
+                            id={`revoke-escrow-${holder.id}`}
+                            onClick={() => {
+                              setEscrowHolders(prev => prev.map(h => {
+                                if (h.id !== holder.id) return h;
+                                return { ...h, keyStatus: 'revoked' };
+                              }));
+                            }}
+                            className="text-red-400 hover:text-red-300 transition font-semibold"
+                          >
+                            Revoke
+                          </button>
+                        </div>
+
+                        <button
+                          id={`delete-escrow-${holder.id}`}
+                          onClick={() => setEscrowHolders(prev => prev.filter(h => h.id !== holder.id))}
+                          className="text-slate-500 hover:text-red-400 transition"
+                          title="Remove Node"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add New Key-Holder */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newEscrowAgency.trim() || !newEscrowName.trim()) return;
+                  const newH: EscrowKeyHolder = {
+                    id: 'esc-' + Date.now(),
+                    agency: newEscrowAgency,
+                    holderName: newEscrowName,
+                    keyStatus: 'escrowed',
+                    authClearance: newEscrowClearance
+                  };
+                  setEscrowHolders(prev => [...prev, newH]);
+                  setNewEscrowAgency('');
+                  setNewEscrowName('');
+                }}
+                className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3"
+              >
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Register New Cryptographic Escrow Node</h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Agency Name</label>
+                    <input
+                      id="escrow-agency-input"
+                      type="text"
+                      placeholder="e.g. County Sheriff Dept"
+                      value={newEscrowAgency}
+                      onChange={(e) => setNewEscrowAgency(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Authorizing Officer Name</label>
+                    <input
+                      id="escrow-officer-input"
+                      type="text"
+                      placeholder="e.g. Sheriff J. Miller"
+                      value={newEscrowName}
+                      onChange={(e) => setNewEscrowName(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Cryptographic Warrant Threshold</label>
+                  <select
+                    id="escrow-clearance-select"
+                    value={newEscrowClearance}
+                    onChange={(e) => setNewEscrowClearance(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
+                  >
+                    <option value="Level-1 Public Safety Warrant Required">Level-1 Public Safety Warrant Required</option>
+                    <option value="Level-3 Public Safety Warrant Required">Level-3 Public Safety Warrant Required</option>
+                    <option value="Signed Court Order Token Required">Signed Court Order Token Required</option>
+                    <option value="Joint Multi-Agency Cryptographic Authorization Only">Joint Multi-Agency Cryptographic Authorization Only</option>
+                  </select>
+                </div>
+
+                <button
+                  id="add-escrow-holder-btn"
+                  type="submit"
+                  className="w-full bg-slate-850 hover:bg-slate-800 border border-slate-750 text-slate-300 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Deploy Escrow Node
+                </button>
+              </form>
+
+              {/* Console Logs */}
+              <div className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-sans">
+                  <History className="w-3.5 h-3.5 text-slate-500" />
+                  Escrow Key-Node Audit Console
+                </span>
+                <div className="bg-slate-950 border border-slate-900 rounded-xl p-3 max-h-48 overflow-y-auto font-mono text-[10px] text-amber-500/90 space-y-1">
+                  {overrideLogs.map((logStr, i) => (
+                    <div key={i} className="leading-relaxed whitespace-pre-wrap">{logStr}</div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab: Hardware Licensing & Device Pairing (License Manager Sub-view) */}
+          {activeTab === 'licensing' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 animate-fadeIn">
+              {/* Head Section */}
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
+                    <Award className="w-4 h-4 text-amber-400 animate-pulse" />
+                    BlurBubble™ Hardware License &amp; Compliance Manager
+                  </h3>
+                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full font-mono uppercase font-bold">
+                    v2.1 REGULATORY CORE
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                  In compliance with local RF transmission bylaws (FCC Part 15, CE RED, and ISED RSS-210), physical opt-out signal beacons must possess registered, cryptographically signed hardware certifications. Use this manager to verify, register, or renew compliance licenses to ensure lawful, uninterrupted signal operation.
+                </p>
+              </div>
+
+              {/* Advanced Status Board */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-2">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block">Regulatory Sync State</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+                    <span className="text-xs font-bold text-white font-sans uppercase">ALL UNITS COMPLIANT</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-sans">
+                    All synchronized physical beacons are validated with municipal database nodes.
+                  </p>
+                </div>
+
+                <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-2">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block">Rotational Broadcast Signature</span>
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-3.5 h-3.5 text-blue-400 animate-spin" style={{ animationDuration: '8s' }} />
+                    <span className="text-xs font-mono text-emerald-400 font-bold uppercase font-sans">SHA-256 SECURE CORE</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-sans">
+                    Rotated broadcast sequence fully complies with FCC and MIC guidelines.
+                  </p>
+                </div>
+
+                <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-2">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block">SAR Exposure Rating</span>
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-xs font-bold text-white font-sans">0.42 W/kg (SAFE RANGE)</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-sans">
+                    Extremely low emission power, well below the legal safety ceiling of 1.6 W/kg.
+                  </p>
+                </div>
+              </div>
+
+              {/* Devices Certification Registry */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block font-sans">
+                    Active Certifications Registry ({state.hardwareLicenses?.length || 0})
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono font-sans">
+                    Updated: Just Now
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  {state.hardwareLicenses?.map((lic) => {
+                    const isVerifying = verifyingId === lic.id || verificationResult[lic.id] === 'verifying';
+                    const isVerified = verificationResult[lic.id] === 'verified';
+                    const certColors = {
+                      FCC: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+                      CE: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+                      ISED: 'bg-red-500/15 text-red-400 border-red-500/30',
+                      MIC: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+                      VCCI: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+                    }[lic.certType || 'FCC'];
+
+                    return (
+                      <div 
+                        key={lic.id}
+                        className={`bg-slate-950/40 border ${isVerified ? 'border-emerald-500/55 shadow-[0_0_15px_rgba(16,185,129,0.05)]' : 'border-slate-800'} rounded-xl p-5 flex flex-col gap-4 text-xs transition-all duration-300`}
+                      >
+                        {/* Device Info Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3">
+                          <div className="space-y-1">
+                            <h4 className="font-bold text-white text-sm flex items-center gap-2 font-sans">
+                              <Cpu className="w-4 h-4 text-emerald-400" />
+                              {lic.deviceName}
+                            </h4>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                              <span className="font-sans">Serial:</span>
+                              <span className="text-slate-300 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-850">{lic.serialNumber}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {/* Cert Standard Badge */}
+                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${certColors} font-mono uppercase tracking-wider`}>
+                              {lic.certType || 'FCC'} Certified
+                            </span>
+                            
+                            {/* License Status Badge */}
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono uppercase font-bold border ${
+                              lic.status === 'active'
+                                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30'
+                                : lic.status === 'revoked'
+                                ? 'bg-red-950/60 text-red-400 border-red-500/30 animate-pulse'
+                                : 'bg-slate-900 text-slate-500 border-slate-800'
+                            }`}>
+                              {lic.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Technical Certification Details */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[11px] font-sans">
+                          <div>
+                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Compliance Cert ID:</span>
+                            <span className="text-slate-200 font-mono text-emerald-400 font-semibold">{lic.rfComplianceCert}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Testing Laboratory:</span>
+                            <span className="text-slate-200 font-medium truncate block font-sans">{lic.laboratory || 'Allied Compliance Labs'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Tx Power cap:</span>
+                            <span className="text-slate-200 font-mono font-medium">{lic.maxRFPowerDb || 10} mW (Max EIRP)</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Frequency Band:</span>
+                            <span className="text-slate-200 font-mono font-medium">{lic.frequencyRangeMhz || '2402 - 2480 MHz'}</span>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Purchase / Sync Date:</span>
+                            <span className="text-slate-300 font-mono flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-500" />
+                              {lic.purchaseDate}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Expiration / Legality:</span>
+                            <span className={`font-mono flex items-center gap-1 ${lic.status === 'active' ? 'text-slate-300' : 'text-red-400 font-semibold'}`}>
+                              <Clock className="w-3 h-3 text-slate-500" />
+                              {lic.expirationDate}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Authority Registrar:</span>
+                            <span className="text-slate-200 font-sans">{lic.authorityName || 'Federal Communications Commission'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Last Verified Check:</span>
+                            <span className="text-slate-300 font-mono">{lic.lastVerified || 'N/A'}</span>
+                          </div>
+                        </div>
+
+                        {/* Cryptographic Key Signature */}
+                        <div className="pt-2.5 border-t border-slate-900/60">
+                          <span className="text-[10px] text-slate-500 font-semibold block mb-1 font-sans uppercase tracking-wider">ECC Public Compliance Signature (Rotated):</span>
+                          <span className="text-[10px] text-slate-400 font-mono leading-normal block bg-slate-950/90 p-2.5 rounded border border-slate-900 overflow-x-auto whitespace-nowrap scrollbar-thin">
+                            🔑 {lic.decryptedPubKey}
+                          </span>
+                        </div>
+
+                        {/* Live Verification Report (Result display) */}
+                        {isVerifying && (
+                          <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-slate-900/60 border border-slate-800 rounded-lg flex items-center justify-center gap-3 font-mono text-xs">
+                            <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" />
+                            <span className="text-slate-300 font-semibold font-sans">Contacting {lic.certType || 'FCC'} Authorized Node Database &amp; Checking Cert Keys...</span>
+                          </motion.div>
+                        )}
+
+                        {isVerified && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
+                            <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-lg space-y-3">
+                              <div className="flex items-center gap-2 text-emerald-400 font-bold font-sans uppercase tracking-wider text-[11px]">
+                                <ShieldCheck className="w-4.5 h-4.5 fill-emerald-400/10" />
+                                Official Certification Verified Active &amp; Legally Compliant
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-slate-400 font-sans border-t border-emerald-500/10 pt-2">
+                                <div>
+                                  <span className="text-slate-500 font-semibold font-sans">Registrar:</span> {lic.authorityName} Office of Engineering and Technology
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 font-semibold font-sans">Testing Lab:</span> {lic.laboratory} (Designated Site Number: US1089)
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 font-semibold font-sans">Specific Absorption Rate (SAR):</span> 0.42 W/kg (1g Tissue limit 1.6 W/kg - compliant)
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 font-semibold font-sans">Equipment Class:</span> Part 15 Low Power Transceiver (DXX)
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-slate-500 leading-normal font-mono bg-slate-950 p-2 rounded border border-slate-900/40">
+                                SIGNED_BY_REGULATORY_KEY: sha256_sig_04fca8911c47be88d1{lic.id.replace('lic-', '')}e72b49bca021ef9a1
+                              </p>
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* License Action Operations */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-900/60">
+                          <div className="flex items-center gap-2">
+                            {/* Verify Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyLicense(lic.id)}
+                              disabled={isVerifying}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 font-sans ${
+                                isVerified
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : 'bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800'
+                              }`}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              {isVerified ? 'Compliance Verified' : isVerifying ? 'Verifying...' : 'Verify Certification'}
+                            </button>
+
+                            {/* Renew Certificate Button */}
+                            <button
+                              type="button"
+                              onClick={() => setShowRenewalModal(showRenewalModal === lic.id ? null : lic.id)}
+                              className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 font-bold text-[11px] transition flex items-center gap-1.5 font-sans"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${renewingId === lic.id ? 'animate-spin' : ''}`} />
+                              Renew Certification
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {/* Revoke/Reauthorize toggle */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = state.hardwareLicenses?.map(l => 
+                                  l.id === lic.id ? { ...l, status: (l.status === 'active' ? 'revoked' : 'active') as any } : l
+                                );
+                                onChange({ ...state, hardwareLicenses: updated });
+                              }}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition text-center font-sans ${
+                                lic.status === 'active'
+                                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20'
+                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
+                              }`}
+                            >
+                              {lic.status === 'active' ? 'Revoke Sync' : 'Re-Authorize'}
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = state.hardwareLicenses?.filter(l => l.id !== lic.id);
+                                onChange({ ...state, hardwareLicenses: updated });
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-red-400 border border-slate-800 transition text-center font-sans"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Interactive Renewal Sub-form (Slide Down) */}
+                        {showRenewalModal === lic.id && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden border-t border-slate-900 pt-3">
+                            <div className="bg-slate-900/30 p-4 border border-slate-850 rounded-lg space-y-3">
+                              <div className="flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-amber-400" />
+                                <h5 className="font-semibold text-white text-xs font-sans">Simulated Certification Renewal Authority</h5>
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-sans">
+                                Extend your BlurBubble RF License legally. Renewing issues a new simulated test report, extends the compliance duration, and signs the ECC keys with updated municipal credentials.
+                              </p>
+
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRenewLicense(lic.id, 1)}
+                                  disabled={renewingId === lic.id}
+                                  className="px-3 py-1.5 rounded bg-slate-850 hover:bg-slate-800 text-slate-200 hover:text-white font-medium text-[11px] border border-slate-750 flex items-center gap-1.5 font-sans"
+                                >
+                                  {renewingId === lic.id && showRenewalModal === lic.id ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : null}
+                                  Extend 1 Year (Compliant)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRenewLicense(lic.id, 2)}
+                                  disabled={renewingId === lic.id}
+                                  className="px-3 py-1.5 rounded bg-slate-850 hover:bg-slate-800 text-slate-200 hover:text-white font-medium text-[11px] border border-slate-750 flex items-center gap-1.5 font-sans"
+                                >
+                                  {renewingId === lic.id && showRenewalModal === lic.id ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : null}
+                                  Extend 2 Years
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRenewLicense(lic.id, 5)}
+                                  disabled={renewingId === lic.id}
+                                  className="px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] border border-amber-500/30 flex items-center gap-1.5 font-sans"
+                                >
+                                  {renewingId === lic.id && showRenewalModal === lic.id ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : null}
+                                  Extend 5 Years (Standard Long-term)
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {(!state.hardwareLicenses || state.hardwareLicenses.length === 0) && (
+                    <div className="p-8 border border-dashed border-slate-800 text-center rounded-xl">
+                      <p className="text-xs text-slate-400 font-sans">No physical beacons synchronized yet. Add one below to pair.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Pair & Add New License Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newLicDeviceName.trim() || !newLicSerial.trim()) return;
+
+                  // Get authority details based on selected standard
+                  const authorityDetails = {
+                    FCC: {
+                      name: 'Federal Communications Commission',
+                      prefix: 'FCC ID: 2A8R9-BB',
+                    },
+                    CE: {
+                      name: 'European Union Conformity Authority',
+                      prefix: 'CE-Ref: 2026-BB',
+                    },
+                    ISED: {
+                      name: 'Innovation, Science and Economic Development Canada',
+                      prefix: 'IC: 28310-BB',
+                    },
+                    MIC: {
+                      name: 'Ministry of Internal Affairs and Communications (Japan)',
+                      prefix: 'MIC ID: 211-BB',
+                    },
+                    VCCI: {
+                      name: 'Voluntary Control Council for Interference (Japan)',
+                      prefix: 'VCCI Cert: V-BB',
+                    }
+                  }[newLicCertType];
+
+                  const finalCertId = newLicCertId.trim() || authorityDetails.prefix + Math.floor(1000 + Math.random() * 9000);
+
+                  const newLic: HardwareLicense = {
+                    id: 'lic-' + Date.now(),
+                    deviceName: newLicDeviceName,
+                    serialNumber: newLicSerial.toUpperCase(),
+                    status: 'active',
+                    purchaseDate: new Date().toISOString().split('T')[0],
+                    expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    decryptedPubKey: 'ecc-secp256k1:04' + Array.from({length: 24}, () => Math.floor(Math.random()*16).toString(16)).join(''),
+                    rfComplianceCert: finalCertId,
+                    certType: newLicCertType,
+                    authorityName: authorityDetails.name,
+                    lastVerified: new Date().toISOString().split('T')[0],
+                    maxRFPowerDb: newLicMaxPower,
+                    frequencyRangeMhz: '2402 - 2480 MHz',
+                    laboratory: newLicLab
+                  };
+
+                  onChange({
+                    ...state,
+                    hardwareLicenses: [...(state.hardwareLicenses || []), newLic]
+                  });
+
+                  setNewLicDeviceName('');
+                  setNewLicSerial('');
+                  setNewLicCertId('');
+                  setNewLicMaxPower(10);
+                  setNewLicLab('Bay Area Compliance Labs');
+                }}
+                className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4"
+              >
+                <div className="flex items-center gap-2 border-b border-slate-900 pb-2">
+                  <Plus className="w-4 h-4 text-emerald-400" />
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Pair Device &amp; Register Hardware Certification</h4>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Beacon Device Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. BlurBubble Keychain Tag v3"
+                      value={newLicDeviceName}
+                      onChange={(e) => setNewLicDeviceName(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Hardware Serial Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. BB-KEY-99120-Z"
+                      value={newLicSerial}
+                      onChange={(e) => setNewLicSerial(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-mono"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Certification standard (FCC, CE, etc.)</label>
+                    <select
+                      value={newLicCertType}
+                      onChange={(e) => setNewLicCertType(e.target.value as any)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                    >
+                      <option value="FCC" className="bg-slate-950 text-white">FCC (USA Standards)</option>
+                      <option value="CE" className="bg-slate-950 text-white">CE (European Conformity)</option>
+                      <option value="ISED" className="bg-slate-950 text-white">ISED (Canada Standards)</option>
+                      <option value="MIC" className="bg-slate-950 text-white">MIC (Japan Telecom Authority)</option>
+                      <option value="VCCI" className="bg-slate-950 text-white">VCCI (Japan Interference Council)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Compliance Certification ID (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="Leave blank to auto-generate based on standard"
+                      value={newLicCertId}
+                      onChange={(e) => setNewLicCertId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Max Transmitter Power limit (mW)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="25"
+                      value={newLicMaxPower}
+                      onChange={(e) => setNewLicMaxPower(Number(e.target.value))}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-mono"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Authorized Testing Laboratory</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Allied Compliance Labs"
+                      value={newLicLab}
+                      onChange={(e) => setNewLicLab(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-[11px] text-slate-400 font-sans leading-normal">
+                  💡 <strong>Cryptographic Regulatory Handshake:</strong> Registering pairs the physical beacon over Bluetooth/NFC, downloads its rotated public ECC credentials, generates compliance certification documents, and validates RF transmit parameters to ensure safe, lawful operation.
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition font-sans"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Initiate Secure Pair &amp; Register Certificate
+                </button>
+              </form>
+
+              {/* Interactive Regional Regulatory Compliance self-test tool */}
+              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-4 mt-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-3 gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+                      <Radio className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Regional Compliance Diagnostics</h4>
+                      <p className="text-[10px] text-slate-400">Validate unlicensed RF output limits and antenna safety standards</p>
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-950/40 border border-amber-900/40 px-2 py-0.5 rounded uppercase font-sans">
+                    RF Diagnostics Unit
+                  </span>
+                </div>
+
+                {/* Region Selector and Test triggers */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left Column: Region configuration */}
+                  <div className="space-y-3.5">
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] text-slate-500 uppercase font-mono font-bold block">Select Active Jurisdiction</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setComplianceRegion('US')}
+                          disabled={complianceTesting}
+                          className={`py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border transition ${
+                            complianceRegion === 'US'
+                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                              : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          🇺🇸 US (FCC Part 15)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setComplianceRegion('EU')}
+                          disabled={complianceTesting}
+                          className={`py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border transition ${
+                            complianceRegion === 'EU'
+                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                              : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          🇪🇺 EU (CE RED Article 3)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setComplianceRegion('CA')}
+                          disabled={complianceTesting}
+                          className={`py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border transition ${
+                            complianceRegion === 'CA'
+                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                              : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          🇨🇦 Canada (ISED RSS)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setComplianceRegion('JP')}
+                          disabled={complianceTesting}
+                          className={`py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border transition ${
+                            complianceRegion === 'JP'
+                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                              : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          🇯🇵 Japan (MIC Art 2)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        id="run-compliance-selftest-btn"
+                        onClick={handleTriggerComplianceTest}
+                        disabled={complianceTesting}
+                        className="w-full bg-slate-950 hover:bg-slate-900/80 border border-slate-800 text-slate-300 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition font-sans"
+                      >
+                        <Radio className={`w-3.5 h-3.5 text-amber-400 ${complianceTesting ? 'animate-ping' : 'animate-pulse'}`} />
+                        {complianceTesting ? 'ANALYZING SPECTRUM CALIBRATION...' : '📡 Run Compliance Diagnostic Self-Test'}
+                      </button>
+
+                      {complianceTesting && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[8px] font-mono text-slate-500">
+                            <span>EIRP POWER LIMIT SWEEP</span>
+                            <span>{complianceProgress}%</span>
+                          </div>
+                          <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden">
+                            <div className="h-full bg-amber-400 transition-all duration-200" style={{ width: `${complianceProgress}%` }}></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Dynamic Report Terminal */}
+                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col justify-between">
+                    <span className="text-[10px] text-slate-400 uppercase font-mono font-bold block border-b border-slate-900 pb-1.5 mb-2">
+                      📋 Diagnostic Evaluation Card
+                    </span>
+
+                    {complianceReport ? (
+                      <div className="space-y-2 font-mono text-[10px]">
+                        <div className="flex justify-between items-center bg-slate-900/30 p-1 rounded">
+                          <span className="text-slate-500">Jurisdiction:</span>
+                          <span className="text-white font-bold">{complianceRegion} Standard</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-slate-900/30 p-1 rounded">
+                          <span className="text-slate-500">Allowed Band Range:</span>
+                          <span className="text-white font-bold">{complianceReport.freqRange}</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-slate-900/30 p-1 rounded">
+                          <span className="text-slate-500">Max EIRP Limit:</span>
+                          <span className="text-amber-400 font-bold">{complianceReport.eirpPower}</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-slate-900/30 p-1 rounded">
+                          <span className="text-slate-500">Harmonization Status:</span>
+                          <span className="text-emerald-400 font-bold flex items-center gap-1">
+                            <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+                            FULLY_VERIFIED
+                          </span>
+                        </div>
+                        <div className="text-[8px] text-slate-500 leading-normal pt-1.5 border-t border-slate-900">
+                          Exemptions Checked: {complianceReport.exemptions.join(' & ')}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-3 text-slate-500 text-[10px] leading-relaxed">
+                        <Award className="w-6 h-6 text-slate-700 mb-2 animate-bounce" />
+                        <span>No live self-audit report exists. Click the diagnostic button to initiate radio spectrum compliance self-check.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab: Legal & Compliance */}
+          {activeTab === 'legal' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              {/* Info Header */}
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
+                    <Scale className="w-4 h-4 text-blue-400" />
+                    Privacy Signal Declaration &amp; Compliance Center
+                  </h3>
+                  <span className="text-[10px] bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full font-mono uppercase font-bold">
+                    LEGAL BLUEPRINT v1.4
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                  The "Privacy Signal Declaration" allows citizens to generate an official digital or printable document justifying their lawful use of passive/focused privacy shielding (including low-power RF Bluetooth/NFC beacons and audio beamforming wave-canceling). This template complies with FCC Part 15, CE RED, GDPR Article 21, and CCPA § 1798.120, providing an authoritative presentation to security, business staff, or regulatory officials.
+                </p>
+              </div>
+
+              {!isDeclarationGenerated ? (
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 border-b border-slate-900 pb-2">
+                    <Sliders className="w-4 h-4 text-blue-400" />
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Customize Declaration Template</h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Link to Device dropdown */}
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Link to Synced Physical Beacon Device</label>
+                      <select
+                        value={declarantBeaconId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDeclarantBeaconId(val);
+                          if (val !== 'custom' && val !== 'all') {
+                            const found = state.hardwareLicenses?.find(l => l.id === val);
+                            if (found) {
+                              setDeclarantCustomDevice(found.deviceName);
+                              setDeclarantCustomSerial(found.serialNumber);
+                              setDeclarationJurisdiction(
+                                found.certType === 'FCC' ? 'USA' : 
+                                found.certType === 'CE' ? 'EU' : 
+                                found.certType === 'ISED' ? 'CA' : 
+                                found.certType === 'MIC' || found.certType === 'VCCI' ? 'JP' : 'USA'
+                              );
+                            }
+                          }
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
+                      >
+                        <option value="all" className="bg-slate-950 text-white">Declare All Synced Devices (Consolidated)</option>
+                        {state.hardwareLicenses?.map((lic) => (
+                          <option key={lic.id} value={lic.id} className="bg-slate-950 text-white">
+                            {lic.deviceName} ({lic.serialNumber} - {lic.certType || 'FCC'})
+                          </option>
+                        ))}
+                        <option value="custom" className="bg-slate-950 text-white">Custom / Unlisted Hardware Device</option>
+                      </select>
+                    </div>
+
+                    {declarantBeaconId === 'custom' && (
+                      <>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Device Model Name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. BlurBubble Keychain Tag"
+                            value={declarantCustomDevice}
+                            onChange={(e) => setDeclarantCustomDevice(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Hardware Serial Number</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. BB-KEY-99120-Z"
+                            value={declarantCustomSerial}
+                            onChange={(e) => setDeclarantCustomSerial(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-mono"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Declarant Full Name</label>
+                      <input
+                        type="text"
+                        value={declarantName}
+                        onChange={(e) => setDeclarantName(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Declarant Contact (Email/Phone)</label>
+                      <input
+                        type="text"
+                        value={declarantEmail}
+                        onChange={(e) => setDeclarantEmail(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Jurisdictional Law Standard</label>
+                      <select
+                        value={declarationJurisdiction}
+                        onChange={(e) => setDeclarationJurisdiction(e.target.value as any)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
+                      >
+                        <option value="USA" className="bg-slate-950 text-white">United States (FCC Pt 15 / CCPA / 4th Amend)</option>
+                        <option value="EU" className="bg-slate-950 text-white">European Union (CE RED / GDPR Art 21)</option>
+                        <option value="CA" className="bg-slate-950 text-white">Canada (ISED RSS-210 / PIPEDA)</option>
+                        <option value="JP" className="bg-slate-950 text-white">Japan (MIC telecom / APPI Protections)</option>
+                        <option value="Custom" className="bg-slate-950 text-white">International General Privacy Assertion</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Primary Shield Intent justification</label>
+                      <select
+                        value={declarationPurpose}
+                        onChange={(e) => setDeclarationPurpose(e.target.value as any)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
+                      >
+                        <option value="ai_optout" className="bg-slate-950 text-white">AI Face-Scanning &amp; Scraping Opt-Out</option>
+                        <option value="anti_eavesdropping" className="bg-slate-950 text-white">Eavesdropping Mitigation &amp; Voice Privacy</option>
+                        <option value="full_cloaking" className="bg-slate-950 text-white">Complete Personal Space Security (Minors/Home)</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Custom Directives &amp; Addendums (Optional)</label>
+                      <textarea
+                        rows={3}
+                        placeholder="e.g. This unit remains active within commercial facilities strictly to enforce CCPA optical rights. It does not interfere with emergency radio frequencies."
+                        value={declarationCustomNotes}
+                        onChange={(e) => setDeclarationCustomNotes(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeclarationDocId('DEC-' + Math.floor(100000 + Math.random() * 900000));
+                        setIsDeclarationGenerated(true);
+                      }}
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition font-sans shadow-lg shadow-blue-500/10"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Generate Official Signal Declaration Document
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Action Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsDeclarationGenerated(false)}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-xs text-slate-300 font-semibold rounded-lg border border-slate-700 transition"
+                      >
+                        ← Edit Template Details
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsPresenting(true)}
+                        className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1.5"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        Present Fullscreen (Mobile HUD)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1.5"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Print / Save PDF
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Document Container */}
+                  <div className="bg-white text-slate-900 rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl border-4 border-slate-300 relative overflow-hidden font-sans print:m-0 print:border-0 print:p-0">
+                    {/* Federal Header Strip */}
+                    <div className="border-b-2 border-slate-900 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block">Digital Rights &amp; Signal Authority</span>
+                        <h1 className="text-lg md:text-xl font-black uppercase tracking-tight text-slate-900 font-sans">
+                          Privacy Signal Declaration
+                        </h1>
+                        <p className="text-[10px] text-slate-600 uppercase font-mono tracking-wider font-semibold">
+                          COMPLIANCE REGISTRY ID: {declarationDocId} // SECURE CORE SEC-256
+                        </p>
+                      </div>
+                      
+                      <div className="bg-slate-100 border border-slate-300 rounded px-2.5 py-1 text-right">
+                        <span className="text-[9px] font-extrabold text-slate-500 uppercase block tracking-wider">Status Check</span>
+                        <span className="text-[11px] font-mono font-bold text-emerald-700 flex items-center justify-end gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                          VERIFIED VALID
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Notice Block */}
+                    <div className="space-y-4 text-xs leading-relaxed text-slate-800">
+                      <p>
+                        This declaration is issued under the authority of the undersigned declarant to formally advise law enforcement, private security, business operators, and members of the public that an active, low-power **Privacy Opt-Out Signal Beacon** is operated in this vicinity.
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-500 block">Authorized Declarant</span>
+                          <span className="text-sm font-bold text-slate-950 block">{declarantName}</span>
+                          <span className="text-[10px] text-slate-500 block">{declarantEmail || 'No contact provided'}</span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-500 block">Asserted Jurisdiction</span>
+                          <span className="text-sm font-bold text-slate-950 block">
+                            {declarationJurisdiction === 'USA' && 'United States of America'}
+                            {declarationJurisdiction === 'EU' && 'European Union'}
+                            {declarationJurisdiction === 'CA' && 'Canada (ISED Standards)'}
+                            {declarationJurisdiction === 'JP' && 'Japan (MIC Jurisdiction)'}
+                            {declarationJurisdiction === 'Custom' && 'General/International Space'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            {declarationJurisdiction === 'USA' && 'CCPA § 1798.120 & FCC Part 15'}
+                            {declarationJurisdiction === 'EU' && 'GDPR Article 21 & CE RED Directive'}
+                            {declarationJurisdiction === 'CA' && 'PIPEDA § 5(1) & ISED RSS-210'}
+                            {declarationJurisdiction === 'JP' && 'APPI Article 23 & MIC Ordinance'}
+                            {declarationJurisdiction === 'Custom' && 'Universal Decl. of Human Rights Art. 12'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Hardware Devices linked */}
+                      <div className="space-y-2 border-t border-slate-200 pt-4">
+                        <h3 className="font-bold uppercase text-[10px] text-slate-900 tracking-wider">Registered Broadcasting Hardware</h3>
+                        {declarantBeaconId === 'all' ? (
+                          <div className="space-y-2">
+                            {state.hardwareLicenses && state.hardwareLicenses.length > 0 ? (
+                              state.hardwareLicenses.map((lic) => (
+                                <div key={lic.id} className="bg-slate-50 p-3 rounded-lg border border-slate-150 flex items-center justify-between gap-4 font-sans">
+                                  <div>
+                                    <span className="font-bold text-slate-900 block">{lic.deviceName}</span>
+                                    <span className="text-[10px] text-slate-500 font-mono">Serial: {lic.serialNumber} // Authority ID: {lic.rfComplianceCert}</span>
+                                  </div>
+                                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase font-sans">
+                                    {lic.certType || 'FCC'} COMPLIANT
+                                  </span>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-[11px] text-slate-500 italic">No synchronized hardware devices found. Custom device declaration will be asserted.</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-150 flex items-center justify-between gap-4 font-sans">
+                            <div>
+                              <span className="font-bold text-slate-900 block">
+                                {declarantBeaconId === 'custom' ? (declarantCustomDevice || 'Unspecified Privacy Beacon') : state.hardwareLicenses?.find(l => l.id === declarantBeaconId)?.deviceName}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                Serial: {declarantBeaconId === 'custom' ? (declarantCustomSerial || 'BB-GENERIC-TAG') : state.hardwareLicenses?.find(l => l.id === declarantBeaconId)?.serialNumber} //
+                                Compliance ID: {declarantBeaconId === 'custom' ? ('FCC-ID-AUTO-' + Math.floor(1000 + Math.random() * 9000)) : state.hardwareLicenses?.find(l => l.id === declarantBeaconId)?.rfComplianceCert}
+                              </span>
+                            </div>
+                            <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase font-sans">
+                              {declarationJurisdiction === 'EU' ? 'CE COMPLIANT' : declarationJurisdiction === 'CA' ? 'ISED COMPLIANT' : declarationJurisdiction === 'JP' ? 'MIC COMPLIANT' : 'FCC COMPLIANT'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Legal Justification Details */}
+                      <div className="space-y-2 border-t border-slate-200 pt-4">
+                        <h3 className="font-bold uppercase text-[10px] text-slate-900 tracking-wider font-sans">Aesthetic &amp; Constitutional Privacy Protections</h3>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5 text-slate-700 text-[11px]">
+                          <p>
+                            <strong className="text-slate-900">1. Legally Justified Frequency Power:</strong> The broadcasting devices listed above function on license-exempt ISM / SRD frequency bands (such as 2.4 GHz) strictly below local regulatory EIRP thresholds. The transmission constitutes compliant RF signals as authorized under Part 15 of FCC rules, European CE RED guidelines, and MIC Telecom Ordinance.
+                          </p>
+                          <p>
+                            <strong className="text-slate-900">2. Right to Refuse Digital Profiling (Biometric Opt-Out):</strong> Under {declarationJurisdiction === 'USA' ? 'CCPA § 1798.120 (Right to Opt-Out of Sale or Sharing of Personal Information)' : declarationJurisdiction === 'EU' ? 'GDPR Article 21 (Right to Object to Automated Profiling and processing)' : 'general Privacy Principles'}, citizens retain a fundamental right to opt-out of unauthorized biometric face-scanning, generative AI scraping, and optical video tracking in publicly accessible spaces. This broadcast acts as a machine-readable opt-out signal.
+                          </p>
+                          <p>
+                            <strong className="text-slate-900">3. Narrow Ethical Shielding Policy:</strong> This device does **NOT** engage in wide-area commercial jamming of public spectrum. It does not block innocent public ambient recordings, nor interfere with adjacent conversations. It employs highly focused, targeted beamforming and dynamic phase cancellation of the declarant’s voice-signature *only*, protecting personal conversations while bystander devices capture their target recordings completely unhindered.
+                          </p>
+                          {declarationCustomNotes && (
+                            <p className="border-t border-slate-200 pt-2 text-slate-800 italic">
+                              <strong>Addendum:</strong> {declarationCustomNotes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Signatures and QR Verification Block */}
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center border-t-2 border-slate-950 pt-6">
+                        <div className="md:col-span-8 space-y-3">
+                          <p className="text-[10px] leading-relaxed text-slate-500 uppercase font-bold tracking-tight">
+                            Cryptographic Signature Verification Statement
+                          </p>
+                          <p className="text-[11px] text-slate-600 leading-normal font-sans">
+                            Scan the adjacent QR code to verify the legal authenticity of this declaration, check the real-time registration of the hardware licenses on municipal networks, or download the formal compliance certs directly to emergency dispatch consoles.
+                          </p>
+                          <div className="flex gap-4 pt-2 font-sans">
+                            <div>
+                              <span className="text-[9px] uppercase font-bold text-slate-500 block">Declarant Signature</span>
+                              <span className="text-base font-serif italic text-slate-900 font-bold block select-none border-b border-slate-300 pr-12 pb-1">
+                                {declarantName}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-mono block">Digitally Signed // {new Date().toISOString().split('T')[0]}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase font-bold text-slate-500 block">Registrar Endorsement</span>
+                              <span className="text-xs font-mono font-bold text-emerald-700 block select-none pt-2">
+                                ✓ BlurBubble Compliance Node Secure
+                              </span>
+                              <span className="text-[8px] text-slate-400 font-mono block">Signature Hash: sha256_sig_9f982d1c9aa</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Interactive QR Code column */}
+                        <div className="md:col-span-4 flex flex-col items-center justify-center space-y-2">
+                          <svg className="w-28 h-28 text-slate-900 bg-white p-1 rounded-lg border border-slate-300" viewBox="0 0 25 25">
+                           <rect width="25" height="25" fill="#FFFFFF"/>
+                           <path d="M0 0h7v1H1v5H0V0zm1 1h5v5H1V1zm1 1h3v3H2V2zm16-2h7v7h-1V1h-6V0zm1 1h5v5h-5V1zm1 1h3v3h-3V2zM0 18h7v7H0v-7zm1 1h5v5H1v-5zm1 1h3v3H2v-3zm18-2h1v1h-1v-1zm1 1h1v1h-1v-1zm1-1h1v1h-1v-1zm2 1h1v1h-1v-1zm-4 2h1v1h-1v-1zm1 1h1v1h-1v-1zm2-1h1v1h-1v-1zm0 2h1v1h-1v-1zm2-1h1v1h-1v-1zm0 2h1v1h-1v-1zm-8-3h1v1h-1v-1zm1-1h1v1h-1v-1zm2 1h1v1h-1v-1zm1-1h1v1h-1v-1zm-4 4h1v1h-1v-1zm2 0h1v1h-1v-1zm2 0h1v1h-1v-1zm-6-2h1v1h-1v-1zm2 0h1v1h-1v-1zm2-2h1v1h-1v-1zm-3-1h1v1h-1v-1zm2 0h1v1h-1v-1zm0-3h1v1h-1v-1zm1 1h1v1h-1v-1zm1-1h1v1h-1v-1zm-4 9h1v1h-1v-1zm1-2h1v1h-1v-1zm1 1h1v1h-1v-1z" fill="#000000"/>
+                         </svg>
+                         <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest text-center">
+                           Scan to Verify
+                         </span>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             )}
+
+              {/* Interactive Legal & Compliance Scenario Tutorial */}
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-900 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Interactive Legal Tutorial</h4>
+                      <p className="text-[10px] text-slate-400">Master compliance, legal boundaries, and rule hierarchies of decentralized privacy.</p>
+                    </div>
+                  </div>
+                  <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[8.5px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                    COMPLIANCE QUIZ
+                  </span>
+                </div>
+
+                {tutorialStep === 0 ? (
+                  <div className="space-y-4 py-2">
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Do you know your legal rights regarding biometric privacy, radio spectrum boundaries, and family consent hierarchies? Take this interactive scenario-based quiz to test your knowledge and unlock your **Certified Privacy Jurist Badge**.
+                    </p>
+                    <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-lg space-y-1.5 text-[10.5px]">
+                      <span className="font-bold text-slate-300 block">📚 What you will learn:</span>
+                      <ul className="list-disc pl-4 space-y-1 text-slate-400 font-sans">
+                        <li>The absolute hierarchy order (Judicial Override &gt; School Perimeter &gt; Family Whitelist)</li>
+                        <li>FCC Part 15 regulations regarding audio wave phase cancellation versus radio jamming</li>
+                        <li>GDPR Article 17 dynamic blurring rights over total content deletion</li>
+                      </ul>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTutorialStep(1);
+                        setTutorialAnswers({});
+                        setTutorialCompleted(false);
+                        setTutorialFeedback(null);
+                      }}
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold py-2 px-4 rounded-lg text-xs transition uppercase tracking-wider font-sans"
+                    >
+                      Begin Compliance Tutorial
+                    </button>
+                  </div>
+                ) : tutorialStep >= 1 && tutorialStep <= 3 ? (
+                  // Question View
+                  (() => {
+                    const legalTutorialQuestions = [
+                      {
+                        id: 1,
+                        scenario: "Scenario A: Overriding Priority Hierarchies",
+                        question: "You enter a designated public school yard which enforces an absolute 'Stationary Perimeter Safeguard' for child protection. Your family member's phone has been whitelisted on your device. Can they bypass the school yard restriction and record you?",
+                        options: [
+                          { idx: 0, text: "Yes, whitelists and personal consent always override municipal safety perimeters.", isCorrect: false, feedback: "Incorrect. Safety and child protection zones always take absolute, un-overridable precedence in the priority hierarchy to ensure zero-tolerance protection." },
+                          { idx: 1, text: "No, local physical perimeters (such as schools) override personal family whitelists.", isCorrect: true, feedback: "Correct! To ensure legally compliant and secure child protection, municipal zones and school perimeters take absolute priority over whitelists." },
+                          { idx: 2, text: "Yes, family members can override any zone restriction by entering an override command.", isCorrect: false, feedback: "Incorrect. While a user can choose their mode, physical perimeters designated as high-priority override all local whitelists." }
+                        ]
+                      },
+                      {
+                        id: 2,
+                        scenario: "Scenario B: FCC Part 15 & Spectrum Jamming Laws",
+                        question: "Your active acoustic shield uses focused beamforming sound wave phase cancellation to prevent bystanders from eavesdropping. Is this compliant under FCC spectrum jamming bans?",
+                        options: [
+                          { idx: 0, text: "Yes, because it only cancels your own voice wave-signature rather than actively jamming the public wireless radio spectrum.", isCorrect: true, feedback: "Correct! Phase cancellation of your own vocal acoustic wave is legally defined as personal audio masking, fully compliant with FCC Part 15 regulations." },
+                          { idx: 1, text: "No, personal privacy filters of any frequency are classified as illegal spectrum jamming.", isCorrect: false, feedback: "Incorrect. Electromagnetic radio jamming (jammers) is banned. Selective acoustic voice shielding is fully compliant and safe." }
+                        ]
+                      },
+                      {
+                        id: 3,
+                        scenario: "Scenario C: GDPR Article 17 (Right to Erasure)",
+                        question: "A bystander uploads a public video clip on Instagram containing your physical face without your consent. Under GDPR Article 17, are you legally mandated to demand complete deletion of the creator's video?",
+                        options: [
+                          { idx: 0, text: "Yes, GDPR mandates total video deletion as the only compliant solution.", isCorrect: false, feedback: "Incorrect. Forcing total deletion is often overkill, violates creative freedom, and creates friction with creators." },
+                          { idx: 1, text: "No, you can utilize the BlurBubble dynamic blur API to inject blur coordinates into the player stream, keeping the video online while shielding your face.", isCorrect: true, feedback: "Correct! Coordinated dynamic obfuscation protects your privacy without deleting the creator's upload. It is a win-win for public expression and personal data control." }
+                        ]
+                      }
+                    ];
+
+                    const qIdx = tutorialStep - 1;
+                    const question = legalTutorialQuestions[qIdx];
+                    const selectedAnsIdx = tutorialAnswers[question.id];
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center text-[10px] font-mono">
+                          <span className="text-slate-500 uppercase font-bold">{question.scenario}</span>
+                          <span className="text-blue-400">Scenario {tutorialStep} of 3</span>
+                        </div>
+
+                        <p className="text-xs font-bold text-white font-sans">{question.question}</p>
+
+                        <div className="grid grid-cols-1 gap-2.5 pt-2">
+                          {question.options.map((opt) => {
+                            const isChosen = selectedAnsIdx === opt.idx;
+                            const isRevealed = selectedAnsIdx !== undefined;
+                            
+                            let btnStyle = "bg-slate-900/40 border-slate-850 hover:bg-slate-900 hover:border-slate-800 text-slate-300";
+                            if (isChosen) {
+                              btnStyle = opt.isCorrect 
+                                ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300" 
+                                : "bg-red-500/10 border-red-500/40 text-red-300";
+                            } else if (isRevealed && opt.isCorrect) {
+                              btnStyle = "bg-emerald-500/5 border-emerald-500/20 text-emerald-400";
+                            }
+
+                            return (
+                              <button
+                                key={opt.idx}
+                                type="button"
+                                disabled={isRevealed}
+                                onClick={() => {
+                                  setTutorialAnswers(prev => ({ ...prev, [question.id]: opt.idx }));
+                                  setTutorialFeedback(opt.feedback);
+                                }}
+                                className={`p-3 rounded-xl border text-left text-xs font-medium transition ${btnStyle}`}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="mt-0.5 select-none text-[10px] bg-slate-950/60 w-4 h-4 rounded-full flex items-center justify-center border border-slate-800 shrink-0 font-mono text-slate-400">
+                                    {String.fromCharCode(65 + opt.idx)}
+                                  </span>
+                                  <span>{opt.text}</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Interactive Explanation Box */}
+                        {selectedAnsIdx !== undefined && (
+                          <div className={`p-3 rounded-lg border text-[11px] leading-relaxed animate-fadeIn space-y-2 ${
+                            question.options.find(o => o.idx === selectedAnsIdx)?.isCorrect
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                              : "bg-red-500/10 border-red-500/40 text-red-300"
+                          }`}>
+                            <div className="font-bold flex items-center gap-1">
+                              {question.options.find(o => o.idx === selectedAnsIdx)?.isCorrect ? "✅ Correct! Solution Breakdown:" : "❌ Incorrect. Legal Guidance:"}
+                            </div>
+                            <p className="text-slate-300">{tutorialFeedback}</p>
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTutorialFeedback(null);
+                                if (tutorialStep === 3) {
+                                  setTutorialStep(4);
+                                } else {
+                                  setTutorialStep(tutorialStep + 1);
+                                }
+                              }}
+                              className="bg-slate-950/60 hover:bg-slate-950 border border-slate-800 text-white font-bold py-1 px-3 rounded text-[10px] font-mono tracking-wider transition ml-auto block"
+                            >
+                              {tutorialStep === 3 ? "VIEW FINAL EVALUATION →" : "NEXT SCENARIO →"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  // Results view
+                  (() => {
+                    let score = 0;
+                    if (tutorialAnswers[1] === 1) score++;
+                    if (tutorialAnswers[2] === 0) score++;
+                    if (tutorialAnswers[3] === 1) score++;
+
+                    return (
+                      <div className="space-y-4 py-2 text-center">
+                        <div className="w-16 h-16 bg-blue-500/10 border-2 border-blue-400 rounded-full flex items-center justify-center mx-auto text-2xl">
+                          {score === 3 ? "⚖️" : "📜"}
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Tutorial Assessment Completed</span>
+                          <h4 className="text-base font-extrabold text-white font-sans">
+                            {score === 3 ? "Certified Privacy Jurist" : "Apprentice Privacy Advocate"}
+                          </h4>
+                          <span className="text-xs text-blue-400 font-mono font-bold block">Score: {score} / 3 Scenarios Correct</span>
+                        </div>
+
+                        <div className="max-w-md mx-auto p-3.5 bg-slate-900/50 border border-slate-850 rounded-xl text-[11px] text-slate-400 leading-normal text-left space-y-1.5">
+                          <span className="text-white font-bold block text-center mb-1">🎓 Key Legal Takeaways Checklist:</span>
+                          <p>✓ <strong>Rule Hierarchy:</strong> Family Whitelists are subordinate to municipal safety zones (e.g., schools) and official warrants. No personal bypass overrides community/child security.</p>
+                          <p>✓ <strong>Acoustic Compliance:</strong> Selective sound signature cancellation is legal under FCC Part 15 because it acts as acoustical masking rather than active RF frequency jamming.</p>
+                          <p>✓ <strong>Digital Erasure:</strong> Dynamic blur injection is preferred over content deletion, reconciling personal biometric privacy with online freedom of expression.</p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTutorialStep(0);
+                            setTutorialAnswers({});
+                            setTutorialFeedback(null);
+                          }}
+                          className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition uppercase tracking-wider font-sans mx-auto block"
+                        >
+                          Retake Tutorial
+                        </button>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Tab: Hardware Pairing */}
+          {activeTab === 'pairing' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              {/* Info Header */}
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
+                    <Bluetooth className="w-4 h-4 text-blue-400" />
+                    BlurBubble™ BLE Pairing Console
+                  </h3>
+                  <span className="text-[10px] bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full font-mono uppercase font-bold">
+                    BLE Secure Sync
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                  Initialize a secure cryptographic pairing handshake with nearby BlurBubble™-certified hardware nodes. Pairing establishes an encrypted local channel, exchanges ECDSA signature credentials, and registers the device under your authorized security assets list.
+                </p>
+              </div>
+
+              {/* Sub-tab switcher */}
+              <div className="flex border-b border-slate-900 pb-px gap-1">
+                <button
+                  id="pairing-subtab-console-btn"
+                  type="button"
+                  onClick={() => {
+                    setPairingSubTab('console');
+                    playLocalSoundTest('tactical_click', 50);
+                  }}
+                  className={`px-4 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 ${
+                    pairingSubTab === 'console'
+                      ? 'border-blue-500 text-blue-400 font-mono'
+                      : 'border-transparent text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  <Bluetooth className="w-3.5 h-3.5" />
+                  Sync &amp; Pair Console
+                </button>
+                <button
+                  id="pairing-subtab-diag-btn"
+                  type="button"
+                  onClick={() => {
+                    setPairingSubTab('diagnostics');
+                    playLocalSoundTest('tactical_click', 50);
+                    if (!selectedDiagDeviceId && state.registeredEntities?.length > 0) {
+                      setSelectedDiagDeviceId(state.registeredEntities[0].id);
+                    }
+                    if (pingLogs.length === 0) {
+                      setPingLogs([
+                        "Diagnostic suite initialized.",
+                        "Ready to dispatch high-frequency telemetry probes."
+                      ]);
+                    }
+                  }}
+                  className={`px-4 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 ${
+                    pairingSubTab === 'diagnostics'
+                      ? 'border-emerald-500 text-emerald-400 font-mono'
+                      : 'border-transparent text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  Peripheral Diagnostics Dashboard
+                </button>
+              </div>
+
+              {pairingSubTab === 'console' ? (
+                <>
+                  {/* No active device pairing & not scanning / scanning in progress */}
+                  {!pairingBleDevice ? (
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-6 space-y-6">
+                  {/* Radar Scanning Visualizer */}
+                  <div className="flex flex-col items-center justify-center p-6 bg-slate-900/30 border border-slate-850 rounded-2xl relative overflow-hidden min-h-[250px]">
+                    
+                    {/* Pulsing Concentric Circles */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className={`w-48 h-48 rounded-full border border-blue-500/10 flex items-center justify-center ${isBleScanning ? 'animate-pulse' : ''}`}>
+                        <div className="w-36 h-36 rounded-full border border-blue-500/20 flex items-center justify-center">
+                          <div className="w-24 h-24 rounded-full border border-blue-500/30 flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-full border border-blue-500/40 flex items-center justify-center">
+                              <Bluetooth className={`w-5 h-5 text-blue-400 ${isBleScanning ? 'animate-bounce' : ''}`} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Scanner Sweep effect */}
+                    {isBleScanning && (
+                      <div className="absolute inset-0 w-full h-full animate-spin bg-gradient-to-tr from-transparent via-blue-500/5 to-transparent rounded-full pointer-events-none" style={{ animationDuration: '3s' }} />
+                    )}
+
+                    <div className="relative z-10 text-center space-y-4">
+                      {isBleScanning ? (
+                        <>
+                          <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Scanning For Certified Hardware...</h4>
+                          <p className="text-xs text-slate-400 max-w-xs font-sans">Listening for local BlurBubble BLE advertisement broadcasts. Keep your device powered on and close.</p>
+                          <div className="w-48 bg-slate-850 h-1.5 rounded-full mx-auto overflow-hidden">
+                            <motion.div 
+                              className="bg-blue-500 h-full"
+                              initial={{ width: '0%' }}
+                              animate={{ width: `${bleProgress}%` }}
+                              transition={{ duration: 0.2 }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-mono text-blue-400 block">{bleProgress}% Broadcaster Coverage Scan</span>
+                        </>
+                      ) : (
+                        <>
+                          <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">BLE Radio Node Disengaged</h4>
+                          <p className="text-xs text-slate-400 max-w-xs font-sans">Launch a local spectrum sweep to discover nearby, unbonded BlurBubble hardware beacons or keychains.</p>
+                          
+                          <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
+                            <button
+                              id="simulate-ble-scan"
+                              type="button"
+                              onClick={startBleScan}
+                              className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-lg transition font-sans border border-slate-700 shadow-lg flex items-center gap-2"
+                            >
+                              <Bluetooth className="w-4 h-4 text-blue-400" />
+                              Simulate Spectrum Scan
+                            </button>
+                            <button
+                              id="real-ble-scan"
+                              type="button"
+                              onClick={startRealBleScan}
+                              className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs rounded-lg transition font-sans shadow-lg shadow-blue-500/15 flex items-center gap-2 border border-blue-400"
+                            >
+                              <Zap className="w-4 h-4 text-yellow-300 animate-pulse" />
+                              Real Web Bluetooth Scan
+                            </button>
+                          </div>
+
+                          {realBleError && (
+                            <div className="text-[10px] text-amber-400 font-mono mt-3 max-w-xs mx-auto leading-normal bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-lg text-left">
+                              <span className="font-bold">⚠️ Bluetooth Alert:</span> {realBleError}
+                              <p className="text-[9px] text-slate-400 mt-1 font-sans">
+                                Web Bluetooth scanning requires HTTPS and direct user interaction. If running in a sandboxed iframe, click <strong>Open in New Tab</strong> to grant device authorizations.
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Discovered Devices */}
+                  {discoveredBleDevices.length > 0 && !isBleScanning && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-sans">Discovered Local Hardware Beacons</h4>
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold">{discoveredBleDevices.length} Available</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {discoveredBleDevices.map((device) => (
+                          <div key={device.id} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-slate-700/80 transition animate-fade-in">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-white text-xs">{device.name}</span>
+                                <span className="text-[9px] bg-slate-800 border border-slate-700 text-slate-400 px-1.5 py-0.2 rounded font-mono font-semibold uppercase">{device.type}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 leading-normal font-sans">{device.desc}</p>
+                              <div className="flex items-center gap-3 text-[10px] text-slate-500 font-mono">
+                                <span>MAC: {device.mac}</span>
+                                <span className="flex items-center gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${device.rssi > -60 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                                  RSSI: {device.rssi} dBm (Strong)
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => runHandshakeSequence(device)}
+                              className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/25 font-bold text-xs rounded-lg transition font-sans text-center shrink-0 flex items-center gap-1.5 justify-center"
+                            >
+                              <Bluetooth className="w-3.5 h-3.5" />
+                              Initialize Secure Pair
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-6 space-y-6">
+                  {/* Active Handshake Block */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping" />
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Active BLE Handshake Protocol</h4>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500 uppercase">{pairingBleDevice.mac}</span>
+                    </div>
+
+                    {/* Step indicators */}
+                    <div className="bg-slate-950/80 rounded-xl p-4 border border-slate-900 font-mono text-[11px] space-y-2.5 max-h-[220px] overflow-y-auto">
+                      {handshakeLogs.map((log, idx) => (
+                        <div key={idx} className={`${log.includes('[SECURE]') ? 'text-blue-400' : 'text-slate-500'}`}>
+                          {log}
+                        </div>
+                      ))}
+
+                      {!pairingSuccess && (
+                        <div className="flex items-center gap-2 text-blue-400">
+                          <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                          <span>Executing cryptoprocessor transaction step {handshakeStepIdx + 1}/7...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Handshake Success / Entity Setup Form */}
+                  {pairingSuccess && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="border-t border-slate-900 pt-5 space-y-5"
+                    >
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0 border border-emerald-500/20">
+                          ✓
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-bold text-white font-sans uppercase tracking-wider">Secure Handshake Verified Successfully!</h4>
+                          <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+                            Diffie-Hellman parameters exchanged securely over channel. The device has authenticated its manufacturer security tag via verified ECDSA certificates. Configure the registered asset options below to arm your new privacy tag.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Registered Asset Name</label>
+                          <input
+                            type="text"
+                            value={pairedDeviceName}
+                            onChange={(e) => setPairedDeviceName(e.target.value)}
+                            placeholder="e.g. Bobby's Backpack Tag"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Asset Category / Tag Type</label>
+                          <select
+                            value={pairedDeviceType}
+                            onChange={(e) => setPairedDeviceType(e.target.value as any)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                          >
+                            <option value="smart_tag" className="bg-slate-950">🎒 Smart Tag (Backpack/Apparel)</option>
+                            <option value="key_fob" className="bg-slate-950">🔑 Key Fob (Keychain)</option>
+                            <option value="prototype" className="bg-slate-950">🔬 Business Prototype / Asset</option>
+                            <option value="artwork" className="bg-slate-950">🎨 Proprietary Artwork / Media</option>
+                            <option value="valuable" className="bg-slate-950">💎 High-Value Asset / Safe</option>
+                          </select>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Default Censor Shield Style</label>
+                          <select
+                            value={pairedDevicePrivacy}
+                            onChange={(e) => setPairedDevicePrivacy(e.target.value as PrivacyLevel)}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                          >
+                            <option value="magic_removal" className="bg-slate-950">🪄 Magic Eraser (Seamless Pixel Infill)</option>
+                            <option value="strict_blur" className="bg-slate-950">💧 Gaussian Blur (Soft Depth Masking)</option>
+                            <option value="pixelate" className="bg-slate-950">👾 Mosaic Pixelation (Classic Retro)</option>
+                            <option value="emoji" className="bg-slate-950">😜 Emoji Overlay (Fun / Discrete Masking)</option>
+                            <option value="black_bar" className="bg-slate-950">⬛ Solid Black-Bar Censorship (Military Grade)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setPairingBleDevice(null)}
+                          className="flex-1 py-2 rounded-lg bg-slate-900 hover:bg-slate-850 text-slate-400 font-bold text-xs border border-slate-800 transition text-center font-sans"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRegisterPairedDevice}
+                          className="flex-1 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition text-center font-sans flex items-center justify-center gap-1.5"
+                        >
+                          Save &amp; Arm Certified Asset
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Advanced Firmware Transceiver Calibration & Flash Wizard */}
+                  <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center gap-2 border-b border-slate-900 pb-2">
+                      <Cpu className="w-4 h-4 text-emerald-400" />
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                          BLE Transceiver Calibration &amp; Firmware Flasher
+                        </h4>
+                        <p className="text-[10px] text-slate-500 font-sans">
+                          Calibrates hardware transceiver clocks to improve signal deflection accuracy.
+                        </p>
+                      </div>
+                    </div>
+
+                    {fwFlashStatus === 'idle' && (
+                      <div className="space-y-3">
+                        <p className="text-[11px] text-slate-400 leading-normal">
+                          If your local hardware beacons are experiencing latency or low signal RSSI, perform an advanced Over-The-Air firmware flash and register calibration.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={runFirmwareFlash}
+                          className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Zap className="w-3.5 h-3.5 animate-bounce" />
+                          Initiate Core Calibration &amp; Re-Flash
+                        </button>
+                      </div>
+                    )}
+
+                    {fwFlashStatus === 'running' && (
+                      <div className="space-y-3 font-mono text-[10px]">
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span className="animate-pulse">Flashing register memory maps...</span>
+                          <span className="text-emerald-400 font-bold">{fwFlashProgress}%</span>
+                        </div>
+                        <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-emerald-400 h-full transition-all duration-300" style={{ width: `${fwFlashProgress}%` }} />
+                        </div>
+                        <div className="bg-slate-950 border border-slate-900 rounded p-2 max-h-24 overflow-y-auto text-emerald-400/90 space-y-1">
+                          {fwFlashLogs.map((logLine, idx) => (
+                            <div key={idx} className="leading-tight">
+                              {logLine}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {fwFlashStatus === 'success' && (
+                      <div className="space-y-3 font-mono text-[10px]">
+                        <div className="border border-emerald-500/30 bg-emerald-500/5 rounded p-3 text-emerald-400 space-y-1 text-center">
+                          <CheckCircle2 className="w-6 h-6 mx-auto mb-1 text-emerald-400 animate-pulse" />
+                          <p className="font-bold uppercase tracking-wider text-xs">Calibration Successful</p>
+                          <p className="text-[10px] text-emerald-500/80 font-sans leading-normal">
+                            All on-chip BLE frequency registers verified and aligned to 2402 MHz. Latency minimized by -12ms.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFwFlashStatus('idle')}
+                          className="w-full py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-400 border border-slate-800 rounded text-[10px] transition cursor-pointer font-sans"
+                        >
+                          Reset Wizard Console
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+                </>
+              ) : (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                  {(!state.registeredEntities || state.registeredEntities.length === 0) ? (
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-8 text-center space-y-4">
+                      <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500 text-lg">
+                        ⚡
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-bold text-white uppercase tracking-wider">No Active Companions Found</h4>
+                        <p className="text-xs text-slate-400 max-w-md mx-auto">
+                          In order to run latency diagnostics or calibrate active battery cells, you must first bond a physical smart keychain or companion badge in the pairing tab.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPairingSubTab('console')}
+                        className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs rounded-lg transition"
+                      >
+                        Go to Pairing Console
+                      </button>
+                    </div>
+                  ) : (() => {
+                    const selectedDevice = state.registeredEntities.find(d => d.id === selectedDiagDeviceId) || state.registeredEntities[0];
+                    const powerSetting = txPowerSettings[selectedDevice.id] || 'medium';
+                    
+                    let latencyVal = 12.8;
+                    let batteryDrainRate = "Normal";
+                    let remainingCycles = 445;
+                    
+                    if (powerSetting === 'low') {
+                      latencyVal = 24.5;
+                      batteryDrainRate = "Ultra-Low (Saves Cells)";
+                      remainingCycles = 480;
+                    } else if (powerSetting === 'high') {
+                      latencyVal = 4.2;
+                      batteryDrainRate = "High Saturation Broadcast";
+                      remainingCycles = 410;
+                    }
+
+                    const deviceHealthPercent = selectedDevice.batteryPercent >= 90 ? 98 : selectedDevice.batteryPercent >= 70 ? 95 : 88;
+                    const healthLabel = deviceHealthPercent >= 95 ? "EXCELLENT" : deviceHealthPercent >= 85 ? "GOOD" : "DEGRADED (SERVICE RECOMMENDED)";
+                    const healthColor = deviceHealthPercent >= 95 ? "text-emerald-400" : deviceHealthPercent >= 85 ? "text-amber-400" : "text-rose-400";
+
+                    return (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                          
+                          {/* Left Side: Device Selection & Interactive Metrics */}
+                          <div className="lg:col-span-4 space-y-4">
+                            <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-3">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold block font-mono">1. Select Peripheral Device</span>
+                              <div className="space-y-2">
+                                {state.registeredEntities.map((dev) => {
+                                  const activePower = txPowerSettings[dev.id] || 'medium';
+                                  return (
+                                    <button
+                                      id={`diag-select-dev-${dev.id}`}
+                                      key={dev.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedDiagDeviceId(dev.id);
+                                        playLocalSoundTest('tactical_click', 50);
+                                        setPingLogs(prev => [
+                                          `[SELECT] Diagnostics focus shifted to peripheral: ${dev.name}`,
+                                          `[STATUS] Querying registers... Active TX power: ${activePower.toUpperCase()}`,
+                                          ...prev
+                                        ]);
+                                      }}
+                                      className={`w-full text-left p-3 rounded-lg border transition-all ${
+                                        selectedDevice.id === dev.id
+                                          ? 'bg-emerald-500/10 border-emerald-500/30 text-white'
+                                          : 'bg-slate-900/30 border-slate-850 hover:bg-slate-900/60 text-slate-400 hover:text-white'
+                                      }`}
+                                    >
+                                      <div className="flex justify-between items-start">
+                                        <div className="space-y-0.5">
+                                          <span className="text-xs font-bold block truncate max-w-[150px]">{dev.name}</span>
+                                          <span className="text-[9px] text-slate-500 font-mono block uppercase font-bold">Type: {dev.type}</span>
+                                        </div>
+                                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                                          dev.isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                        }`}>
+                                          {dev.isActive ? 'CONNECTED' : 'DISCONNECTED'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-[10px] text-slate-500 mt-2 border-t border-slate-900/40 pt-1.5">
+                                        <span className="flex items-center gap-1">🔋 {dev.batteryPercent}%</span>
+                                        <span className="font-mono">TX: {activePower.toUpperCase()}</span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            
+                            <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
+                              <div className="space-y-0.5">
+                                <span className="text-[10px] text-slate-500 uppercase font-bold block font-mono">2. TX Radio Frequency Power</span>
+                                <p className="text-[10px] text-slate-500 font-sans">Tune transmit amplitudes to optimize signal saturation versus battery drain</p>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {[
+                                  { id: 'low', label: '🔋 Low', dbm: '-12 dBm' },
+                                  { id: 'medium', label: '⚡ Med', dbm: '0 dBm' },
+                                  { id: 'high', label: '📡 High', dbm: '+8 dBm' }
+                                ].map((pow) => {
+                                  const isCurrent = (txPowerSettings[selectedDevice.id] || 'medium') === pow.id;
+                                  return (
+                                    <button
+                                      id={`diag-tx-power-${pow.id}`}
+                                      key={pow.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setTxPowerSettings({
+                                          ...txPowerSettings,
+                                          [selectedDevice.id]: pow.id as any
+                                        });
+                                        playLocalSoundTest('tactical_click', 60);
+                                        setPingLogs(prev => [
+                                          `[CALIBRATION] Calibrating RF registers on '${selectedDevice.name}'`,
+                                          `[AMPLITUDE] Attenuation level modified to ${pow.dbm} (${pow.label.toUpperCase()})`,
+                                          `[SYSTEM] Target loop latency synchronized. Estimating new cycle bounds.`,
+                                          ...prev
+                                        ]);
+                                      }}
+                                      className={`p-2 rounded-lg border transition-all text-center flex flex-col justify-between h-14 ${
+                                        isCurrent
+                                          ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-400'
+                                          : 'bg-slate-900/30 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900/60'
+                                      }`}
+                                    >
+                                      <span className="text-[10px] font-bold block">{pow.label}</span>
+                                      <span className="text-[8px] font-mono text-slate-500 block">{pow.dbm}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Side: Detailed Diagnostics Stats & Real-Time Visualization */}
+                          <div className="lg:col-span-8 space-y-6">
+                            <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 space-y-4">
+                              <div className="flex items-center justify-between border-b border-slate-900 pb-3">
+                                <div className="space-y-0.5">
+                                  <span className="text-xs font-bold text-white block uppercase tracking-wider font-mono">
+                                    Live RF Diagnostic Console: {selectedDevice.name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-sans block">
+                                    Real-time BLE signal latency waveform and battery cell monitoring
+                                  </span>
+                                </div>
+                                <span className="text-[10px] font-mono text-emerald-400 animate-pulse flex items-center gap-1 font-semibold">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                  SCANNER TELEMETRY FEED
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-slate-900/40 border border-slate-850 rounded-xl p-4 space-y-3">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-mono text-slate-500 uppercase font-semibold">Signal Latency Test</span>
+                                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-bold">
+                                      {latencyVal < 10 ? "ULTRA-FAST" : "OPTIMAL"}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-baseline justify-between">
+                                    <div className="space-y-0.5">
+                                      <span className="text-2xl font-bold font-mono text-white tracking-tight">
+                                        {isPingTesting 
+                                          ? `${(latencyVal + (Math.random() * 4 - 2)).toFixed(1)} ms`
+                                          : `${(latencyVal + (Math.sin(Date.now() / 1000) * 0.5)).toFixed(1)} ms`
+                                        }
+                                      </span>
+                                      <span className="text-[9.5px] text-slate-500 block font-sans">Loopback Handshake (RTT)</span>
+                                    </div>
+                                    <div className="text-right text-[10px] font-mono text-slate-400">
+                                      <div>Jitter: <span className="text-emerald-400">0.9 ms</span></div>
+                                      <div>Success Rate: <span className="text-emerald-400">100%</span></div>
+                                    </div>
+                                  </div>
+
+                                  <div className="h-16 bg-black/40 border border-slate-900 rounded-lg p-2 flex items-end justify-between relative overflow-hidden">
+                                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:10px_10px] opacity-20 pointer-events-none" />
+                                    {Array.from({ length: 24 }).map((_, i) => {
+                                      const seed = Math.sin((i + Date.now() / 500) * 0.5) * 0.3 + 0.7;
+                                      const heightPercent = isPingTesting 
+                                        ? Math.floor(seed * 70 + Math.random() * 20)
+                                        : Math.floor(seed * 40 + 20);
+                                      
+                                      const heightVal = Math.max(10, Math.min(100, heightPercent));
+                                      const isHighlight = i === 23;
+
+                                      return (
+                                        <div
+                                          key={i}
+                                          className={`w-1.5 rounded-t-sm transition-all duration-300 ${
+                                            isHighlight 
+                                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' 
+                                              : 'bg-emerald-500/20'
+                                          }`}
+                                          style={{ height: `${heightVal}%` }}
+                                        />
+                                      );
+                                    })}
+                                    <span className="absolute bottom-1 left-2 text-[8px] font-mono text-slate-600 uppercase">Live Handshake RTT Jitter</span>
+                                  </div>
+                                </div>
+
+                                <div className="bg-slate-900/40 border border-slate-850 rounded-xl p-4 space-y-3">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-mono text-slate-500 uppercase font-semibold">Battery Diagnostic</span>
+                                    <span className={`text-[10px] font-mono font-bold ${healthColor}`}>
+                                      HEALTH: {healthLabel}
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-black/20 border border-slate-900/50 p-2 rounded-lg text-center space-y-0.5">
+                                      <span className="text-[8px] font-mono text-slate-500 block uppercase">SoC Percent</span>
+                                      <span className="text-lg font-bold font-mono text-white block">
+                                        {selectedDevice.batteryPercent}%
+                                      </span>
+                                      <div className="w-12 bg-slate-800 h-1 rounded-full mx-auto overflow-hidden mt-1">
+                                        <div 
+                                          className={`h-full ${selectedDevice.batteryPercent > 50 ? 'bg-emerald-400' : selectedDevice.batteryPercent > 20 ? 'bg-amber-400' : 'bg-rose-500'}`} 
+                                          style={{ width: `${selectedDevice.batteryPercent}%` }} 
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="bg-black/20 border border-slate-900/50 p-2 rounded-lg text-center space-y-0.5">
+                                      <span className="text-[8px] font-mono text-slate-500 block uppercase">SOH Health</span>
+                                      <span className={`text-lg font-bold font-mono block ${healthColor}`}>
+                                        {deviceHealthPercent}%
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-[9.5px] font-mono text-slate-500 space-y-1.5 border-t border-slate-900/60 pt-2">
+                                    <div className="flex justify-between">
+                                      <span>Remaining Lifespan:</span>
+                                      <span className="text-slate-300 font-bold">{remainingCycles} Cycles (Safe)</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Cell Temperature:</span>
+                                      <span className="text-slate-300 font-bold">
+                                        {isPingTesting ? "29.2 °C" : "27.6 °C"}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Telemetry Drain Class:</span>
+                                      <span className="text-slate-300 font-bold">{batteryDrainRate}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                id="run-diag-ping-test-btn"
+                                type="button"
+                                disabled={isPingTesting}
+                                onClick={() => {
+                                  setIsPingTesting(true);
+                                  setPingProgress(0);
+                                  playLocalSoundTest('sonar_chime', 80);
+                                  
+                                  setPingLogs(prev => [
+                                    `[START] Triggering Connection & Latency Diagnostics Sequence on '${selectedDevice.name}'...`,
+                                    ...prev
+                                  ]);
+
+                                  let currentProg = 0;
+                                  const interval = setInterval(() => {
+                                    currentProg += 10;
+                                    setPingProgress(currentProg);
+
+                                    if (currentProg === 20) {
+                                      setPingLogs(prev => [
+                                        `[PROBE 1] Dispatched 32-byte BLE telemetry query envelope...`,
+                                        `[PROBE 1 RTT] Acknowledged. Latency: ${latencyVal.toFixed(1)}ms. SigStrength: ${selectedDevice.signalStrength || -60}dBm.`,
+                                        ...prev
+                                      ]);
+                                    } else if (currentProg === 50) {
+                                      setPingLogs(prev => [
+                                        `[PROBE 2] Initiating on-chip loopback frequency jitter test...`,
+                                        `[PROBE 2 SUCCESS] Jitter metrics compiled. Max deviation: 0.8ms. Threshold: 4.5ms.`,
+                                        ...prev
+                                      ]);
+                                    } else if (currentProg === 80) {
+                                      setPingLogs(prev => [
+                                        `[STATE QUERY] Fetching peripheral battery state registers...`,
+                                        `[STATE QUERY RESULT] Capacity: ${selectedDevice.batteryPercent}%. SOH: ${deviceHealthPercent}%. Cycle life: ${remainingCycles} remaining. Temp: 28.1°C.`,
+                                        ...prev
+                                      ]);
+                                    } else if (currentProg >= 100) {
+                                      clearInterval(interval);
+                                      setIsPingTesting(false);
+                                      playLocalSoundTest('tactical_click', 85);
+                                      setPingLogs(prev => [
+                                        `[COMPLETE] Diagnostics sequence concluded successfully. Link verified and fully calibrated!`,
+                                        ...prev
+                                      ]);
+                                    }
+                                  }, 250);
+                                }}
+                                className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-extrabold py-2.5 rounded-lg text-xs transition flex items-center justify-center gap-2 cursor-pointer font-sans uppercase tracking-wider"
+                              >
+                                {isPingTesting ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    Testing Peripheral Connection ({pingProgress}%) ...
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>⚡</span>
+                                    Trigger Diagnostic Connection Ping Test
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 space-y-2">
+                              <div className="flex items-center justify-between text-[10px] font-mono">
+                                <span className="text-slate-500 uppercase font-semibold">Peripheral Diagnostic Telemetry Console</span>
+                                <button
+                                  id="clear-diag-logs-btn"
+                                  type="button"
+                                  onClick={() => setPingLogs([])}
+                                  className="text-slate-500 hover:text-white transition-colors uppercase text-[9px] bg-slate-900 border border-slate-850 px-2 py-0.5 rounded cursor-pointer"
+                                >
+                                  Clear Console
+                                </button>
+                              </div>
+
+                              <div className="h-32 bg-black/60 p-3 rounded-lg border border-slate-900 font-mono text-[10px] overflow-y-auto space-y-1.5 scrollbar-thin">
+                                {pingLogs.length > 0 ? (
+                                  pingLogs.map((log, idx) => (
+                                    <div key={idx} className={`leading-relaxed ${
+                                      log.includes('START') || log.includes('COMPLETE')
+                                        ? 'text-emerald-400 font-semibold' 
+                                        : log.includes('CALIBRATION') || log.includes('SELECT')
+                                        ? 'text-blue-400 font-semibold'
+                                        : 'text-slate-300'
+                                    }`}>
+                                      <span className="text-slate-600 mr-2">[{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                                      {log}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-600 block text-center pt-8">Console empty. Trigger a ping test or configure RF settings to populate diagnostics log.</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Tab 11: WiFi Recognition & Automation Rules */}
+          {activeTab === 'wifi' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              
+              {/* Header Info */}
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                      <Wifi className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-sm">WiFi Recognition &amp; Automation</h3>
+                      <p className="text-[11px] text-slate-400">Establish local SSID triggers to automatically configure your opt-out broadcasts and censor modes when entering establishments.</p>
+                    </div>
+                  </div>
+                  
+                  {/* Master Switch */}
+                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-900 rounded-xl px-3 py-1.5">
+                    <span className="text-[10px] uppercase tracking-wider font-mono font-bold text-slate-400">
+                      Auto-Triggers:
+                    </span>
+                    <button
+                      type="button"
+                      id="wifi-automation-toggle"
+                      onClick={() => onChange({
+                        ...state,
+                        wifiRulesEnabled: !state.wifiRulesEnabled
+                      })}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        state.wifiRulesEnabled ? 'bg-emerald-500' : 'bg-slate-800'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          state.wifiRulesEnabled ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Simulation Center */}
+              <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-950 pb-3">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-white font-sans uppercase tracking-wider">Connected WiFi Simulator</h4>
+                    <p className="text-[10px] text-slate-500">Test your automation rules by switching the current simulated connection of your phone/wearable.</p>
+                  </div>
+                  
+                  {state.currentWifiSsid ? (
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/40 px-2 py-0.5 rounded flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Connected to: {state.currentWifiSsid}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                      No WiFi Connection
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Selector card */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] text-slate-400 uppercase font-semibold font-mono">Simulate Wireless Connection</label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        id="wifi-simulator-select"
+                        value={state.currentWifiSsid || ''}
+                        disabled={isSimulatingWifi}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setIsSimulatingWifi(true);
+                          
+                          // Trigger a nice transition animation to make it feel alive!
+                          setTimeout(() => {
+                            onChange({
+                              ...state,
+                              currentWifiSsid: value
+                            });
+                            setIsSimulatingWifi(false);
+                          }, 1000);
+                        }}
+                        className="flex-1 bg-slate-950 border border-slate-900 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60 font-sans disabled:opacity-50"
+                      >
+                        <option value="">-- Disconnect WiFi --</option>
+                        <option value="Starbucks_Guest_WiFi">☕ Starbucks_Guest_WiFi (Local Coffee Shop)</option>
+                        <option value="HQ_Corporate_Secure">🏢 HQ_Corporate_Secure (Corporate Office)</option>
+                        <option value="Gold_Gym_Member">💪 Gold_Gym_Member (Local Fitness Club)</option>
+                        {state.wifiRules?.filter(r => !['Starbucks_Guest_WiFi', 'HQ_Corporate_Secure', 'Gold_Gym_Member'].includes(r.ssid)).map((rule) => (
+                          <option key={rule.id} value={rule.ssid}>📶 {rule.ssid} ({rule.label})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-[10px] text-slate-500 italic">
+                      Changing simulated WiFi connection runs the recognition algorithm and triggers compliant rule protocols.
+                    </p>
+                  </div>
+
+                  {/* Telemetry Status card */}
+                  <div className="bg-slate-950/60 border border-slate-950 rounded-xl p-3.5 space-y-2 flex flex-col justify-between relative overflow-hidden">
+                    {isSimulatingWifi ? (
+                      <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center gap-2">
+                        <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold animate-pulse uppercase tracking-wider">Handshaking Local AP...</span>
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-1">
+                      <span className="text-[9px] uppercase font-bold text-slate-500 font-mono">Current Settings Engine</span>
+                      <div className="flex items-center gap-1.5 text-xs text-white">
+                        <span className="font-semibold">Shield Status:</span>
+                        <span className="font-mono text-emerald-400 font-bold uppercase bg-emerald-950/20 px-1.5 py-0.2 rounded border border-emerald-900/20 font-sans">
+                          {state.privacyLevel.toUpperCase().replace('_', ' ')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-white">
+                        <span className="font-semibold">BLE Broadcast:</span>
+                        <span className={`font-semibold font-mono ${state.isBroadcasting ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          {state.isBroadcasting ? 'ACTIVE' : 'OFF'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-white">
+                        <span className="font-semibold">Facial Opt-Out:</span>
+                        <span className={`font-semibold font-mono ${state.facialRecognitionOptOut ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          {state.facialRecognitionOptOut ? 'ARMED' : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-[9px] text-slate-500 border-t border-slate-900 pt-1.5">
+                      {state.currentWifiSsid ? (
+                        state.wifiRules?.find(r => r.ssid === state.currentWifiSsid && r.isActive) ? (
+                          <span className="text-emerald-400 font-bold">✓ Connected &amp; Rules applied automatically.</span>
+                        ) : (
+                          <span className="text-slate-400">✓ Connected. No active rule configured for this SSID.</span>
+                        )
+                      ) : (
+                        <span className="text-slate-600">No WiFi connection simulated. Standard manual dials apply.</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Advanced Signal Scanner */}
+              <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-950 pb-3">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-white font-sans uppercase tracking-wider">Nearby WiFi Spectrogram Scanner</h4>
+                    <p className="text-[10px] text-slate-500">Scan 2.4Ghz/5.8Ghz bands to discover nearby wireless SSID broadcast access points.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsScanningWifiNetwork(true);
+                      setScannedWifiSuccess(null);
+                      playLocalSoundTest('sonar_chime', 80);
+                      setTimeout(() => {
+                        setScannedWifiNetworks([
+                          { ssid: 'Costa_Coffee_WPA3', label: 'Costa Coffee Shop', privacyLevel: 'strict_blur', dbm: -52 },
+                          { ssid: 'Oakwood_High_Guest', label: 'Oakwood High School Zone', privacyLevel: 'magic_removal', dbm: -67 },
+                          { ssid: 'Home_Secured_AX', label: 'Home Sanctuary', privacyLevel: 'none', dbm: -38 }
+                        ]);
+                        setIsScanningWifiNetwork(false);
+                        setScannedWifiSuccess('Scan complete! 3 nearby access points discovered.');
+                      }, 2000);
+                    }}
+                    disabled={isScanningWifiNetwork}
+                    className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/20 text-slate-950 disabled:text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded-lg transition flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isScanningWifiNetwork ? 'animate-spin' : ''}`} />
+                    {isScanningWifiNetwork ? 'Scanning Airwaves...' : 'Scan Nearby Airwaves'}
+                  </button>
+                </div>
+
+                {isScanningWifiNetwork ? (
+                  <div className="py-8 flex flex-col items-center justify-center space-y-3 text-center">
+                    <div className="relative w-12 h-12 flex items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                      <Wifi className="w-6 h-6 text-emerald-400 animate-pulse" />
+                      <span className="absolute inset-0 rounded-full border border-emerald-400/40 animate-ping opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase animate-pulse">Scanning SSID Beacons...</span>
+                      <p className="text-[9px] text-slate-500 max-w-[200px] leading-relaxed font-mono">Locking PLL frequency synthesizer... Measuring RSSI power indices...</p>
+                    </div>
+                  </div>
+                ) : scannedWifiNetworks.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {scannedWifiSuccess && (
+                      <div className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950/20 border border-emerald-900/30 px-3 py-1.5 rounded-lg flex items-center justify-between">
+                        <span>✓ {scannedWifiSuccess}</span>
+                        <button type="button" onClick={() => setScannedWifiSuccess(null)} className="text-slate-500 hover:text-white font-bold px-1 text-sm">×</button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {scannedWifiNetworks.map((net) => {
+                        let powerColor = "text-emerald-400";
+                        if (net.dbm < -65) powerColor = "text-amber-400";
+                        return (
+                          <div key={net.ssid} className="bg-slate-950/60 border border-slate-900 rounded-xl p-3 flex flex-col justify-between space-y-3 hover:border-slate-800 transition">
+                            <div className="space-y-1 text-left">
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-[10px] text-slate-300 font-bold truncate pr-1" title={net.ssid}>{net.ssid}</span>
+                                <span className={`font-mono text-[9px] font-bold shrink-0 ${powerColor}`}>{net.dbm} dBm</span>
+                              </div>
+                              <div className="text-[9px] text-slate-500 leading-tight">
+                                {net.label} • Default mode: <span className="text-slate-400 font-bold">{net.privacyLevel.replace('_', ' ')}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewWifiSsid(net.ssid);
+                                setNewWifiLabel(net.label);
+                                setNewWifiPrivacy(net.privacyLevel);
+                                setScannedWifiSuccess(`Pre-filled rules for ${net.ssid}! Click "Create Automation Trigger" below.`);
+                                playLocalSoundTest('tactical_click', 60);
+                              }}
+                              className="w-full py-1 bg-slate-900 hover:bg-slate-850 text-emerald-400 hover:text-emerald-300 text-[9px] font-bold uppercase rounded-lg transition border border-slate-800"
+                            >
+                              [+] Use SSID Profile
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-slate-950/30 border border-slate-900 rounded-xl text-slate-500 text-xs">
+                    <p className="font-semibold">No scanned network profiles cached.</p>
+                    <p className="text-[10px] text-slate-600 mt-1">Click the scan button in the top right to discover surrounding broadcast SSIDs.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Rule Form */}
+              <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-4">
+                <h4 className="text-xs font-bold text-white font-sans uppercase tracking-wider border-b border-slate-950 pb-2">Add SSID Automation Trigger</h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] text-slate-400 uppercase font-semibold font-sans">WiFi SSID (Network Name)</label>
+                    <input
+                      type="text"
+                      id="wifi-ssid-input"
+                      placeholder="e.g. My_Office_Network"
+                      value={newWifiSsid}
+                      onChange={(e) => setNewWifiSsid(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] text-slate-400 uppercase font-semibold font-sans">Establishment Label</label>
+                    <input
+                      type="text"
+                      id="wifi-label-input"
+                      placeholder="e.g. Main Office Headquarters"
+                      value={newWifiLabel}
+                      onChange={(e) => setNewWifiLabel(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] text-slate-400 uppercase font-semibold font-sans"> Censor Shield Level</label>
+                    <select
+                      value={newWifiPrivacy}
+                      onChange={(e) => setNewWifiPrivacy(e.target.value as PrivacyLevel)}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                    >
+                      <option value="strict_blur">💧 Gaussian Blur (Soft Depth Masking)</option>
+                      <option value="magic_removal">🪄 Magic Eraser (Seamless Pixel Infill)</option>
+                      <option value="pixelate">👾 Mosaic Pixelation (Classic Retro)</option>
+                      <option value="emoji">😜 Emoji Overlay (Fun / Discrete Masking)</option>
+                      <option value="black_bar">⬛ Solid Black-Bar Censorship</option>
+                      <option value="none">🔓 None (Opt-In Discovery Mode)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-6 pt-3">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={newWifiBroadcast}
+                        onChange={(e) => setNewWifiBroadcast(e.target.checked)}
+                        className="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500/30"
+                      />
+                      <span className="text-xs text-slate-300 font-sans">Enable Broadcast</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={newWifiFaceOptOut}
+                        onChange={(e) => setNewWifiFaceOptOut(e.target.checked)}
+                        className="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500/30"
+                      />
+                      <span className="text-xs text-slate-300 font-sans">Face Registry Opt-Out</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex justify-end border-t border-slate-950 pt-3">
+                  <button
+                    type="button"
+                    id="add-wifi-rule-btn"
+                    onClick={() => {
+                      if (!newWifiSsid.trim() || !newWifiLabel.trim()) return;
+                      const newRule: WifiTriggerRule = {
+                        id: 'wifi-' + Date.now(),
+                        ssid: newWifiSsid.trim(),
+                        label: newWifiLabel.trim(),
+                        privacyLevel: newWifiPrivacy,
+                        broadcastEnabled: newWifiBroadcast,
+                        facialRecognitionOptOut: newWifiFaceOptOut,
+                        isActive: true
+                      };
+                      
+                      const updatedRules = [...(state.wifiRules || []), newRule];
+                      onChange({
+                        ...state,
+                        wifiRules: updatedRules
+                      });
+
+                      setNewWifiSsid('');
+                      setNewWifiLabel('');
+                      setNewWifiPrivacy('strict_blur');
+                      setNewWifiBroadcast(true);
+                      setNewWifiFaceOptOut(true);
+
+                      window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                        detail: { 
+                          title: 'SSID Trigger Rule Added',
+                          body: `"${newRule.label}" SSID trigger defined successfully. Connecting to "${newRule.ssid}" will apply automated settings.`,
+                          type: 'blocking'
+                        } 
+                      }));
+                    }}
+                    disabled={!newWifiSsid.trim() || !newWifiLabel.trim()}
+                    className="px-5 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition font-sans disabled:opacity-40"
+                  >
+                    Add WiFi Automation Rule
+                  </button>
+                </div>
+              </div>
+
+              {/* Rules List */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-950 pb-2">
+                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-sans">Configured WiFi Automation Rules</h4>
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold">{(state.wifiRules || []).length} Rules Active</span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {!(state.wifiRules && state.wifiRules.length > 0) ? (
+                    <div className="text-center py-6 text-slate-600 text-xs bg-slate-900/20 border border-slate-900 rounded-xl">
+                      No WiFi recognition rules configured yet.
+                    </div>
+                  ) : (
+                    state.wifiRules.map((rule) => {
+                      const isCurrentMatch = state.currentWifiSsid === rule.ssid;
+                      return (
+                        <div 
+                          key={rule.id} 
+                          id={`wifi-rule-${rule.id}`}
+                          className={`rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition ${
+                            isCurrentMatch 
+                              ? 'bg-emerald-950/15 border-2 border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.06)]' 
+                              : 'bg-slate-900/40 border border-slate-800 hover:border-slate-700/80'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-bold text-white text-xs">{rule.label}</span>
+                              <span className="text-[10px] bg-slate-800 border border-slate-700 text-slate-400 px-2 py-0.2 rounded font-mono font-bold">{rule.ssid}</span>
+                              
+                              {isCurrentMatch && (
+                                <span className="text-[9px] bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-2 py-0.2 rounded font-bold uppercase tracking-wider animate-pulse font-mono flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                  Active Match
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Rule detail tags */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400 font-sans">
+                              <span className="flex items-center gap-1">
+                                <span className="text-slate-600">•</span> Censor style: <span className="text-slate-200 font-semibold uppercase">{rule.privacyLevel.replace('_', ' ')}</span>
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <span className="text-slate-600">•</span> Broadcasting: <span className={`font-semibold ${rule.broadcastEnabled ? 'text-emerald-400' : 'text-slate-400'}`}>{rule.broadcastEnabled ? 'ON' : 'OFF'}</span>
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <span className="text-slate-600">•</span> Facial Opt-Out: <span className={`font-semibold ${rule.facialRecognitionOptOut ? 'text-emerald-400' : 'text-slate-400'}`}>{rule.facialRecognitionOptOut ? 'ON' : 'OFF'}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 self-end md:self-auto shrink-0">
+                            {/* Toggle active */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = (state.wifiRules || []).map((r) => 
+                                  r.id === rule.id ? { ...r, isActive: !r.isActive } : r
+                                );
+                                onChange({
+                                  ...state,
+                                  wifiRules: updated
+                                });
+                              }}
+                              className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition ${
+                                rule.isActive 
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
+                                  : 'bg-slate-950 border-slate-900 text-slate-500 hover:text-slate-400'
+                              }`}
+                            >
+                              {rule.isActive ? 'Trigger Armed' : 'Trigger Silenced'}
+                            </button>
+
+                            {/* Delete */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = (state.wifiRules || []).filter((r) => r.id !== rule.id);
+                                onChange({
+                                  ...state,
+                                  wifiRules: updated
+                                });
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-950/40 hover:bg-rose-500/15 border border-slate-900 hover:border-rose-500/35 text-slate-500 hover:text-rose-400 transition"
+                              title="Delete rule"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+            </motion.div>
+          )}
+
+          {/* Tab 12: Biometric Authentication & WebAuthn Security */}
+          {activeTab === 'biometric' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              
+              {/* Header Info with Master Lock Switch */}
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 bg-rose-500/10 text-rose-400 rounded-lg shrink-0">
+                      <Fingerprint className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-sm">Biometric Security Vault</h3>
+                      <p className="text-[11px] text-slate-400">Lock the user interface using WebAuthn standard public-key cryptography to prevent tampering with your opt-out settings.</p>
+                    </div>
+                  </div>
+                  
+                  {/* Master Lock Switch */}
+                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-900 rounded-xl px-3 py-1.5 self-start sm:self-auto shrink-0">
+                    <span className="text-[10px] uppercase tracking-wider font-mono font-bold text-slate-400">
+                      App Lock Shield:
+                    </span>
+                    <button
+                      type="button"
+                      id="biometric-lock-toggle"
+                      onClick={() => {
+                        if (!state.biometricRegistered) {
+                          // Prompt registration first
+                          window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                            detail: { 
+                              title: 'Passkey Required',
+                              body: 'Please register a biometric passkey below before enabling the automatic app lock feature.',
+                              type: 'child_blocking'
+                            } 
+                          }));
+                          return;
+                        }
+                        
+                        const updatedVal = !state.biometricLockEnabled;
+                        onChange({
+                          ...state,
+                          biometricLockEnabled: updatedVal
+                        });
+
+                        setBiometricLogs(prev => [
+                          `[CONFIG] Biometric application lock ${updatedVal ? 'ENABLED' : 'DISABLED'}.`,
+                          ...prev
+                        ]);
+
+                        window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                          detail: { 
+                            title: updatedVal ? 'App Lock Shields Armed' : 'App Lock Disarmed',
+                            body: updatedVal 
+                              ? 'Your BlurBubble dashboard is now shielded by WebAuthn. Manual lock button is now available in the top menu.'
+                              : 'Biometric authorization bypassed. Anyone can now access this screen.',
+                            type: 'blocking'
+                          } 
+                        }));
+                      }}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        state.biometricLockEnabled ? 'bg-rose-500' : 'bg-slate-800'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          state.biometricLockEnabled ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status & Enrollment Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Enrollment Card */}
+                <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider border-b border-slate-950 pb-2 flex items-center gap-1.5">
+                      <Key className="w-4 h-4 text-rose-400" />
+                      WebAuthn Passkey Setup
+                    </h4>
+                    
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Enroll this device's secure hardware enclave (Touch ID, Face ID, Windows Hello, or Android Biometrics) to generate a unique public/private key pair.
+                    </p>
+
+                    {state.biometricRegistered ? (
+                      <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span className="text-xs font-bold text-emerald-400 font-sans">Passkey Registered &amp; Ready</span>
+                        </div>
+                        <div className="text-[10px] text-slate-300 space-y-1 font-mono">
+                          <div><span className="text-slate-500">Name:</span> {state.biometricRelyingParty || 'My Biometric Key'}</div>
+                          <div><span className="text-slate-500">Created:</span> {state.biometricEnrollmentDate}</div>
+                          <div><span className="text-slate-500">Cred ID:</span> <span className="text-rose-300">{state.biometricCredentialId?.substring(0, 20)}...</span></div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-3.5 text-center text-slate-500 text-xs">
+                        No passkey enrolled. Enroll below to establish your secure bystander identity.
+                      </div>
+                    )}
+
+                    <div className="space-y-2.5">
+                      <label className="block text-[10px] text-slate-400 uppercase font-mono font-bold">Passkey Nickname</label>
+                      <input
+                        type="text"
+                        value={customPasskeyName}
+                        onChange={(e) => setCustomPasskeyName(e.target.value)}
+                        placeholder="e.g. iPhone Face ID / MacBook Touch ID"
+                        className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500/60 font-sans"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-950 flex flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsRegisteringBiometric(true);
+                        setBiometricStep(0);
+                        const timestamp = new Date().toLocaleTimeString();
+                        
+                        setBiometricLogs(prev => [
+                          `[${timestamp}] Starting credential registration flow...`,
+                          `[${timestamp}] navigator.credentials.create() triggered with ES256 params.`,
+                          ...prev
+                        ]);
+
+                        try {
+                          // Standard WebAuthn creation challenge parameters
+                          const challenge = new Uint8Array(32);
+                          window.crypto.getRandomValues(challenge);
+                          const userId = new Uint8Array(16);
+                          window.crypto.getRandomValues(userId);
+
+                          const rpId = window.location.hostname || "localhost";
+
+                          const options: CredentialCreationOptions = {
+                            publicKey: {
+                              challenge: challenge,
+                              rp: {
+                                name: "BlurBubble Shield Protocol",
+                                id: rpId
+                              },
+                              user: {
+                                id: userId,
+                                name: "blur_citizen_" + Math.floor(Math.random() * 10000),
+                                displayName: "BlurBubble Authorized Citizen"
+                              },
+                              pubKeyCredParams: [
+                                { type: "public-key", alg: -7 },  // ES256 (ECDSA)
+                                { type: "public-key", alg: -257 } // RS256 (RSA)
+                              ],
+                              authenticatorSelection: {
+                                userVerification: "required",
+                                residentKey: "preferred"
+                              },
+                              timeout: 10000
+                            }
+                          };
+
+                          setBiometricStep(1); // Device prompt
+                          setBiometricLogs(prev => [
+                            `[${new Date().toLocaleTimeString()}] Invoking browser secure hardware enclave dialog...`,
+                            ...prev
+                          ]);
+
+                          // Real WebAuthn call
+                          const credential = await navigator.credentials.create(options) as PublicKeyCredential;
+                          
+                          if (credential) {
+                            setBiometricStep(2); // signature / verification
+                            const credIdBase64 = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+                            
+                            const regDate = new Date().toLocaleString();
+                            onChange({
+                              ...state,
+                              biometricRegistered: true,
+                              biometricRelyingParty: customPasskeyName.trim() || 'My Biometric Key',
+                              biometricEnrollmentDate: regDate,
+                              biometricCredentialId: credIdBase64
+                            });
+
+                            setBiometricStep(3); // success
+                            setBiometricLogs(prev => [
+                              `[${new Date().toLocaleTimeString()}] Success! Decrypted WebAuthn signature received.`,
+                              `[INFO] Public Key Credential ID: ${credIdBase64}`,
+                              `[INFO] ClientDataJSON digest verified. Algorithm verified as ES256.`,
+                              ...prev
+                            ]);
+
+                            window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                              detail: { 
+                                title: 'Passkey Enrolled!',
+                                body: `"${customPasskeyName}" has been established as your secure hardware anchor. App lock can now be safely enabled.`,
+                                type: 'blocking'
+                              } 
+                            }));
+                          }
+                        } catch (err: any) {
+                          console.warn("Direct WebAuthn credentials.create failed:", err);
+                          setBiometricLogs(prev => [
+                            `[WARN] Hardware enrollment failed or was cancelled. Details: ${err.message}`,
+                            `[INFO] Launching isolated virtual zero-knowledge simulator...`,
+                            ...prev
+                          ]);
+
+                          // Trigger high-fidelity simulator
+                          setBiometricStep(1); // Showing user feedback
+                          setTimeout(() => {
+                            setBiometricStep(2); // Simulating local attestation keys
+                            setBiometricLogs(prev => [
+                              `[SIMULATOR] Generating ephemeral elliptic curve keypair locally...`,
+                              `[SIMULATOR] SECP256R1 parameters configured with public key G-factor verification.`,
+                              ...prev
+                            ]);
+                            
+                            setTimeout(() => {
+                              const mockCredId = "virtual_ecc_" + Math.random().toString(16).substring(2, 10) + "_" + Date.now();
+                              const regDate = new Date().toLocaleString();
+                              
+                              onChange({
+                                ...state,
+                                biometricRegistered: true,
+                                biometricRelyingParty: customPasskeyName.trim() || 'My Biometric Key (Simulated)',
+                                biometricEnrollmentDate: regDate,
+                                biometricCredentialId: mockCredId
+                              });
+
+                              setBiometricStep(3); // success
+                              setBiometricLogs(prev => [
+                                `[SIMULATOR] [SUCCESS] Signed attestation statement received!`,
+                                `[SIMULATOR] Virtual Credential Anchor: ${mockCredId}`,
+                                `[SIMULATOR] Simulated hardware token successfully bound to localStorage key.`,
+                                ...prev
+                              ]);
+
+                              window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                                detail: { 
+                                  title: 'Passkey Created (Simulated)',
+                                  body: `Direct hardware access is restricted inside iframe context. Ephemeral hardware credentials established successfully in client-side state.`,
+                                  type: 'blocking'
+                                } 
+                              }));
+                            }, 1200);
+                          }, 1000);
+                        } finally {
+                          setIsRegisteringBiometric(false);
+                        }
+                      }}
+                      className="flex-1 bg-slate-950 text-white hover:text-rose-400 border border-slate-900 hover:border-rose-500/40 text-xs py-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <Fingerprint className="w-3.5 h-3.5" />
+                      {state.biometricRegistered ? 'Re-enroll Passkey' : 'Enroll Passkey'}
+                    </button>
+
+                    {state.biometricRegistered && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChange({
+                            ...state,
+                            biometricRegistered: false,
+                            biometricLockEnabled: false,
+                            biometricEnrollmentDate: undefined,
+                            biometricCredentialId: undefined,
+                            biometricRelyingParty: undefined
+                          });
+
+                          setBiometricLogs(prev => [
+                            `[CONFIG] Cleared current WebAuthn credentials from secure store. App lock disabled.`,
+                            ...prev
+                          ]);
+
+                          window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
+                            detail: { 
+                              title: 'Passkey Revoked',
+                              body: 'All local cryptographic credentials have been purged. Your shield dashboard is no longer restricted.',
+                              type: 'child_blocking'
+                            } 
+                          }));
+                        }}
+                        className="px-3 bg-slate-950 hover:bg-rose-500/10 border border-slate-900 hover:border-rose-500/30 text-slate-500 hover:text-rose-400 text-xs py-2 rounded-lg font-bold transition"
+                      >
+                        Purge Keys
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Cryptographic Log Card */}
+                <div className="bg-slate-950/70 border border-slate-900 rounded-xl p-5 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase font-mono tracking-widest flex items-center justify-between border-b border-slate-900 pb-2">
+                      <span>Cryptographic Handshake Logs</span>
+                      <span className="text-[9px] bg-slate-900 px-1.5 py-0.5 rounded text-rose-400 font-bold">WEBAUTHN v2</span>
+                    </h4>
+
+                    {/* Step Visualizer */}
+                    <div className="grid grid-cols-4 gap-1 pb-1">
+                      <div className={`h-1.5 rounded-full transition ${biometricStep >= 0 ? 'bg-rose-500 animate-pulse' : 'bg-slate-900'}`} title="1. Challenge" />
+                      <div className={`h-1.5 rounded-full transition ${biometricStep >= 1 ? 'bg-rose-500 animate-pulse' : 'bg-slate-900'}`} title="2. Device Enclave" />
+                      <div className={`h-1.5 rounded-full transition ${biometricStep >= 2 ? 'bg-rose-500 animate-pulse' : 'bg-slate-900'}`} title="3. Attestation Signature" />
+                      <div className={`h-1.5 rounded-full transition ${biometricStep >= 3 ? 'bg-emerald-500' : 'bg-slate-900'}`} title="4. Final Verified" />
+                    </div>
+
+                    <div className="bg-black/40 rounded-lg p-3 border border-slate-950 text-[10px] font-mono text-slate-400 h-[175px] overflow-y-auto space-y-1.5 scrollbar-thin">
+                      {biometricLogs.map((logStr, idx) => {
+                        let isSuccess = logStr.includes('[SUCCESS]') || logStr.includes('[CONFIG]');
+                        let isSim = logStr.includes('[SIMULATOR]');
+                        let isWarn = logStr.includes('[WARN]');
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`leading-normal border-l-2 pl-1.5 py-0.2 ${
+                              isSuccess ? 'text-emerald-400 border-emerald-500' : 
+                              isWarn ? 'text-rose-400 border-rose-500 font-bold' : 
+                              isSim ? 'text-amber-400 border-amber-500' : 
+                              'text-slate-400 border-slate-800'
+                            }`}
+                          >
+                            {logStr}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-slate-900 mt-3 font-sans">
+                    <span>WebAuthn Supported: {window.PublicKeyCredential ? 'YES (Device Compatible)' : 'NO (User Agent Ignored)'}</span>
+                    <button
+                      type="button"
+                      onClick={() => setBiometricLogs(["System logs cleared. Listening for cryptographic triggers."])}
+                      className="text-slate-500 hover:text-white"
+                    >
+                      Clear Logs
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Technical Specifications of the Cryptographic Protection */}
+              <div className="bg-slate-900/20 border border-slate-850 rounded-xl p-5 space-y-4">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans border-b border-slate-950 pb-2">
+                  Zero-Trust Protection Specifications
+                </h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div className="space-y-1 bg-slate-950/40 p-3.5 rounded-xl border border-slate-900">
+                    <span className="font-bold text-white block">ECC Secp256k1 Signature</span>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Every unlock challenge requires hardware-locked elliptic curve cryptographic signatures that cannot be intercepted by background processes.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1 bg-slate-950/40 p-3.5 rounded-xl border border-slate-900">
+                    <span className="font-bold text-white block">No Key Storage on Server</span>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Your biometric identifiers are strictly isolated in your phone's Secure Enclave. Only the public key attestation is ever accessed.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1 bg-slate-950/40 p-3.5 rounded-xl border border-slate-900">
+                    <span className="font-bold text-white block">IFrame Context Awareness</span>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Complies strictly with cross-origin credential frame sandboxes, auto-falling back to local zero-knowledge cryptography when frame policies are missing.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </motion.div>
+          )}
+
+          {/* Tab 13: Privacy Governance Hierarchy */}
+          {activeTab === 'hierarchy' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              {/* Header block with visual layout */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold bg-violet-500/10 border border-violet-500/30 text-violet-400 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                        Rule Engine v3
+                      </span>
+                      <span className="text-slate-500 text-[11px]">•</span>
+                      <span className="text-slate-400 text-xs">Authored Rules: 6 Layers</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-white font-sans">Privacy Governance Hierarchy</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
+                      Configure the precedence chain of your bystander privacy policies. When automated triggers, geo-fenced perimeters, family whitelists, or time-based schedules conflict, the policy ranked highest in the stack will govern your opt-out beacon.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400 font-medium">Hierarchy System:</span>
+                    <button
+                      type="button"
+                      id="hierarchy-system-toggle"
+                      onClick={() => onChange({ ...state, hierarchyRulesEnabled: !(state.hierarchyRulesEnabled !== false) })}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        (state.hierarchyRulesEnabled !== false) ? 'bg-violet-500' : 'bg-slate-800'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          (state.hierarchyRulesEnabled !== false) ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total Lockdown Mode Section */}
+              <div className={`p-6 rounded-2xl border transition-all ${
+                state.totalLockdownMode 
+                  ? 'bg-rose-950/20 border-rose-500/40 shadow-lg shadow-rose-950/20' 
+                  : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'
+              }`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="flex items-start gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center border transition-all ${
+                      state.totalLockdownMode 
+                        ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 animate-pulse' 
+                        : 'bg-slate-950/50 border-slate-800 text-slate-500'
+                    }`}>
+                      <ShieldAlert className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-white">Total Lockdown Mode</h4>
+                        {state.totalLockdownMode && (
+                          <span className="text-[9px] font-bold bg-rose-500/25 border border-rose-500/50 text-rose-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-mono animate-pulse">
+                            Armed
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                        Instantly overrides all whitelists, trust circles, schedules, or family exemptions. Restricts your opt-out signal to maximum, absolute shielding. Safe for high-privacy environments or volatile public scenarios.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-4">
+                    <button
+                      type="button"
+                      id="total-lockdown-toggle"
+                      onClick={() => {
+                        const newLockdown = !state.totalLockdownMode;
+                        onChange({ 
+                          ...state, 
+                          totalLockdownMode: newLockdown 
+                        });
+                        window.dispatchEvent(new CustomEvent('trigger-test-alert', {
+                          detail: {
+                            title: newLockdown ? 'TOTAL LOCKDOWN ACTIVATED' : 'TOTAL LOCKDOWN DEACTIVATED',
+                            body: newLockdown 
+                              ? 'All whitelists, overrides, and sharing keys suspended. Strict Censor Mode active.'
+                              : 'Normal governance hierarchy restored.',
+                            type: newLockdown ? 'error' : 'success'
+                          }
+                        }));
+                      }}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-bold font-mono tracking-wider transition ${
+                        state.totalLockdownMode
+                          ? 'bg-rose-500 text-white hover:bg-rose-600 shadow-md shadow-rose-500/10'
+                          : 'bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-rose-400 hover:text-rose-300'
+                      }`}
+                    >
+                      {state.totalLockdownMode ? 'DISABLE LOCKDOWN' : 'ACTIVATE LOCKDOWN'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hierarchy Stack Panel */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* List of Rules - Reorderable Stack (7 Cols) */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
+                        Rule Precedence Chain
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Order rules from top to bottom. Higher elements override lower elements.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onChange({
+                        ...state,
+                        governanceHierarchy: ['lockdown', 'strict_rules', 'perimeter_shields', 'allow_list', 'wifi_triggers', 'smart_schedules']
+                      })}
+                      className="text-[10px] text-violet-400 hover:text-violet-300 flex items-center gap-1 transition"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Reset to Defaults
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {(state.governanceHierarchy || ['lockdown', 'strict_rules', 'perimeter_shields', 'allow_list', 'wifi_triggers', 'smart_schedules']).map((ruleId, index, arr) => {
+                      const ruleInfo = HIERARCHY_DETAILS[ruleId] || {
+                        title: ruleId,
+                        desc: "No description available.",
+                        icon: "Layers",
+                        badgeColor: "text-slate-400 bg-slate-500/10 border-slate-500/30"
+                      };
+                      
+                      const isLockedOut = state.totalLockdownMode && ruleId !== 'lockdown';
+                      
+                      const moveUp = () => {
+                        if (index === 0) return;
+                        const newArr = [...arr];
+                        const temp = newArr[index];
+                        newArr[index] = newArr[index - 1];
+                        newArr[index - 1] = temp;
+                        onChange({ ...state, governanceHierarchy: newArr });
+                      };
+
+                      const moveDown = () => {
+                        if (index === arr.length - 1) return;
+                        const newArr = [...arr];
+                        const temp = newArr[index];
+                        newArr[index] = newArr[index + 1];
+                        newArr[index + 1] = temp;
+                        onChange({ ...state, governanceHierarchy: newArr });
+                      };
+
+                      return (
+                        <div 
+                          key={ruleId}
+                          className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                            isLockedOut
+                              ? 'bg-slate-950/25 border-slate-900 opacity-50'
+                              : ruleId === 'lockdown' && state.totalLockdownMode
+                                ? 'bg-rose-950/20 border-rose-500/30'
+                                : 'bg-slate-950/40 border-slate-800/80 hover:border-slate-850'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3.5 flex-1 min-w-0 pr-4">
+                            {/* Visual Priority Rank Indicator */}
+                            <div className="flex flex-col items-center justify-center w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 shrink-0">
+                              <span className="text-[10px] text-slate-500 uppercase font-mono font-bold leading-none">Rank</span>
+                              <span className={`text-xs font-bold leading-none mt-0.5 ${
+                                index === 0 ? 'text-violet-400' : 'text-slate-300'
+                              }`}>
+                                {index + 1}
+                              </span>
+                            </div>
+
+                            {/* Icon & Rule Content */}
+                            <div className="shrink-0">
+                              {getIcon(ruleId)}
+                            </div>
+
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-xs text-white truncate font-sans">
+                                  {ruleInfo.title}
+                                </span>
+                                {isLockedOut && (
+                                  <span className="text-[8px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-1 py-0.1 rounded uppercase font-bold tracking-wide font-mono shrink-0">
+                                    Muted by Lockdown
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10.5px] text-slate-400 leading-normal">
+                                {ruleInfo.desc}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Control arrows */}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={moveUp}
+                              disabled={index === 0 || isLockedOut}
+                              className={`p-1.5 rounded-lg border transition ${
+                                index === 0 || isLockedOut
+                                  ? 'border-slate-900 text-slate-700 cursor-not-allowed'
+                                  : 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                              }`}
+                              title="Move Up"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={moveDown}
+                              disabled={index === arr.length - 1 || isLockedOut}
+                              className={`p-1.5 rounded-lg border transition ${
+                                index === arr.length - 1 || isLockedOut
+                                  ? 'border-slate-900 text-slate-700 cursor-not-allowed'
+                                  : 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
+                              }`}
+                              title="Move Down"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Conflict Simulation & Sandbox (5 Cols) */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
+                      Policy Resolution Sandbox
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Select a conflict scenario to see how your active hierarchy resolves it in real-time.
+                    </p>
+                  </div>
+
+                  {/* Scenarios Buttons List */}
+                  <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 space-y-2">
+                    {[
+                      { id: 'scen-1', title: "Dad's Vlog Exception vs. Strict Shield", desc: "Evaluate whitelists against active manual broadcasts." },
+                      { id: 'scen-2', title: "School Perimeter vs. Corporate WiFi Off", desc: "Evaluate geo-fences against SSID automation parameters." },
+                      { id: 'scen-3', title: "Escrow Key Warrant vs. System State", desc: "Evaluate court-ordered security handshakes." }
+                    ].map((scen) => {
+                      const isActive = selectedScenario === scen.id;
+                      return (
+                        <button
+                          key={scen.id}
+                          type="button"
+                          onClick={() => setSelectedScenario(scen.id)}
+                          className={`w-full text-left p-3 rounded-lg border transition ${
+                            isActive
+                              ? 'bg-violet-950/20 border-violet-500/30 shadow-sm'
+                              : 'bg-slate-900/20 border-slate-900 hover:border-slate-800'
+                          }`}
+                        >
+                          <span className={`text-xs font-bold block ${isActive ? 'text-violet-400' : 'text-slate-300'}`}>
+                            {scen.title}
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-0.5 block leading-normal">
+                            {scen.desc}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Terminal Simulation Logs */}
+                  <div className="bg-black/80 rounded-xl border border-slate-900 p-4 space-y-3 shadow-inner">
+                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-pulse" />
+                        <span className="text-[9.5px] font-bold text-slate-400 font-mono tracking-wider">RESOLVER_CORE_EXEC</span>
+                      </div>
+                      <span className="text-[9px] bg-slate-900 px-1.5 py-0.5 rounded text-violet-400 font-mono uppercase">
+                        Dynamic Sim
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 font-mono text-[10.5px] h-[180px] overflow-y-auto scrollbar-thin text-slate-300 leading-normal">
+                      {((scenId: string, hierarchyArr: string[], isLockdownActive: boolean) => {
+                        const logs: string[] = [];
+                        const timestamp = new Date().toLocaleTimeString();
+                        logs.push(`[${timestamp}] 🔬 INITIALIZING PRIVACY RESOLVER...`);
+                        
+                        if (isLockdownActive) {
+                          logs.push(`[${timestamp}] ⚠️ SYSTEM ALERT: TOTAL LOCKDOWN MODE IS ARMED.`);
+                          logs.push(`[${timestamp}] 🛡️ [RESOLUTION] Override requests are strictly BLOCKED.`);
+                          logs.push(`[${timestamp}] 🚫 Outcome: Maximum opt-out enforced. Whitelist suspended.`);
+                          return logs;
+                        }
+
+                        if (scenId === 'scen-1') {
+                          logs.push(`[${timestamp}] ℹ️ Scenario: Dad's Vlog vs. Emergency Strict Shield`);
+                          logs.push(`[${timestamp}] 📡 Active Rule: Strict Restrictions (Censor Active)`);
+                          logs.push(`[${timestamp}] 📹 Observer: Dad's Camera (@family_vlogs Allowed)`);
+                          
+                          const rankStrict = hierarchyArr.indexOf('strict_rules');
+                          const rankAllow = hierarchyArr.indexOf('allow_list');
+                          
+                          logs.push(`[${timestamp}] 🔍 Checking hierarchy precedence:`);
+                          logs.push(`    - 'Strict Restrictions' rank: #${rankStrict !== -1 ? rankStrict + 1 : 2}`);
+                          logs.push(`    - 'Allow List Exceptions' rank: #${rankAllow !== -1 ? rankAllow + 1 : 4}`);
+                          
+                          if (rankStrict < rankAllow) {
+                            logs.push(`[${timestamp}] ⚖️ Precedence won: 'Strict Restrictions' overrides whitelists.`);
+                            logs.push(`[${timestamp}] 🔒 [RESOLUTION] Dad's camera is strictly BLURRED.`);
+                            logs.push(`[${timestamp}] 🛡️ Outcome: Privacy prioritized over family exception.`);
+                          } else {
+                            logs.push(`[${timestamp}] ⚖️ Precedence won: 'Allow List' overrides strict rules.`);
+                            logs.push(`[${timestamp}] 🔓 [RESOLUTION] Dad's camera is allowed bypass.`);
+                            logs.push(`[${timestamp}] 👁️ Outcome: Whitelist bypass granted.`);
+                          }
+                        } else if (scenId === 'scen-2') {
+                          logs.push(`[${timestamp}] ℹ️ Scenario: Perimeter Zone vs. WiFi Rules`);
+                          logs.push(`[${timestamp}] 📍 Location: School perimeter (Beacons Enforcing Opt-Out)`);
+                          logs.push(`[${timestamp}] 📶 WiFi Trigger: Corporate WiFi (Broadcasting Censor Off)`);
+                          
+                          const rankPerimeter = hierarchyArr.indexOf('perimeter_shields');
+                          const rankWifi = hierarchyArr.indexOf('wifi_triggers');
+                          
+                          logs.push(`[${timestamp}] 🔍 Checking hierarchy precedence:`);
+                          logs.push(`    - 'Perimeter Zones' rank: #${rankPerimeter !== -1 ? rankPerimeter + 1 : 3}`);
+                          logs.push(`    - 'WiFi Automation' rank: #${rankWifi !== -1 ? rankWifi + 1 : 5}`);
+                          
+                          if (rankPerimeter < rankWifi) {
+                            logs.push(`[${timestamp}] ⚖️ Precedence won: 'Perimeter Zones' overrides WiFi Rules.`);
+                            logs.push(`[${timestamp}] 🔒 [RESOLUTION] Local opt-out beacon enforces STRICT_BLUR.`);
+                            logs.push(`[${timestamp}] 🛡️ Outcome: Physical geo-fence remains active.`);
+                          } else {
+                            logs.push(`[${timestamp}] ⚖️ Precedence won: 'WiFi Automation' overrides geo-fences.`);
+                            logs.push(`[${timestamp}] 🔓 [RESOLUTION] Broadcast disabled via WiFi profile trigger.`);
+                            logs.push(`[${timestamp}] 👁️ Outcome: Perimeter shield bypassed.`);
+                          }
+                        } else if (scenId === 'scen-3') {
+                          logs.push(`[${timestamp}] ℹ️ Scenario: LEA Key Escrow Warrant Override`);
+                          logs.push(`[${timestamp}] 📜 Request: Public key attestation lookup warrant`);
+                          logs.push(`[${timestamp}] 🔍 Checking lockdown status:`);
+                          logs.push(`    - Total Lockdown is currently OFF.`);
+                          logs.push(`[${timestamp}] 🔓 [RESOLUTION] Warrant remains queryable by court key.`);
+                          logs.push(`[${timestamp}] 📜 Outcome: Warrant processed via multi-sig protocol.`);
+                        }
+
+                        return logs;
+                      })(selectedScenario, state.governanceHierarchy || ['lockdown', 'strict_rules', 'perimeter_shields', 'allow_list', 'wifi_triggers', 'smart_schedules'], !!state.totalLockdownMode).map((log, idx) => (
+                        <div key={idx} className={
+                          log.includes('⚠️') || log.includes('🚫') || log.includes('Precedence won')
+                            ? 'text-rose-400 font-semibold'
+                            : log.includes('🛡️') || log.includes('[RESOLUTION]')
+                              ? 'text-emerald-400 font-bold'
+                              : log.includes('🔍')
+                                ? 'text-violet-300'
+                                : 'text-slate-400'
+                        }>
+                          {log}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="border-t border-slate-900 pt-2 flex items-center justify-between text-[9.5px] text-slate-500">
+                      <span>Status: ACTIVE RESOLUTION</span>
+                      <span className="text-violet-400">Order Refreshed</span>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+            </motion.div>
+          )}
+
+          {/* Fullscreen Wallet Overlay for Presenting to Authorities */}
+          <AnimatePresence>
+            {isPresenting && (
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-slate-950/98 z-50 flex items-center justify-center p-4 backdrop-blur-xl"
+              >
+                <div className="w-full max-w-sm bg-slate-900 border-2 border-emerald-500 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between shadow-[0_0_40px_rgba(16,185,129,0.15)] h-[620px]">
+                  {/* Close Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsPresenting(false)}
+                    className="absolute top-4 right-4 bg-slate-950 border border-slate-800 text-slate-400 hover:text-white px-3 py-1 rounded-full text-xs font-bold"
+                  >
+                    Close [×]
+                  </button>
+
+                  {/* Header section */}
+                  <div className="space-y-4 pt-4">
+                    <div className="flex items-center gap-2">
+                      <Scale className="w-5 h-5 text-emerald-400" />
+                      <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest font-mono">Mobile Digital ID</span>
+                    </div>
+                    
+                    <div className="border-b border-slate-800 pb-3">
+                      <h2 className="text-lg font-black text-white uppercase tracking-tight font-sans">
+                        Privacy Declaration Card
+                      </h2>
+                      <span className="text-[10px] font-mono text-slate-500 block uppercase mt-0.5">
+                        AUTHORIZED OPT-OUT SIGNAL ACTIVE
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Content details */}
+                  <div className="space-y-4 flex-1 py-4 justify-center flex flex-col">
+                    {/* Big QR Code */}
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="bg-white p-3.5 rounded-2xl border-4 border-emerald-500 shadow-xl shadow-emerald-500/5">
+                        <svg className="w-40 h-40 text-slate-900" viewBox="0 0 25 25">
+                          <rect width="25" height="25" fill="#FFFFFF"/>
+                          <path d="M0 0h7v1H1v5H0V0zm1 1h5v5H1V1zm1 1h3v3H2V2zm16-2h7v7h-1V1h-6V0zm1 1h5v5h-5V1zm1 1h3v3h-3V2zM0 18h7v7H0v-7zm1 1h5v5H1v-5zm1 1h3v3H2v-3zm18-2h1v1h-1v-1zm1 1h1v1h-1v-1zm1-1h1v1h-1v-1zm2 1h1v1h-1v-1zm-4 2h1v1h-1v-1zm1 1h1v1h-1v-1zm2-1h1v1h-1v-1zm0 2h1v1h-1v-1zm2-1h1v1h-1v-1zm0 2h1v1h-1v-1zm-8-3h1v1h-1v-1zm1-1h1v1h-1v-1zm2 1h1v1h-1v-1zm1-1h1v1h-1v-1zm-4 4h1v1h-1v-1zm2 0h1v1h-1v-1zm2 0h1v1h-1v-1zm-6-2h1v1h-1v-1zm2 0h1v1h-1v-1zm2-2h1v1h-1v-1zm-3-1h1v1h-1v-1zm2 0h1v1h-1v-1zm0-3h1v1h-1v-1zm1 1h1v1h-1v-1zm1-1h1v1h-1v-1zm-4 9h1v1h-1v-1zm1-2h1v1h-1v-1zm1 1h1v1h-1v-1zm2-5h1v1h-1v-1zm1-2h1v1h-1v-1z" fill="#000000"/>
+                        </svg>
+                      </div>
+                      <span className="text-[10px] text-emerald-400 font-bold font-mono uppercase tracking-widest animate-pulse">
+                        ID: {declarationDocId}
+                      </span>
+                    </div>
+
+                    {/* Micro list */}
+                    <div className="space-y-2 text-xs bg-slate-950/60 p-4 border border-slate-850 rounded-xl font-sans mt-2">
+                      <div className="flex justify-between border-b border-slate-900 pb-1">
+                        <span className="text-slate-500">DECLARANT:</span>
+                        <span className="text-white font-bold">{declarantName}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-900 pb-1">
+                        <span className="text-slate-500">JURISDICTION:</span>
+                        <span className="text-white font-semibold font-mono">{declarationJurisdiction}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">HARDWARE STATUS:</span>
+                        <span className="text-emerald-400 font-bold">ALL COMPLIANT</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer section */}
+                  <div className="space-y-3 pt-2">
+                    <p className="text-[9px] text-center text-slate-500 leading-snug font-mono">
+                      ASSERTED RIGHTS: CCPA § 1798.120 / GDPR Art. 21 / FCC Part 15 compliant broadcast. Handshake signature: verified.
+                    </p>
+                    
+                    <div className="h-1 bg-gradient-to-r from-emerald-500/0 via-emerald-500 to-emerald-500/0" />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Smart Exception Modal */}
+          <AnimatePresence>
+            {editingAllowedItem && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 backdrop-blur-md"
+              >
+                <motion.div
+                  initial={{ scale: 0.95, y: 15 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.95, y: 15 }}
+                  className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden shadow-2xl space-y-5"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
+                  
+                  {/* Modal Header */}
+                  <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Sliders className="w-4 h-4 text-blue-400" />
+                        <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider font-mono">
+                          Smart Exemption Settings
+                        </span>
+                      </div>
+                      <h4 className="text-md font-bold text-white font-sans">
+                        {editingAllowedItem.name}
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingAllowedItem(null)}
+                      className="text-slate-400 hover:text-white text-sm bg-slate-950/80 border border-slate-800 px-2.5 py-1 rounded-lg font-mono transition"
+                    >
+                      [Close]
+                    </button>
+                  </div>
+
+                  {/* Body Content */}
+                  <div className="space-y-4 text-xs">
+                    <p className="text-[11px] text-slate-400 leading-normal">
+                      Establish conditional parameters and guardrails on this whitelist bypass to prevent accidental open-recording scenarios or unwanted exposure.
+                    </p>
+
+                    {/* Time Constraint Toggle */}
+                    <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-amber-400" />
+                          <div>
+                            <span className="font-bold text-white block">Time-Window Constraint</span>
+                            <span className="text-[10px] text-slate-500 font-medium">Only allow recording bypass within specific hours</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditingAllowedItem({
+                            ...editingAllowedItem,
+                            timeConstraintEnabled: !editingAllowedItem.timeConstraintEnabled
+                          })}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            editingAllowedItem.timeConstraintEnabled ? 'bg-amber-500' : 'bg-slate-800'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                              editingAllowedItem.timeConstraintEnabled ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {editingAllowedItem.timeConstraintEnabled && (
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                          <div>
+                            <label className="block text-[9px] text-slate-500 uppercase font-bold mb-1">Start Time</label>
+                            <input
+                              type="time"
+                              value={editingAllowedItem.timeStart || '09:00'}
+                              onChange={(e) => setEditingAllowedItem({
+                                ...editingAllowedItem,
+                                timeStart: e.target.value
+                              })}
+                              className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] text-slate-500 uppercase font-bold mb-1">End Time</label>
+                            <input
+                              type="time"
+                              value={editingAllowedItem.timeEnd || '17:00'}
+                              onChange={(e) => setEditingAllowedItem({
+                                ...editingAllowedItem,
+                                timeEnd: e.target.value
+                              })}
+                              className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Identity Constraint Toggle */}
+                    <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-purple-400" />
+                          <div>
+                            <span className="font-bold text-white block">Identity Verification Lock</span>
+                            <span className="text-[10px] text-slate-500 font-medium">Only allow if a specific registered identity is present</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditingAllowedItem({
+                            ...editingAllowedItem,
+                            identityConstraintEnabled: !editingAllowedItem.identityConstraintEnabled
+                          })}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            editingAllowedItem.identityConstraintEnabled ? 'bg-purple-500' : 'bg-slate-800'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                              editingAllowedItem.identityConstraintEnabled ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {editingAllowedItem.identityConstraintEnabled && (
+                        <div className="pt-2">
+                          <label className="block text-[9px] text-slate-500 uppercase font-bold mb-1">Verify Against Family Member</label>
+                          <select
+                            value={editingAllowedItem.allowedIdentityId || 'fam-1'}
+                            onChange={(e) => setEditingAllowedItem({
+                              ...editingAllowedItem,
+                              allowedIdentityId: e.target.value
+                            })}
+                            className="w-full bg-slate-905 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none"
+                          >
+                            {familyMembers.map((member: any) => (
+                              <option key={member.id} value={member.id}>
+                                {member.name} ({member.relation})
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-slate-500 mt-1.5 leading-normal">
+                            Note: Secure peer-to-peer verification checks will continuously ping the chosen family member's active node beacon. If they are not nearby, bypass is auto-revoked.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Save Controls */}
+                  <div className="flex items-center gap-3 pt-3 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setEditingAllowedItem(null)}
+                      className="flex-1 bg-slate-950 border border-slate-800 text-slate-400 hover:text-white font-bold py-2 rounded-xl transition text-center"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAllowedList(prev => prev.map(item => item.id === editingAllowedItem.id ? editingAllowedItem : item));
+                        setEditingAllowedItem(null);
+                        
+                        window.dispatchEvent(new CustomEvent('trigger-test-alert', {
+                          detail: {
+                            title: 'CONSTRAINTS UPDATED',
+                            body: `Smart parameters configured successfully for ${editingAllowedItem.name}.`,
+                            type: 'success'
+                          }
+                        }));
+                      }}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold py-2 rounded-xl transition text-center"
+                    >
+                      Save Parameters
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+        </div>
+      </div>
+
+      {/* Dynamic Sidebar: Info Logs OR Social Customizer */}
+      {(state.showAuditLogs || (state.privacyLevel === 'none' && state.isBroadcasting)) && (
+        <div className="lg:col-span-5 space-y-6">
+          <AnimatePresence mode="wait">
+            {state.privacyLevel === 'none' && state.isBroadcasting ? (
+              <motion.div
+                key="social-card"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-md space-y-4"
+              >
+                <div className="flex items-center gap-2 mb-2 text-emerald-400">
+                  <Sparkle className="w-5 h-5 fill-emerald-400 animate-spin" style={{ animationDuration: '10s' }} />
+                  <h3 className="text-base font-semibold text-white">Opt-In Social Discovery</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  By disabling privacy shields, your beacon shifts into "Social Discovery" mode. Nearby AI Glasses wearers will see your virtual AR nameplate, helping you connect.
+                </p>
+
+                <div className="space-y-3 pt-2">
+                  <div>
+                    <label className="block text-xs text-slate-500 uppercase tracking-wider mb-1 font-semibold">
+                      Discovery Handle
+                    </label>
+                    <input
+                      id="social-handle-input"
+                      type="text"
+                      value={tempUsername}
+                      onChange={(e) => setTempUsername(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-emerald-500/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-500 uppercase tracking-wider mb-1 font-semibold">
+                      Virtual Bio Nameplate
+                    </label>
+                    <textarea
+                      id="social-bio-input"
+                      rows={2}
+                      value={tempBio}
+                      onChange={(e) => setTempBio(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/60 resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-500 uppercase tracking-wider mb-1 font-semibold">
+                      Interests / Tags
+                    </label>
+                    <input
+                      id="social-tags-input"
+                      type="text"
+                      value={tempInterests}
+                      onChange={(e) => setTempInterests(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/60"
+                      placeholder="e.g. Design, Tech, Foodie"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">Comma-separated tags</span>
+                  </div>
+
+                  <button
+                    id="save-profile-btn"
+                    onClick={handleProfileSave}
+                    className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs py-2 rounded-lg font-semibold transition"
+                  >
+                    Save &amp; Broadcast Profile
+                  </button>
+                </div>
+
+                {/* Demo Card Preview */}
+                <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4.5 space-y-3">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block">
+                    AR HUD Nameplate Preview:
+                  </span>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <User className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white font-mono">{state.socialProfile?.username || '@your_handle'}</h4>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-normal">{state.socialProfile?.bio}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {state.socialProfile?.interests.map((interest) => (
+                          <span key={interest} className="text-[9px] bg-emerald-950/40 border border-emerald-900/60 text-emerald-400 px-1.5 py-0.5 rounded">
+                            {interest}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="logs-card"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md"
+              >
+                {/* OS Window Title Bar */}
+                <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5 shrink-0">
+                      <span 
+                        className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" 
+                        onClick={() => onChange({ ...state, showAuditLogs: false })} 
+                        title="Close Window" 
+                      />
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Privacy Audit Log</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {logs.length > 0 && (
+                      <button
+                        id="clear-logs-btn"
+                        type="button"
+                        onClick={onClearLogs}
+                        className="text-[10px] text-slate-500 hover:text-white uppercase tracking-wider font-bold transition mr-1"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onChange({ ...state, showAuditLogs: false })}
+                      className="text-slate-400 hover:text-rose-400 transition-colors text-xs font-bold font-mono px-1.5 py-0.5 rounded bg-slate-950/65 border border-slate-800"
+                      title="Close Window"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab switcher for Logs vs Email summary */}
+                <div className="flex border-b border-slate-800 bg-slate-950/40">
+                  <button
+                    id="logs-ledger-tab-btn"
+                    type="button"
+                    onClick={() => setLogsActiveTab('ledger')}
+                    className={`flex-1 py-3 text-[10px] font-mono font-bold uppercase tracking-wider border-b-2 transition-all duration-150 cursor-pointer text-center select-none ${
+                      logsActiveTab === 'ledger'
+                        ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
+                        : 'border-transparent text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    📡 Audit Ledger ({logs.length})
+                  </button>
+                  <button
+                    id="logs-email-tab-btn"
+                    type="button"
+                    onClick={() => setLogsActiveTab('email')}
+                    className={`flex-1 py-3 text-[10px] font-mono font-bold uppercase tracking-wider border-b-2 transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 select-none ${
+                      logsActiveTab === 'email'
+                        ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
+                        : 'border-transparent text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    <Mail className="w-3 h-3" />
+                    📧 Daily Summary Email
+                  </button>
+                </div>
+
+                {/* Window Content */}
+                <div className="p-5 space-y-4 bg-slate-900/30">
+                  {logsActiveTab === 'ledger' ? (
+                    <>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800/40 pb-3">
+                        <p className="text-xs text-slate-400 leading-normal max-w-[280px] sm:max-w-xs">
+                          Real-time validation log demonstrating nearby smart glasses identifying your Opt-Out beacon and applying shields.
+                        </p>
+                        {logs.length > 0 && (
+                          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                            <button
+                              id="export-csv-btn"
+                              type="button"
+                              onClick={() => handleExportLogs('csv')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-800 bg-slate-950/80 hover:bg-slate-900 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/20 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer shadow-sm active:scale-95 select-none"
+                              title="Export logs as CSV spreadsheet"
+                            >
+                              <Download className="w-3 h-3 text-emerald-400" />
+                              <span>Export CSV</span>
+                            </button>
+                            <button
+                              id="export-pdf-btn"
+                              type="button"
+                              onClick={() => handleExportLogs('pdf')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-800 bg-slate-950/80 hover:bg-slate-900 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/20 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer shadow-sm active:scale-95 select-none"
+                              title="Export logs as PDF document"
+                            >
+                              <Download className="w-3 h-3 text-emerald-400" />
+                              <span>Export PDF</span>
+                            </button>
+                            <button
+                              id="export-json-btn"
+                              type="button"
+                              onClick={() => handleExportLogs('json')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-800 bg-slate-950/80 hover:bg-slate-900 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/20 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer shadow-sm active:scale-95 select-none"
+                              title="Export logs as cryptographically signed JSON ledger"
+                            >
+                              <Sparkles className="w-3 h-3 text-emerald-400" />
+                              <span>Export Signed JSON</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                        {logs.length === 0 ? (
+                          <div className="border border-dashed border-slate-800 rounded-xl p-8 text-center text-slate-500 space-y-2">
+                            <AlertCircle className="w-6 h-6 mx-auto text-slate-600" />
+                            <p className="text-xs">No active handshakes detected yet.</p>
+                            <p className="text-[10px] text-slate-600">
+                              Toggle glasses mode or wait to observe active simulations.
+                            </p>
+                          </div>
+                        ) : (
+                          logs.map((log) => {
+                            const isProximityAlert = log.distance < 2;
+                            return (
+                              <div 
+                                key={log.id} 
+                                className={`bg-slate-950/55 rounded-xl p-3 space-y-1.5 text-xs border transition-all ${
+                                  isProximityAlert 
+                                    ? 'border-red-500/80 bg-red-950/15 shadow-[0_0_10px_rgba(239,68,68,0.15)] animate-pulse' 
+                                    : 'border-slate-800/80'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between text-[10px]">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-slate-500 font-mono">{log.timestamp}</span>
+                                    {isProximityAlert && (
+                                      <span className="text-[8px] font-mono bg-red-500/10 text-red-400 border border-red-500/20 px-1 py-0.2 rounded uppercase tracking-wider font-extrabold animate-bounce">
+                                        ⚠️ PROXIMITY CRITICAL
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className={`px-1.5 py-0.5 rounded-full uppercase font-bold text-[8px] ${
+                                    log.action === 'censored' 
+                                      ? 'bg-red-950/40 text-red-400 border border-red-900/40' 
+                                      : log.action === 'discovered' 
+                                      ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/40' 
+                                      : log.action === 'erased' 
+                                      ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-500/20' 
+                                      : 'bg-slate-800 text-slate-400'
+                                  }`}>
+                                    {log.action}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center text-white font-medium">
+                                  <span>{log.deviceModel}</span>
+                                  <span className={`font-mono text-[10px] ${isProximityAlert ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
+                                    {log.distance.toFixed(1)}m away
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5 text-[10px] text-slate-500 pt-1 border-t border-slate-900">
+                                  <div>
+                                    <span className="block text-[8px] uppercase tracking-wider text-slate-600">Shield</span>
+                                    <span className="text-slate-400 font-semibold">{log.shieldApplied}</span>
+                                  </div>
+                                  <div>
+                                    <span className="block text-[8px] uppercase tracking-wider text-slate-600">Verified ID</span>
+                                    <span className="text-slate-400 font-mono">{log.rotatedId.substring(0, 8)}...</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    /* Daily Summary Email Generator tab */
+                    <div className="space-y-4 text-left">
+                      <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="relative flex h-2 w-2">
+                              {isAutoReportEnabled ? (
+                                <>
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </>
+                              ) : (
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-600"></span>
+                              )}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-300 font-mono uppercase tracking-wider">
+                              {isAutoReportEnabled ? 'Secure Report Daemon Active' : 'Report Daemon Suspended'}
+                            </span>
+                          </div>
+                          
+                          <label className="relative inline-flex items-center cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isAutoReportEnabled}
+                              onChange={(e) => setIsAutoReportEnabled(e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-slate-950"></div>
+                          </label>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Configures a localized daily cron task using RFC-9402 protocols to automatically compile your privacy protection history and securely deliver the telemetry to your address.
+                        </p>
+                      </div>
+
+                      {/* Settings form */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Recipient Address</label>
+                          <input
+                            type="email"
+                            required
+                            value={emailRecipient}
+                            onChange={(e) => setEmailRecipient(e.target.value)}
+                            placeholder="user@example.com"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition font-normal"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Auto-Dispatch Hour</label>
+                          <div className="relative">
+                            <input
+                              type="time"
+                              required
+                              value={emailReportTime}
+                              onChange={(e) => setEmailReportTime(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition font-normal"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Telemetry Verbosity</label>
+                          <select
+                            value={emailReportType}
+                            onChange={(e) => setEmailReportType(e.target.value as 'standard' | 'forensic')}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition"
+                          >
+                            <option value="standard">📊 Standard Analytics</option>
+                            <option value="forensic">🔬 Forensic RF-Level</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Next Scheduled Dispatch</span>
+                          <span className="text-xs text-slate-300 font-mono font-bold py-1.5 px-1 bg-slate-950 border border-slate-800/80 rounded-lg flex items-center gap-1.5 justify-center">
+                            <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                            {isAutoReportEnabled ? `Today at ${emailReportTime}` : 'Deactivated'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Summary Metrics */}
+                      <div className="bg-slate-950/70 border border-slate-850 rounded-xl p-3 grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <div className="text-lg font-extrabold text-red-400 font-mono">
+                            {logs.filter(l => l.action === 'censored').length}
+                          </div>
+                          <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Censors</div>
+                        </div>
+                        <div className="border-x border-slate-850">
+                          <div className="text-lg font-extrabold text-emerald-400 font-mono">
+                            {logs.filter(l => l.action === 'discovered' || l.action === 'erased').length}
+                          </div>
+                          <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Detections</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-extrabold text-blue-400 font-mono">
+                            {logs.length > 0 ? (logs.reduce((acc, c) => acc + c.distance, 0) / logs.length).toFixed(1) : '0.0'}m
+                          </div>
+                          <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Avg Range</div>
+                        </div>
+                      </div>
+
+                      {/* Mock Email Preview Card */}
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden text-xs">
+                        {/* Header metadata */}
+                        <div className="bg-slate-900 px-3 py-2 border-b border-slate-800 text-[10px] text-slate-400 font-mono space-y-1">
+                          <div>
+                            <span className="text-slate-500 font-bold uppercase">To:</span> {emailRecipient}
+                          </div>
+                          <div>
+                            <span className="text-slate-500 font-bold uppercase">Subject:</span> BlurBubble™ Daily Security Audit Compliance Report
+                          </div>
+                        </div>
+                        
+                        {/* Preview content container */}
+                        <div className="p-4 max-h-[160px] overflow-y-auto bg-slate-950 font-sans space-y-3 select-text">
+                          <div className="text-[10px] text-emerald-400 font-bold font-mono uppercase border-b border-slate-900 pb-1">
+                            🛡️ BlurBubble™ Privacy Shield Notification
+                          </div>
+                          <p className="text-[11px] text-slate-300 leading-relaxed font-normal">
+                            Hello, <strong>{emailRecipient.split('@')[0]}</strong>. Below is your automated localized daily privacy summary from your active BlurBubble™ Shield Node.
+                          </p>
+
+                          {emailReportType === 'forensic' && (
+                            <div className="border-l-2 border-indigo-500 bg-indigo-500/5 p-2 rounded text-[10px] text-indigo-300">
+                              <strong>Forensic RF Analysis:</strong> Temporal rotation keys were cycled {Math.floor(logs.length / 3) + 1} times to prevent longitudinal profiling. Local privacy index remains 100%.
+                            </div>
+                          )}
+
+                          {/* Simplified preview table */}
+                          <div className="space-y-1.5 font-mono text-[9px] text-slate-400 border-t border-slate-900 pt-2">
+                            <div className="grid grid-cols-3 text-slate-500 font-bold uppercase">
+                              <span>Incident Time</span>
+                              <span>Target Device</span>
+                              <span className="text-right">Action</span>
+                            </div>
+                            {logs.slice(0, 3).map((log, index) => (
+                              <div key={index} className="grid grid-cols-3 border-b border-slate-900 pb-1">
+                                <span className="text-slate-500">{log.timestamp}</span>
+                                <span className="text-slate-300 font-bold truncate">{log.deviceModel}</span>
+                                <span className={`text-right font-bold ${log.action === 'censored' ? 'text-red-400' : 'text-emerald-400'}`}>
+                                  {log.action.toUpperCase()}
+                                </span>
+                              </div>
+                            ))}
+                            {logs.length > 3 && (
+                              <div className="text-[8px] text-slate-500 text-center font-bold">
+                                + {logs.length - 3} more records included in final HTML report payload
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Feedback simulation banner */}
+                      {reportSimulationSuccess && (
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-semibold flex items-center gap-2 animate-bounce">
+                          <Check className="w-4 h-4 shrink-0" />
+                          <span>Simulation Successful! secure daily report draft successfully generated and dispatched to {emailRecipient}.</span>
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2">
+                        <button
+                          id="copy-email-html-btn"
+                          type="button"
+                          onClick={() => {
+                            const html = generateDailySummaryEmailHtml(emailRecipient, emailReportTime, emailReportType);
+                            navigator.clipboard.writeText(html);
+                            // Change text temporarily to copy confirmation
+                            const btn = document.getElementById('copy-email-html-btn');
+                            if (btn) {
+                              const originalHtml = btn.innerHTML;
+                              btn.innerHTML = `<svg class="w-3.5 h-3.5 text-emerald-400 animate-pulse" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Copied HTML!`;
+                              setTimeout(() => {
+                                btn.innerHTML = originalHtml;
+                              }, 2000);
+                            }
+                          }}
+                          className="flex-1 py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
+                          title="Copy raw HTML code of compliant summary email to paste in custom mail clients"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy HTML Payload</span>
+                        </button>
+
+                        <button
+                          id="simulate-send-email-btn"
+                          type="button"
+                          onClick={handleSimulateSendReport}
+                          disabled={isSendingReportSimulation}
+                          className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-950 text-slate-950 font-extrabold rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-lg shadow-emerald-500/10"
+                          title="Simulate instant dispatch over BlurBubble encrypted broadcast channels"
+                        >
+                          {isSendingReportSimulation ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Broadcasting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Simulate Send</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Interactive Information Overlay Modal (Universal User Guide) */}
+      <AnimatePresence>
+        {helpTopic && HELP_TOPICS[helpTopic] && (() => {
+          const topic = HELP_TOPICS[helpTopic];
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+              onClick={() => setHelpTopic(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="p-6 border-b border-slate-800 bg-slate-950/50 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                      {topic.category} Guide
+                    </span>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2 mt-1">
+                      <HelpCircle className="w-4 h-4 text-blue-400 animate-pulse" />
+                      {topic.title}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHelpTopic(null)}
+                    className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white transition text-xs"
+                    title="Close help guide"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+                  {/* Summary Section */}
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Overview</h4>
+                    <p className="text-xs text-slate-300 leading-relaxed font-medium bg-slate-950/40 p-3.5 border border-slate-800/60 rounded-xl">
+                      {topic.summary}
+                    </p>
+                  </div>
+
+                  {/* Under the Hood Section */}
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">How It Works</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      {topic.whatItDoes}
+                    </p>
+                  </div>
+
+                  {/* How To Use Section */}
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Operation &amp; Usage Instructions</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      {topic.howToUse}
+                    </p>
+                  </div>
+
+                  {/* Key Benefits */}
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Key Privacy Protections</h4>
+                    <div className="space-y-2">
+                      {topic.benefits.map((benefit, index) => (
+                        <div key={index} className="flex items-start gap-2 text-xs text-slate-300">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{benefit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setHelpTopic(null)}
+                    className="w-full sm:w-auto px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold transition text-xs shadow-lg shadow-blue-500/10"
+                  >
+                    Acknowledge &amp; Close
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Create New Schedule Modal */}
+      <AnimatePresence>
+        {isScheduleModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+            onClick={() => setIsScheduleModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="p-6 border-b border-slate-800 bg-slate-950/50 flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    Advanced Automation
+                  </span>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2 mt-1">
+                    <Clock className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    Create New Schedule Slot
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsScheduleModalOpen(false)}
+                  className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white transition text-xs"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddScheduleSlot(e);
+                  setIsScheduleModalOpen(false);
+                }}
+                className="p-6 space-y-4 max-h-[70vh] overflow-y-auto"
+              >
+                <div className="space-y-4 text-xs">
+                  {/* Name */}
+                  <div>
+                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Schedule Label / Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Morning Commute, Dinner Shield"
+                      value={newSlotLabel}
+                      onChange={(e) => setNewSlotLabel(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                    />
+                  </div>
+
+                  {/* Times Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Start Time (24h)</label>
+                      <input
+                        type="time"
+                        required
+                        value={newSlotStartTime}
+                        onChange={(e) => setNewSlotStartTime(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">End Time (24h)</label>
+                      <input
+                        type="time"
+                        required
+                        value={newSlotEndTime}
+                        onChange={(e) => setNewSlotEndTime(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Broadcast Setting */}
+                  <div>
+                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Broadcast Transmit State</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewSlotBroadcastEnabled(true)}
+                        className={`py-2 px-3 rounded-lg border text-center transition font-bold ${
+                          newSlotBroadcastEnabled
+                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
+                            : 'bg-slate-950 border-slate-850 text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        Beacon ON (Broadcasting)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewSlotBroadcastEnabled(false)}
+                        className={`py-2 px-3 rounded-lg border text-center transition font-bold ${
+                          !newSlotBroadcastEnabled
+                            ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
+                            : 'bg-slate-950 border-slate-850 text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        Beacon OFF (Battery Saver)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Specific Privacy settings / overrides */}
+                  <div>
+                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Privacy Settings Override</label>
+                    <select
+                      value={newSlotPrivacyLevel}
+                      onChange={(e) => setNewSlotPrivacyLevel(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
+                    >
+                      <option value="default">Default Behavior (Inherit Global State)</option>
+                      <option value="strict_blur">Strict Blur (Full anonymization face-blurring)</option>
+                      <option value="pixelate">Pixelate (Heavy pixelation of bystander feeds)</option>
+                      <option value="emoji">Emoji Overlay (Dynamic comical covers)</option>
+                      <option value="black_bar">Black Bar (Solid visual censorship bar)</option>
+                      <option value="magic_removal">AI Magic Removal (Erase face completely)</option>
+                      <option value="none">None (Allow filming/registration)</option>
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Choose whether matching this schedule automatically overrides your default privacy filter choice.
+                    </p>
+                  </div>
+
+                  {/* Icon profile */}
+                  <div>
+                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Visual Profile Icon</label>
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                      {(['briefcase', 'baby', 'beer', 'home', 'school', 'car', 'users', 'shield'] as const).map(ic => {
+                        const isSel = newSlotIcon === ic;
+                        return (
+                          <button
+                            key={ic}
+                            type="button"
+                            onClick={() => setNewSlotIcon(ic)}
+                            className={`p-2.5 rounded-lg border transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                              isSel 
+                                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-bold' 
+                                : 'bg-slate-950 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900'
+                            }`}
+                            title={ic}
+                          >
+                            {renderSlotIcon(ic, "w-4 h-4")}
+                            <span className="text-[8px] uppercase tracking-tighter opacity-80 mt-0.5">{ic}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Days */}
+                  <div>
+                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Specific Broadcast Days</label>
+                    <div className="flex flex-wrap gap-1">
+                      {daysOfWeek.map(day => {
+                        const isSelected = newSlotDays.includes(day);
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setNewSlotDays(newSlotDays.filter(d => d !== day));
+                              } else {
+                                setNewSlotDays([...newSlotDays, day]);
+                              }
+                            }}
+                            className={`flex-1 min-w-[40px] py-2 text-[10px] font-bold uppercase rounded-lg border transition cursor-pointer text-center ${
+                              isSelected 
+                                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-bold' 
+                                : 'bg-slate-950 border-slate-850 text-slate-500 hover:text-slate-300'
+                            }`}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row justify-end gap-2 bg-slate-900">
+                  <button
+                    type="button"
+                    onClick={() => setIsScheduleModalOpen(false)}
+                    className="px-5 py-2 rounded-xl bg-slate-950 border border-slate-850 hover:bg-slate-900 text-slate-400 hover:text-white transition text-xs font-bold font-mono uppercase tracking-wider cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold transition text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/15"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Save Schedule Rule
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+

@@ -1,0 +1,6 @@
+{
+  "name": "BlurBubble",
+  "description": "Interactive universal privacy-protection and opt-out signal manager. Protect your face, devices, valuables, art, and intellectual property from unwanted AI recordings and smart camera scans.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
