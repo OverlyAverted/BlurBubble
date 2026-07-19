@@ -206,7 +206,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
   const [webcamActive, setWebcamActive] = useState(false);
   const [webcamError, setWebcamError] = useState<string | null>(null);
   const [useVirtualWebcam, setUseVirtualWebcam] = useState(false);
-  const [blurPosition, setBlurPosition] = useState({ x: 50, y: 40 }); // percentage coords
+  const [blurPosition, setBlurPosition] = useState({ x: 50, y: 40, scale: 1.0 }); // percentage coords
   
   // Camera selection option to use front or back camera
   const [webcamFacingMode, setWebcamFacingMode] = useState<'user' | 'environment'>('user');
@@ -1172,6 +1172,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
       }
 
       let sourceLoaded = false;
+      const isMirrored = webcamFacingMode === 'user' && !selectedWebcamId;
       
       // Capture from real video or virtual stream
       if (!useVirtualWebcam && videoRef.current && videoRef.current.readyState >= 2) {
@@ -1180,8 +1181,8 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
         const vH = video.videoHeight || 480;
 
         // Bounding box for face/body based on percentage
-        // In real webcam, the video is scale-x-[-1] (mirrored in UI), so let's adjust the x center.
-        const centerPercentX = 1 - (blurPosition.x / 100); 
+        // In real webcam, the video is scale-x-[-1] (mirrored in UI) when mirrored, so let's adjust the x center.
+        const centerPercentX = isMirrored ? (1 - (blurPosition.x / 100)) : (blurPosition.x / 100); 
         const centerPercentY = blurPosition.y / 100;
 
         const cropW = aiTrackingMode === 'body' ? Math.round(vW * 0.22) : Math.round(vW * 0.25);
@@ -1195,8 +1196,12 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
 
         offscreenCtx.clearRect(0, 0, w, h);
         offscreenCtx.save();
-        offscreenCtx.scale(-1, 1); // Unmirror the sub-image to match viewport
-        offscreenCtx.drawImage(video, cropX, cropY, cropW, cropH, -w, 0, w, h);
+        if (isMirrored) {
+          offscreenCtx.scale(-1, 1); // Unmirror the sub-image to match viewport
+          offscreenCtx.drawImage(video, cropX, cropY, cropW, cropH, -w, 0, w, h);
+        } else {
+          offscreenCtx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, w, h);
+        }
         offscreenCtx.restore();
         sourceLoaded = true;
       } else {
@@ -1298,10 +1303,11 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     const finalX = Math.max(10, Math.min(90, x));
     const finalY = Math.max(10, Math.min(90, y));
-    setBlurPosition({
+    setBlurPosition((prev) => ({
       x: finalX,
       y: finalY,
-    });
+      scale: prev.scale ?? 1.0,
+    }));
     // Sync Kalman state to prevent jumps upon re-enabling tracking
     kalmanXStateRef.current = { x: finalX, p: 1.0 };
     kalmanYStateRef.current = { y: finalY, p: 1.0 };
@@ -1362,7 +1368,9 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
 
         let targetX = 50;
         let targetY = 40;
+        let targetScale = 1.0;
         let detectedRealFace = false;
+        const isMirrored = webcamFacingMode === 'user' && !selectedWebcamId;
 
         // Try actual real-time image analysis of the live webcam stream
         if (videoRef.current && videoRef.current.readyState >= 2 && ctx) {
@@ -1406,8 +1414,13 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                   targetX = mapped.x;
                   targetY = mapped.y;
                   
-                  // Mirror coordinate since camera view is flipped scale-x-[-1]
-                  targetX = 100 - targetX;
+                  // Calculate face size relative to frame width to determine depth/scale
+                  targetScale = Math.max(0.4, Math.min(2.4, (width / vWidth) / 0.18));
+                  
+                  // Mirror coordinate since camera view is flipped scale-x-[-1] ONLY when mirrored in UI
+                  if (isMirrored) {
+                    targetX = 100 - targetX;
+                  }
                   
                   // Keep inside comfortable visual bounds
                   targetX = Math.max(12, Math.min(88, targetX));
@@ -1433,6 +1446,9 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                   const vWidth = videoRef.current.videoWidth || 640;
                   const vHeight = videoRef.current.videoHeight || 480;
                   
+                  // Calculate face size relative to frame width to determine depth/scale
+                  targetScale = Math.max(0.4, Math.min(2.4, (width / vWidth) / 0.18));
+                  
                   // Get centroid of face and map to 100% viewport space taking webcam aspect-crop into account.
                   // Shift down from the forehead (50% level) to eyes/nose center (58% level).
                   const cx = x + width / 2;
@@ -1441,8 +1457,10 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                   targetX = mapped.x;
                   targetY = mapped.y;
                   
-                  // Mirror coordinate since camera view is flipped scale-x-[-1]
-                  targetX = 100 - targetX;
+                  // Mirror coordinate since camera view is flipped scale-x-[-1] ONLY when mirrored in UI
+                  if (isMirrored) {
+                    targetX = 100 - targetX;
+                  }
                   
                   // Keep inside comfortable visual bounds
                   targetX = Math.max(12, Math.min(88, targetX));
@@ -1555,6 +1573,9 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                 if (weightSum > 0) {
                   const rawX = sumX / weightSum;
                   const rawY = sumY / weightSum;
+                  
+                  // Calculate scale based on density of matching skin cluster pixels to estimate size/depth
+                  targetScale = Math.max(0.4, Math.min(2.4, weightSum / (aiTrackingMode === 'body' ? 70 : 45)));
 
                   // Convert to mirrored visual percentages (0-100) taking aspect crop into account.
                   // Shift rawY down slightly (+1.8 out of 30 pixels) to center on eyes/nose instead of forehead.
@@ -1562,8 +1583,10 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                   targetX = mapped.x;
                   targetY = mapped.y;
 
-                  // Mirror coordinate since camera view is flipped scale-x-[-1]
-                  targetX = 100 - targetX;
+                  // Mirror coordinate since camera view is flipped scale-x-[-1] ONLY when mirrored in UI
+                  if (isMirrored) {
+                    targetX = 100 - targetX;
+                  }
 
                   // Constrain to responsive viewport limits
                   targetX = Math.max(12, Math.min(88, targetX));
@@ -1616,6 +1639,9 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
             targetX = 50 + Math.sin(tick * 0.4) * 16 + Math.cos(tick * 0.9) * 4;
             targetY = 56 + Math.cos(tick * 0.5) * 10 + Math.sin(tick * 0.8) * 2.5;
           }
+          
+          // Beautiful drift simulating moving closer and further (z-axis depth motion)
+          targetScale = 1.0 + Math.sin(tick * 0.4) * 0.35;
         }
 
         let finalX = targetX;
@@ -1652,16 +1678,21 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
 
         // Apply final coordinates to target mask position state
         setBlurPosition((prev) => {
+          const prevScale = prev.scale ?? 1.0;
+          const nextScale = parseFloat((prevScale + (targetScale - prevScale) * (detectedRealFace ? 0.12 : 0.08)).toFixed(3));
+          
           if (kalmanEnabled) {
             return {
               x: parseFloat(finalX.toFixed(2)),
               y: parseFloat(finalY.toFixed(2)),
+              scale: nextScale,
             };
           } else {
             const easeFactor = (detectedRealFace || useVirtualWebcam) ? 0.95 : 0.15;
             return {
               x: parseFloat((prev.x + (targetX - prev.x) * easeFactor).toFixed(2)),
               y: parseFloat((prev.y + (targetY - prev.y) * easeFactor).toFixed(2)),
+              scale: nextScale,
             };
           }
         });
@@ -1679,7 +1710,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
 
     scheduleId = scheduleNextFrame(runTrackerFrame);
     return () => cancelScheduledFrame(scheduleId);
-  }, [aiTrackingActive, aiTrackingMode, aiSwaySpeed, activeTab, webcamActive, useVirtualWebcam, useEdgeAiModel, edgeAiModel, trackingFpsLimit, detectedCameraFps, kalmanEnabled, kalmanQ, kalmanR]);
+  }, [aiTrackingActive, aiTrackingMode, aiSwaySpeed, activeTab, webcamActive, useVirtualWebcam, useEdgeAiModel, edgeAiModel, trackingFpsLimit, detectedCameraFps, kalmanEnabled, kalmanQ, kalmanR, webcamFacingMode, selectedWebcamId]);
 
   // Log generation triggers when variables change
   useEffect(() => {
@@ -2664,26 +2695,57 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                       )}
 
                       {/* The dynamic backdrop filter blur card simulating smart-glasses software blurring */}
-                      {showCensorOverlay && (
-                        <motion.div
-                          style={{
-                            position: 'absolute',
-                            left: `${blurPosition.x}%`,
-                            top: `${blurPosition.y}%`,
-                            transform: 'translate(-50%, -50%)',
-                            clipPath: aiTrackingMode === 'body' 
-                              ? 'none' 
-                              : 'polygon(50% 5%, 68% 13%, 82% 28%, 86% 48%, 80% 70%, 68% 86%, 50% 95%, 32% 86%, 20% 70%, 14% 48%, 18% 28%, 32% 13%)',
-                            WebkitClipPath: aiTrackingMode === 'body' 
-                              ? 'none' 
-                              : 'polygon(50% 5%, 68% 13%, 82% 28%, 86% 48%, 80% 70%, 68% 86%, 50% 95%, 32% 86%, 20% 70%, 14% 48%, 18% 28%, 32% 13%)',
-                          }}
-                          className={`absolute flex items-center justify-center cursor-move z-10 overflow-hidden ${
-                            aiTrackingMode === 'body' 
-                              ? 'w-44 h-72 rounded-t-[5rem] rounded-b-[4rem]' 
-                              : 'w-48 h-48'
-                          }`}
-                        >
+                      {showCensorOverlay && (() => {
+                        const scaleFactor = (blurPosition as any).scale !== undefined ? (blurPosition as any).scale : 1.0;
+                        const isBody = aiTrackingMode === 'body';
+                        const baseWidth = isBody ? 176 : 192;
+                        const baseHeight = isBody ? 288 : 192;
+
+                        const dynamicWidth = baseWidth * scaleFactor;
+                        const dynamicHeight = baseHeight * scaleFactor;
+
+                        const renderTick = performance.now() * 0.003;
+                        const wave = Math.sin(renderTick * 2.0) * 1.5;
+                        const wave2 = Math.cos(renderTick * 1.6) * 1.5;
+                        const wave3 = Math.sin(renderTick * 1.1) * 2.0;
+
+                        const dynamicClipPath = isBody 
+                          ? 'none' 
+                          : `polygon(
+                              ${50 + wave}% ${5 + wave2}%, 
+                              ${68 + wave2}% ${13 - wave}%, 
+                              ${82 + wave3}% ${28 + wave2}%, 
+                              ${86 - wave}% ${48 + wave3}%, 
+                              ${80 + wave2}% ${70 - wave}%, 
+                              ${68 - wave3}% ${86 + wave2}%, 
+                              ${50 - wave}% ${95 - wave3}%, 
+                              ${32 + wave2}% ${86 - wave}%, 
+                              ${20 - wave3}% ${70 + wave2}%, 
+                              ${14 + wave}% ${48 - wave3}%, 
+                              ${18 - wave2}% ${28 - wave}%, 
+                              ${32 + wave3}% ${13 + wave2}%
+                            )`;
+
+                        const rotX = (blurPosition.y - 40) * 0.45 + Math.sin(renderTick * 0.6) * 3;
+                        const rotY = -(blurPosition.x - 50) * 0.45 + Math.cos(renderTick * 0.6) * 3;
+                        const rotZ = (blurPosition.x - 50) * 0.12;
+
+                        return (
+                          <motion.div
+                            style={{
+                              position: 'absolute',
+                              left: `${blurPosition.x}%`,
+                              top: `${blurPosition.y}%`,
+                              width: `${dynamicWidth}px`,
+                              height: `${dynamicHeight}px`,
+                              transform: `translate(-50%, -50%) perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) rotateZ(${rotZ}deg)`,
+                              clipPath: dynamicClipPath,
+                              WebkitClipPath: dynamicClipPath,
+                            }}
+                            className={`absolute flex items-center justify-center cursor-move z-10 overflow-hidden ${
+                              isBody ? 'rounded-t-[5rem] rounded-b-[4rem]' : ''
+                            }`}
+                          >
                           {/* Live WebAssembly/Vectorized dynamic pixel-processing canvas */}
                           <canvas
                             ref={wasmCanvasRef}
@@ -2903,8 +2965,9 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                             <span className="text-[7px] font-mono text-red-300">EMERGENCY FORCE SHIELD</span>
                           </div>
                         )}
-                      </motion.div>
-                    )}
+                          </motion.div>
+                        );
+                      })()}
                   </>
                 )}
               </>
@@ -5185,7 +5248,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                 <button
                   id="reset-ai-target-btn"
                   onClick={() => {
-                    setBlurPosition({ x: 50, y: 40 });
+                    setBlurPosition({ x: 50, y: 40, scale: 1.0 });
                     setAiTrackingActive(true);
                     kalmanXStateRef.current = { x: 50, p: 1.0 };
                     kalmanYStateRef.current = { y: 40, p: 1.0 };
