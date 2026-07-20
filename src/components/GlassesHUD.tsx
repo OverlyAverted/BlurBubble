@@ -207,6 +207,8 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
   const [webcamError, setWebcamError] = useState<string | null>(null);
   const [useVirtualWebcam, setUseVirtualWebcam] = useState(false);
   const [blurPosition, setBlurPosition] = useState({ x: 50, y: 40, scale: 1.0 }); // percentage coords
+  const [childPosition, setChildPosition] = useState({ x: 25, y: 55, scale: 0.85 }); // Child Tag target
+  const [strangerPosition, setStrangerPosition] = useState({ x: 75, y: 50, scale: 1.0 }); // Bystander target
   
   // Camera selection option to use front or back camera
   const [webcamFacingMode, setWebcamFacingMode] = useState<'user' | 'environment'>('user');
@@ -319,6 +321,12 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
   const [showHolographicAvatar, setShowHolographicAvatar] = useState(false); // Default to false
   const [showTargetTagLabel, setShowTargetTagLabel] = useState(false); // Default to false
   const [showCameraErrorAlert, setShowCameraErrorAlert] = useState(false); // Default to false
+  const [multiTargetSim, setMultiTargetSim] = useState(true); // Simulate multiple distinct beacon tags (Parent & Son) leaving stranger unblurred
+
+  // Real-time and simulated gyro/accelerometer data for auto-calibration warping alignment
+  const [gyroData, setGyroData] = useState({ alpha: 0, beta: 0, gamma: 0 });
+  const [accelData, setAccelData] = useState({ x: 0, y: 0, z: 0 });
+  const [simulatedTilt, setSimulatedTilt] = useState({ pitch: 0, roll: 0 }); // Fallback simulated tilt for desktop testing
 
   // Virtual Street Sandbox Viewport Display Toggles
   const [sandboxShowBlur, setSandboxShowBlur] = useState(true); // Enforce only blur active by default
@@ -393,6 +401,81 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
     { id: 'h3', name: 'Sony AI Sentinel Cam 4K (Opt-Out Tag ID: SNY-112)', type: 'camera' as const, mac: 'FC:FB:FB:11:22:90', channel: 'Wi-Fi 5GHz (Ch 48)', code: 'BB-SNY-112' },
     { id: 'h4', name: 'Stealth Drone Signal Tag v2 (Opt-Out Tag ID: DRN-502)', type: 'drone' as const, mac: '24:0A:64:EE:50:D2', channel: 'Wi-Fi 2.4GHz (Ch 11)', code: 'BB-DRN-502' }
   ];
+
+  // Listener for Calibrate Warp grid reset event triggered from App.tsx status bar tooltip
+  useEffect(() => {
+    const handleCalibrateWarp = () => {
+      setBlurPosition({ x: 50, y: 40, scale: 1.0 });
+      setAiTrackingActive(true);
+      kalmanXStateRef.current = { x: 50, p: 1.0 };
+      kalmanYStateRef.current = { y: 40, p: 1.0 };
+      
+      addLog({
+        deviceModel: 'GLASSES_HUD',
+        action: 'censored',
+        shieldApplied: 'CALIBRATE_3D_WARPING',
+        distance: 0,
+        rotatedId: 'MESH_CALIB_SUCCESS'
+      });
+    };
+
+    window.addEventListener('calibrate-warp', handleCalibrateWarp);
+    return () => {
+      window.removeEventListener('calibrate-warp', handleCalibrateWarp);
+    };
+  }, [addLog]);
+
+  // Gyro & Accelerometer Hardware/Simulation Controller for Auto-Calibration
+  useEffect(() => {
+    let active = true;
+    
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      if (!active) return;
+      if (e.beta !== null || e.gamma !== null) {
+        setGyroData({
+          alpha: e.alpha || 0,
+          beta: e.beta || 0,
+          gamma: e.gamma || 0
+        });
+      }
+    };
+
+    const handleMotion = (e: DeviceMotionEvent) => {
+      if (!active) return;
+      const acc = e.accelerationIncludingGravity || e.acceleration || { x: 0, y: 0, z: 0 };
+      setAccelData({
+        x: acc.x || 0,
+        y: acc.y || 0,
+        z: acc.z || 0
+      });
+    };
+
+    window.addEventListener('deviceorientation', handleOrientation);
+    window.addEventListener('devicemotion', handleMotion);
+
+    // Continuous high-fidelity simulation of physical movement/tilt to support non-mobile environments (such as desktop testing)
+    let stepFrame = 0;
+    const runSimulation = () => {
+      if (!active) return;
+      stepFrame++;
+      
+      // Simulate physical walk/sway pattern with natural pitch & roll harmonics
+      setSimulatedTilt({
+        pitch: Math.sin(stepFrame * 0.05) * 12 + Math.cos(stepFrame * 0.02) * 5,
+        roll: Math.cos(stepFrame * 0.04) * 15 + Math.sin(stepFrame * 0.01) * 6
+      });
+      
+      requestAnimationFrame(runSimulation);
+    };
+
+    runSimulation();
+
+    return () => {
+      active = false;
+      window.removeEventListener('deviceorientation', handleOrientation);
+      window.removeEventListener('devicemotion', handleMotion);
+    };
+  }, []);
 
   // Stop/Start camera on change of scan states
   useEffect(() => {
@@ -1697,6 +1780,27 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
           }
         });
 
+        // Track simulated child & stranger positions dynamically relative to parent drift to simulate realistic multi-human scene
+        setChildPosition((prev) => {
+          const cX = 25 + Math.sin(tick * 0.5) * 6;
+          const cY = 55 + Math.cos(tick * 0.7) * 4;
+          return {
+            x: parseFloat(cX.toFixed(2)),
+            y: parseFloat(cY.toFixed(2)),
+            scale: parseFloat((0.85 + Math.sin(tick * 0.3) * 0.08).toFixed(3))
+          };
+        });
+
+        setStrangerPosition((prev) => {
+          const sX = 75 + Math.cos(tick * 0.6) * 5;
+          const sY = 50 + Math.sin(tick * 0.8) * 3;
+          return {
+            x: parseFloat(sX.toFixed(2)),
+            y: parseFloat(sY.toFixed(2)),
+            scale: parseFloat((1.0 + Math.cos(tick * 0.4) * 0.06).toFixed(3))
+          };
+        });
+
         // Holographic green scanning line
         setAiScanLineY((prev) => (prev + 2.5 * aiSwaySpeed) % 100);
 
@@ -2105,6 +2209,17 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                 <div className="text-red-500 font-bold animate-pulse flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
                   HARD_BLOCKOUT: ENFORCED
+                </div>
+              )}
+              {citizenState.autoCalibrate && (
+                <div className="text-cyan-400 font-mono text-[8px] border-t border-cyan-500/15 pt-1 mt-1 space-y-0.5 pointer-events-none">
+                  <div className="text-[9px] font-extrabold flex items-center gap-1 text-cyan-300">
+                    <span className="w-1.5 h-1.5 rounded bg-cyan-400 animate-pulse"></span>
+                    DYNAMIC ACCEL-GYRO CONTROLLER
+                  </div>
+                  <div>PITCH_BETA: {(gyroData.beta ? gyroData.beta : (simulatedTilt.pitch + 45)).toFixed(1)}°</div>
+                  <div>ROLL_GAMMA: {(gyroData.gamma ? gyroData.gamma : simulatedTilt.roll).toFixed(1)}°</div>
+                  <div>ACCEL_G_FORCE: {Math.abs(accelData.x + accelData.y + accelData.z || Math.sin(performance.now() * 0.005) * 0.2).toFixed(3)} G</div>
                 </div>
               )}
             </div>
@@ -2696,7 +2811,13 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
 
                       {/* The dynamic backdrop filter blur card simulating smart-glasses software blurring */}
                       {showCensorOverlay && (() => {
-                        const scaleFactor = (blurPosition as any).scale !== undefined ? (blurPosition as any).scale : 1.0;
+                        const renderTick = performance.now() * 0.003;
+                        let scaleFactor = (blurPosition as any).scale !== undefined ? (blurPosition as any).scale : 1.0;
+                        if (citizenState.autoCalibrate) {
+                          const accelImpulse = Math.abs(accelData.x + accelData.y + accelData.z);
+                          const accelModifier = accelImpulse > 0.1 ? Math.min(0.08, accelImpulse * 0.004) : 0;
+                          scaleFactor = scaleFactor * (1.0 + Math.sin(renderTick * 5) * accelModifier);
+                        }
                         const isBody = aiTrackingMode === 'body';
                         const baseWidth = isBody ? 176 : 192;
                         const baseHeight = isBody ? 288 : 192;
@@ -2704,7 +2825,6 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                         const dynamicWidth = baseWidth * scaleFactor;
                         const dynamicHeight = baseHeight * scaleFactor;
 
-                        const renderTick = performance.now() * 0.003;
                         const wave = Math.sin(renderTick * 2.0) * 1.5;
                         const wave2 = Math.cos(renderTick * 1.6) * 1.5;
                         const wave3 = Math.sin(renderTick * 1.1) * 2.0;
@@ -2726,9 +2846,19 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                               ${32 + wave3}% ${13 + wave2}%
                             )`;
 
-                        const rotX = (blurPosition.y - 40) * 0.45 + Math.sin(renderTick * 0.6) * 3;
-                        const rotY = -(blurPosition.x - 50) * 0.45 + Math.cos(renderTick * 0.6) * 3;
-                        const rotZ = (blurPosition.x - 50) * 0.12;
+                        let rotX = (blurPosition.y - 40) * 0.45 + Math.sin(renderTick * 0.6) * 3;
+                        let rotY = -(blurPosition.x - 50) * 0.45 + Math.cos(renderTick * 0.6) * 3;
+                        let rotZ = (blurPosition.x - 50) * 0.12;
+
+                        if (citizenState.autoCalibrate) {
+                          const pitchOffset = gyroData.beta ? (gyroData.beta - 45) * 0.35 : simulatedTilt.pitch * 0.35;
+                          const rollOffset = gyroData.gamma ? gyroData.gamma * 0.4 : simulatedTilt.roll * 0.4;
+                          const yawOffset = gyroData.alpha ? (gyroData.alpha % 360) * 0.04 : (simulatedTilt.pitch + simulatedTilt.roll) * 0.04;
+
+                          rotX += pitchOffset;
+                          rotY -= rollOffset;
+                          rotZ += yawOffset;
+                        }
 
                         return (
                           <motion.div
@@ -2965,6 +3095,144 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                             <span className="text-[7px] font-mono text-red-300">EMERGENCY FORCE SHIELD</span>
                           </div>
                         )}
+
+                        {/* Perspective-Warping Grid Overlay Visual Guide */}
+                        {citizenState.showWarpGrid && (() => {
+                          const isHeatmap = citizenState.showDepthHeatmap;
+                          const overallDepth = Math.max(0, Math.min(1, (scaleFactor - 0.6) / 0.8));
+
+                          const getHeatColor = (depthVal: number) => {
+                            let r = 0, g = 0, b = 0;
+                            if (depthVal < 0.5) {
+                              const t = depthVal * 2;
+                              r = Math.round(16 + (234 - 16) * t);
+                              g = Math.round(185 + (179 - 185) * t);
+                              b = Math.round(129 + (8 - 129) * t);
+                            } else {
+                              const t = (depthVal - 0.5) * 2;
+                              r = Math.round(234 + (239 - 234) * t);
+                              g = Math.round(179 + (68 - 179) * t);
+                              b = Math.round(8 + (68 - 8) * t);
+                            }
+                            return `rgb(${r}, ${g}, ${b})`;
+                          };
+
+                          const getElementColor = (relativeOffset: number) => {
+                            if (!isHeatmap) return "currentColor";
+                            const depth = Math.max(0, Math.min(1, overallDepth + relativeOffset));
+                            return getHeatColor(depth);
+                          };
+
+                          const defaultColor = isHeatmap ? getElementColor(0) : "rgba(34, 211, 238, 0.5)";
+
+                          return (
+                            <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden rounded-full flex items-center justify-center">
+                              {/* Technical cyan 3D grid line system */}
+                              <div 
+                                className="absolute inset-0 border rounded-full transition-colors duration-300"
+                                style={{
+                                  backgroundColor: isHeatmap ? `${getElementColor(-0.15)}1a` : "rgba(8, 47, 73, 0.1)",
+                                  borderColor: isHeatmap ? `${getElementColor(-0.15)}40` : "rgba(34, 211, 238, 0.25)"
+                                }}
+                              />
+                              
+                              {/* Dynamic mesh grid lines */}
+                              <svg className="absolute inset-0 w-full h-full text-cyan-400/50" viewBox="0 0 100 100" fill="none">
+                                {/* Dynamic horizontal perspective lines */}
+                                <line x1="10" y1="20" x2="90" y2="20" stroke={getElementColor(-0.1)} strokeWidth="0.5" strokeDasharray="1,1" />
+                                <line x1="5" y1="40" x2="95" y2="40" stroke={getElementColor(0.05)} strokeWidth="0.5" strokeDasharray="2,1" />
+                                <line x1="5" y1="60" x2="95" y2="60" stroke={getElementColor(0.0)} strokeWidth="0.5" strokeDasharray="2,1" />
+                                <line x1="10" y1="80" x2="90" y2="80" stroke={getElementColor(-0.1)} strokeWidth="0.5" strokeDasharray="1,1" />
+                                
+                                {/* Dynamic vertical perspective lines wrapping facial depth */}
+                                <path d="M 50,5 Q 35,50 50,95" stroke={getElementColor(0.0)} strokeWidth="0.5" strokeDasharray="2,2" />
+                                <path d="M 50,5 Q 20,50 50,95" stroke={getElementColor(-0.15)} strokeWidth="0.55" />
+                                <path d="M 50,5 Q 65,50 50,95" stroke={getElementColor(0.0)} strokeWidth="0.5" strokeDasharray="2,2" />
+                                <path d="M 50,5 Q 80,50 50,95" stroke={getElementColor(-0.15)} strokeWidth="0.55" />
+                                
+                                {/* Diagonal contour mesh triangulation */}
+                                <path 
+                                  d="
+                                    M 50,5 L 20,40 L 50,60 L 80,40 Z
+                                    M 20,40 L 5,60 L 50,95 L 95,60 L 80,40 Z
+                                    M 50,5 L 50,95
+                                    M 5,60 L 95,60
+                                    M 20,40 L 80,40
+                                  " 
+                                  stroke={getElementColor(-0.05)} 
+                                  strokeWidth="0.4" 
+                                  opacity="0.6"
+                                />
+                              
+                              {/* Tracking Nodes / Face Geometry points */}
+                              <g style={{ color: isHeatmap ? getElementColor(0.1) : "rgb(110, 231, 243)" }}>
+                                {/* Left Eye Node */}
+                                <circle cx="35" cy="35" r="1.5" fill={getElementColor(0.05)} className="animate-pulse" />
+                                <line x1="35" y1="35" x2="25" y2="28" stroke={getElementColor(0.05)} strokeWidth="0.3" />
+                                
+                                {/* Right Eye Node */}
+                                <circle cx="65" cy="35" r="1.5" fill={getElementColor(0.05)} className="animate-pulse" />
+                                <line x1="65" y1="35" x2="75" y2="28" stroke={getElementColor(0.05)} strokeWidth="0.3" />
+                                
+                                {/* Nose Bridge Node */}
+                                <circle cx="50" cy="45" r="1.8" fill={getElementColor(0.15)} />
+                                <line x1="50" y1="45" x2="50" y2="35" stroke={getElementColor(0.15)} strokeWidth="0.3" />
+                                
+                                {/* Nose Tip Node */}
+                                <circle cx="50" cy="55" r="1.8" fill={getElementColor(0.30)} />
+                                <circle cx="50" cy="55" r="3.5" stroke={getElementColor(0.30)} strokeWidth="0.3" className="animate-ping" style={{ animationDuration: '2s' }} />
+                                
+                                {/* Left Cheek Node */}
+                                <circle cx="25" cy="58" r="1.2" fill={getElementColor(-0.05)} />
+                                
+                                {/* Right Cheek Node */}
+                                <circle cx="75" cy="58" r="1.2" fill={getElementColor(-0.05)} />
+                                
+                                {/* Mouth Left Node */}
+                                <circle cx="40" cy="70" r="1.2" fill={getElementColor(0.0)} />
+                                
+                                {/* Mouth Right Node */}
+                                <circle cx="60" cy="70" r="1.2" fill={getElementColor(0.0)} />
+                                
+                                {/* Chin Node */}
+                                <circle cx="50" cy="85" r="1.5" fill={getElementColor(-0.10)} />
+                              </g>
+                            </svg>
+                            
+                            {/* Geometric readout labels floating on the perspective plane */}
+                            <div 
+                              className="absolute top-2 left-2 right-2 flex justify-between text-[6.5px] font-mono rounded border transition-colors duration-300 px-1 py-0.5"
+                              style={{
+                                color: isHeatmap ? getElementColor(0.1) : "rgb(110, 231, 243)",
+                                backgroundColor: "rgba(2, 6, 23, 0.85)",
+                                borderColor: isHeatmap ? `${getElementColor(0.1)}40` : "rgba(6, 182, 212, 0.25)"
+                              }}
+                            >
+                              <span>ROT_Y: {(rotY * 0.1).toFixed(2)} rad</span>
+                              <span>ROT_X: {(rotX * 0.1).toFixed(2)} rad</span>
+                              <span>DEPTH_Z: {scaleFactor.toFixed(2)} {isHeatmap && "(HEAT)"}</span>
+                            </div>
+                            
+                            <div 
+                              className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-[5.5px] font-mono rounded border transition-colors duration-300 px-1 py-0.5"
+                              style={{
+                                color: isHeatmap ? getElementColor(0.0) : "rgb(34, 211, 238)",
+                                backgroundColor: "rgba(2, 6, 23, 0.9)",
+                                borderColor: isHeatmap ? `${getElementColor(0.0)}40` : "rgba(6, 182, 212, 0.25)"
+                              }}
+                            >
+                              <span className="animate-pulse font-extrabold">● {isHeatmap ? 'DEPTH_HEATMAP_MESH' : 'GEOM_MESH_WARPING'}</span>
+                              <span>{Math.abs(rotX + rotY) > 5 ? 'ACTIVE_WARPING' : 'CALIBRATING'}</span>
+                            </div>
+                            
+                            {/* Diagonal Corner brackets */}
+                            <div className="absolute top-1 left-1 w-1.5 h-1.5 border-t border-l" style={{ borderColor: defaultColor }} />
+                            <div className="absolute top-1 right-1 w-1.5 h-1.5 border-t border-r" style={{ borderColor: defaultColor }} />
+                            <div className="absolute bottom-1 left-1 w-1.5 h-1.5 border-b border-l" style={{ borderColor: defaultColor }} />
+                            <div className="absolute bottom-1 right-1 w-1.5 h-1.5 border-b border-r" style={{ borderColor: defaultColor }} />
+                          </div>
+                        );
+                      })()}
                           </motion.div>
                         );
                       })()}

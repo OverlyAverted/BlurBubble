@@ -72,7 +72,9 @@ import {
   Copy,
   Send,
   X,
-  Activity
+  Activity,
+  Gavel,
+  CheckSquare
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import D3SignalMap from './D3SignalMap';
@@ -7957,20 +7959,80 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                           </div>
                         </div>
 
+                        {/* Thermal Infrared (FLIR) Pulse Masking */}
+                        <div className={`p-4 rounded-xl border transition-all ${
+                          state.thermalPulseEnabled 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                                <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                                Thermal Infrared (FLIR) Pulse Masker
+                              </span>
+                              <span className="text-[10px] text-slate-400 block leading-relaxed">
+                                Emits rapid, micro-calibrated biothermal pulses. Masks heat signatures to prevent biometric FLIR face-mapping and thermal tracking.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onChange({ ...state, thermalPulseEnabled: !state.thermalPulseEnabled })}
+                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
+                                state.thermalPulseEnabled
+                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                  : 'bg-slate-900 text-slate-400 border-slate-800'
+                              }`}
+                            >
+                              {state.thermalPulseEnabled ? 'ACTIVE' : 'MUTED'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Retroreflective Feedback Scrambler */}
+                        <div className={`p-4 rounded-xl border transition-all ${
+                          state.retroScramblerEnabled 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                                <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
+                                Retroreflective Lens Scrambler
+                              </span>
+                              <span className="text-[10px] text-slate-400 block leading-relaxed">
+                                Detects optical feedback from CCTV or smartphone camera lenses. Emits a safe, directed anti-reflection flare to overexpose unauthorized captures.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onChange({ ...state, retroScramblerEnabled: !state.retroScramblerEnabled })}
+                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
+                                state.retroScramblerEnabled
+                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                  : 'bg-slate-900 text-slate-400 border-slate-800'
+                              }`}
+                            >
+                              {state.retroScramblerEnabled ? 'ACTIVE' : 'MUTED'}
+                            </button>
+                          </div>
+                        </div>
+
                         {/* Anti-Lip Reading Spatial Deflector */}
-                        <div className={`p-4 rounded-xl border transition-all md:col-span-2 ${
+                        <div className={`p-4 rounded-xl border transition-all ${
                           state.antiLipReadingEnabled 
                             ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
                             : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
                         }`}>
-                          <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start justify-between">
                             <div className="space-y-1">
                               <span className="text-xs font-bold block text-white flex items-center gap-1.5">
                                 <Cpu className="w-3.5 h-3.5 text-emerald-400" />
                                 Anti-Lip Reading Coordinate Deflector
                               </span>
                               <span className="text-[10px] text-slate-400 block leading-relaxed">
-                                Dynamically feeds anti-lip-reading micro-oscillations into localized computer-vision frameworks. Prevents deep-learning AI from reconstructing private vocal conversations from high-definition video feeds or directional earbud mic arrays.
+                                Dynamically feeds micro-oscillations into localized computer-vision frames. Prevents deep-learning models from reconstructing vocal conversations from video feeds.
                               </span>
                             </div>
                             <button
@@ -7983,6 +8045,36 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                               }`}
                             >
                               {state.antiLipReadingEnabled ? 'ARMED' : 'STANDBY'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* LiDAR 3D Mesh Floodlight Projector */}
+                        <div className={`p-4 rounded-xl border transition-all ${
+                          state.lidarMeshFloodEnabled 
+                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                                <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                                LiDAR 3D Mesh Deflection Projector
+                              </span>
+                              <span className="text-[10px] text-slate-400 block leading-relaxed">
+                                Floods the local airspace with high-frequency laser deflection pulses, scrambling 3D space telemetry and geometric environment scanning.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onChange({ ...state, lidarMeshFloodEnabled: !state.lidarMeshFloodEnabled })}
+                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
+                                state.lidarMeshFloodEnabled
+                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                  : 'bg-slate-900 text-slate-400 border-slate-800'
+                              }`}
+                            >
+                              {state.lidarMeshFloodEnabled ? 'ACTIVE' : 'MUTED'}
                             </button>
                           </div>
                         </div>
@@ -8000,7 +8092,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                             </span>
                           </div>
                           
-                          <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] font-mono">
                             <div className="bg-slate-900/30 p-2 rounded border border-slate-900/40 space-y-0.5">
                               <span className="text-[9px] text-slate-500 block">IR PULSE SPEED</span>
                               <span className="font-bold text-slate-200">
@@ -8008,9 +8100,33 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                               </span>
                             </div>
                             <div className="bg-slate-900/30 p-2 rounded border border-slate-900/40 space-y-0.5">
-                              <span className="text-[9px] text-slate-500 block">LIDAR SCRAMBLE INDEX</span>
+                              <span className="text-[9px] text-slate-500 block">LIDAR SCRAMBLE</span>
                               <span className="font-bold text-emerald-400">
                                 {state.lidarInterferenceEnabled ? '98.7% (CRITICAL)' : '0.0% (DEFAULT)'}
+                              </span>
+                            </div>
+                            <div className="bg-slate-900/30 p-2 rounded border border-slate-900/40 space-y-0.5">
+                              <span className="text-[9px] text-slate-500 block">THERMAL BIOMASK</span>
+                              <span className="font-bold text-emerald-400">
+                                {state.thermalPulseEnabled ? '41.2°C HEAT MASK' : 'OFF / STANDBY'}
+                              </span>
+                            </div>
+                            <div className="bg-slate-900/30 p-2 rounded border border-slate-900/40 space-y-0.5">
+                              <span className="text-[9px] text-slate-500 block">RETRO LENS SHIELD</span>
+                              <span className="font-bold text-slate-200">
+                                {state.retroScramblerEnabled ? 'ACTIVE SHIELDING' : 'OFF / STANDBY'}
+                              </span>
+                            </div>
+                            <div className="bg-slate-900/30 p-2 rounded border border-slate-900/40 space-y-0.5">
+                              <span className="text-[9px] text-slate-500 block">LIP DEFLECTOR</span>
+                              <span className="font-bold text-emerald-400">
+                                {state.antiLipReadingEnabled ? 'COORDINATED' : 'OFF / STANDBY'}
+                              </span>
+                            </div>
+                            <div className="bg-slate-900/30 p-2 rounded border border-slate-900/40 space-y-0.5">
+                              <span className="text-[9px] text-slate-500 block">3D MESH FLOOD</span>
+                              <span className="font-bold text-slate-200">
+                                {state.lidarMeshFloodEnabled ? '1024 pts/m²' : 'OFF / STANDBY'}
                               </span>
                             </div>
                           </div>
@@ -8090,7 +8206,10 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                           state.wifiRulesEnabled && 
                           state.acousticWatermarkingEnabled && 
                           (state.registeredEntities.every(e => e.isActive)) && 
-                          state.irDisruptionEnabled
+                          state.irDisruptionEnabled &&
+                          state.wifi7MacOptOutEnabled &&
+                          state.auracastSquelchEnabled &&
+                          state.uwbDistanceScramblerEnabled
                         }
                         onClick={() => {
                           const allActive = 
@@ -8098,7 +8217,10 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                             state.wifiRulesEnabled && 
                             state.acousticWatermarkingEnabled && 
                             (state.registeredEntities.every(e => e.isActive)) && 
-                            state.irDisruptionEnabled;
+                            state.irDisruptionEnabled &&
+                            state.wifi7MacOptOutEnabled &&
+                            state.auracastSquelchEnabled &&
+                            state.uwbDistanceScramblerEnabled;
                           const targetState = !allActive;
                           const updatedEntities = state.registeredEntities.map(e => ({ ...e, isActive: targetState }));
                           onChange({
@@ -8107,13 +8229,16 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                             wifiRulesEnabled: targetState,
                             acousticWatermarkingEnabled: targetState,
                             irDisruptionEnabled: targetState,
+                            wifi7MacOptOutEnabled: targetState,
+                            auracastSquelchEnabled: targetState,
+                            uwbDistanceScramblerEnabled: targetState,
                             registeredEntities: updatedEntities
                           });
                           if (onAddLog) {
                             onAddLog({
                               deviceModel: 'COORDINATED_BEACON_SUITE',
                               action: targetState ? 'broadcast_changed' : 'muted',
-                              shieldApplied: targetState ? 'ALL_BEACONS_ACTIVE' : 'ALL_BEACONS_SUSPENDED',
+                              shieldApplied: targetState ? 'ALL_BEACONS_ACTIVE_8_CHANNEL' : 'ALL_BEACONS_SUSPENDED',
                               distance: 0,
                               rotatedId: 'MASTER_SUITE_SWEEP'
                             });
@@ -8124,7 +8249,10 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                            state.wifiRulesEnabled && 
                            state.acousticWatermarkingEnabled && 
                            (state.registeredEntities.every(e => e.isActive)) && 
-                           state.irDisruptionEnabled) 
+                           state.irDisruptionEnabled &&
+                           state.wifi7MacOptOutEnabled &&
+                           state.auracastSquelchEnabled &&
+                           state.uwbDistanceScramblerEnabled) 
                             ? 'bg-emerald-500' 
                             : 'bg-slate-800'
                         }`}
@@ -8135,7 +8263,10 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                              state.wifiRulesEnabled && 
                              state.acousticWatermarkingEnabled && 
                              (state.registeredEntities.every(e => e.isActive)) && 
-                             state.irDisruptionEnabled) 
+                             state.irDisruptionEnabled &&
+                             state.wifi7MacOptOutEnabled &&
+                             state.auracastSquelchEnabled &&
+                             state.uwbDistanceScramblerEnabled) 
                               ? 'translate-x-5' 
                               : 'translate-x-0'
                           }`}
@@ -8144,7 +8275,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     {/* Channel 1: BLE (RFC-9402) */}
                     <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
                       state.isBroadcasting 
@@ -8428,6 +8559,177 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                           state.irDisruptionEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
                         }`}>
                           {state.irDisruptionEnabled ? 'IR PULSING ON' : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Channel 6: Wi-Fi 7 MAC Opt-Out (MAC-OPT-OUT) */}
+                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
+                      state.wifi7MacOptOutEnabled 
+                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
+                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
+                    }`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Fingerprint className={`w-4.5 h-4.5 ${state.wifi7MacOptOutEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="text-xs font-bold block text-slate-200">Wi-Fi 7 MAC</span>
+                          </div>
+
+                          {/* Toggle Switch */}
+                          <button
+                            id="btn-beacon-toggle-wifi7"
+                            type="button"
+                            role="switch"
+                            aria-checked={state.wifi7MacOptOutEnabled}
+                            onClick={() => {
+                              onChange({ ...state, wifi7MacOptOutEnabled: !state.wifi7MacOptOutEnabled });
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'WIFI7_MAC_RANDOMIZER',
+                                  action: state.wifi7MacOptOutEnabled ? 'muted' : 'broadcast_changed',
+                                  shieldApplied: state.wifi7MacOptOutEnabled ? 'WIFI7_MAC_RAND_DISABLED' : 'WIFI7_MAC_RANDOMIZATION_ACTIVE_WITH_OPTOUT',
+                                  distance: 0,
+                                  rotatedId: 'WIFI7_MAC_RAND_ON'
+                                });
+                              }
+                            }}
+                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              state.wifi7MacOptOutEnabled ? 'bg-emerald-500' : 'bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                state.wifi7MacOptOutEnabled ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Broadcasts randomized MAC headers with explicit opt-out tagging over Wi-Fi 7 bands.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                          state.wifi7MacOptOutEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
+                        }`}>
+                          {state.wifi7MacOptOutEnabled ? 'RANDOM MAC ON' : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Channel 7: BLE Auracast Squelch (AURACAST-SQUELCH) */}
+                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
+                      state.auracastSquelchEnabled 
+                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
+                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
+                    }`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Radio className={`w-4.5 h-4.5 ${state.auracastSquelchEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="text-xs font-bold block text-slate-200">Auracast Squelch</span>
+                          </div>
+
+                          {/* Toggle Switch */}
+                          <button
+                            id="btn-beacon-toggle-auracast"
+                            type="button"
+                            role="switch"
+                            aria-checked={state.auracastSquelchEnabled}
+                            onClick={() => {
+                              onChange({ ...state, auracastSquelchEnabled: !state.auracastSquelchEnabled });
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'AURACAST_SQUELCH_BEACON',
+                                  action: state.auracastSquelchEnabled ? 'muted' : 'broadcast_changed',
+                                  shieldApplied: state.auracastSquelchEnabled ? 'AURACAST_SQUELCH_DISABLED' : 'AURACAST_SQUELCH_ACTIVE_WHITE_NOISE',
+                                  distance: 0,
+                                  rotatedId: 'AURACAST_SQUELCH_ACTIVE'
+                                });
+                              }
+                            }}
+                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              state.auracastSquelchEnabled ? 'bg-emerald-500' : 'bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                state.auracastSquelchEnabled ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Injects encrypted white-noise audio blocks into nearby broadcast channels.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                          state.auracastSquelchEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
+                        }`}>
+                          {state.auracastSquelchEnabled ? 'SQUELCH ACTIVE' : 'OFF'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Channel 8: UWB Distance Scrambler (UWB-SCRAMBLER) */}
+                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
+                      state.uwbDistanceScramblerEnabled 
+                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
+                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
+                    }`}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Lock className={`w-4.5 h-4.5 ${state.uwbDistanceScramblerEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="text-xs font-bold block text-slate-200">UWB Scrambler</span>
+                          </div>
+
+                          {/* Toggle Switch */}
+                          <button
+                            id="btn-beacon-toggle-uwb"
+                            type="button"
+                            role="switch"
+                            aria-checked={state.uwbDistanceScramblerEnabled}
+                            onClick={() => {
+                              onChange({ ...state, uwbDistanceScramblerEnabled: !state.uwbDistanceScramblerEnabled });
+                              if (onAddLog) {
+                                onAddLog({
+                                  deviceModel: 'UWB_DISTANCE_SCRAMBLER',
+                                  action: state.uwbDistanceScramblerEnabled ? 'muted' : 'broadcast_changed',
+                                  shieldApplied: state.uwbDistanceScramblerEnabled ? 'UWB_SCRAMBLER_DISABLED' : 'UWB_TIME_OF_FLIGHT_PERTURBED',
+                                  distance: 0,
+                                  rotatedId: 'UWB_SCRAMBLER_ACTIVE'
+                                });
+                              }
+                            }}
+                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              state.uwbDistanceScramblerEnabled ? 'bg-emerald-500' : 'bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
+                                state.uwbDistanceScramblerEnabled ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Perturbs ultra-wideband time-of-flight ranges to block micro-location triangulation.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                          state.uwbDistanceScramblerEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
+                        }`}>
+                          {state.uwbDistanceScramblerEnabled ? 'SCRAMBLING' : 'OFF'}
                         </span>
                       </div>
                     </div>
@@ -9448,7 +9750,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                             </div>
 
                             {/* Identity Data Brokers */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition col-span-1 md:col-span-2">
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
                               <div className="space-y-1">
                                 <div className="flex items-center justify-between">
                                   <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
@@ -9474,6 +9776,99 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                                   }`}
                                 >
                                   {state.dataBrokersSweep ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* EU AI Act Biometric Shield */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
+                                    EU AI Act Biometric Shield
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Article 5 Ban</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Invokes Article 5 of the EU AI Act (Regulation EU 2024/1689) to legally prohibit remote real-time biometric tracking, remote facial matching, and emotion recognition.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.euAiActShieldEnabled ? 'Article 5 Armed' : 'Standby Mode'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-eu-ai-act-shield"
+                                  onClick={() => onChange({ ...state, euAiActShieldEnabled: !state.euAiActShieldEnabled })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.euAiActShieldEnabled
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.euAiActShieldEnabled ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Illinois BIPA Deletion Automaton */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <Gavel className="w-3.5 h-3.5 text-emerald-400" />
+                                    Illinois BIPA Deletion Automaton
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Statutory Penalty</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Triggers statutory penalties ($1,000 per negligent, $5,000 per intentional violation) under Illinois BIPA for unconsented scanning, enforcing mandatory data deletion.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.bipaDeletionEnabled ? 'BIPA Auto-Demand Active' : 'Standby Mode'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-bipa-deletion"
+                                  onClick={() => onChange({ ...state, bipaDeletionEnabled: !state.bipaDeletionEnabled })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.bipaDeletionEnabled
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.bipaDeletionEnabled ? 'ON (ACTIVE)' : 'OFF'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* RFC-9402 Compliance Enforcer */}
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
+                                    <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+                                    RFC-9402 Compliance Enforcer
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Physical Standard</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-normal">
+                                  Transmits machine-readable physical privacy assertions and opt-out headers to make smart recording systems automatically drop biometric scans.
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.rfc9402ComplianceEnabled ? 'Enforcing standard' : 'Standby Mode'}</span>
+                                <button
+                                  type="button"
+                                  id="toggle-rfc9402-compliance"
+                                  onClick={() => onChange({ ...state, rfc9402ComplianceEnabled: !state.rfc9402ComplianceEnabled })}
+                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
+                                    state.rfc9402ComplianceEnabled
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
+                                  }`}
+                                >
+                                  {state.rfc9402ComplianceEnabled ? 'ON (ACTIVE)' : 'OFF'}
                                 </button>
                               </div>
                             </div>
@@ -9527,6 +9922,10 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                                   let titleResult = "";
                                   const activeBlocks: string[] = [];
                                   
+                                  if (state.euAiActShieldEnabled) activeBlocks.push("EU AI Act Article 5");
+                                  if (state.bipaDeletionEnabled) activeBlocks.push("BIPA Statutory Deletion");
+                                  if (state.rfc9402ComplianceEnabled) activeBlocks.push("RFC-9402 Enforcer");
+                                  
                                   if (state.adversarialPoisoning) activeBlocks.push("Adversarial Pixel Poisoning");
                                   if (state.rfc9402SocialBlock) activeBlocks.push("RFC-9402 Outbound Headers");
                                   if (state.decoyPersonaBroadcast) activeBlocks.push("Decoy Ephemeral Broadcast");
@@ -9559,6 +9958,15 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                                   }
                                   if (state.dataBrokersSweep) {
                                     logsList.push("  -> [BROKER AUTOMATION] Sent BIPA deletion directives to PimEyes and BeenVerified databases.");
+                                   }
+                                   if (state.euAiActShieldEnabled) {
+                                     logsList.push("  -> [EU AI ACT] Enforced Article 5. Suspended public biometric classification and remote tracking nodes.");
+                                   }
+                                   if (state.bipaDeletionEnabled) {
+                                     logsList.push("  -> [BIPA LAW AUTOMATION] Triggered Illinois BIPA retroactive deletion demands with statutory penalty warnings.");
+                                   }
+                                   if (state.rfc9402ComplianceEnabled) {
+                                     logsList.push("  -> [RFC-9402 COMPLIANCE] Emitting compliant opt-out signals, requiring recording devices to drop facial profiles.");
                                   }
 
                                   setFaceSearchLogs(prev => [...prev, ...logsList]);

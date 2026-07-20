@@ -104,6 +104,18 @@ export interface CitizenState {
   anthropicBlock?: boolean;
   commonCrawlOptOut?: boolean;
   dataBrokersSweep?: boolean;
+  showWarpGrid?: boolean;
+  autoCalibrate?: boolean;
+  showDepthHeatmap?: boolean;
+  thermalPulseEnabled?: boolean;
+  retroScramblerEnabled?: boolean;
+  lidarMeshFloodEnabled?: boolean;
+  wifi7MacOptOutEnabled?: boolean;
+  auracastSquelchEnabled?: boolean;
+  uwbDistanceScramblerEnabled?: boolean;
+  euAiActShieldEnabled?: boolean;
+  bipaDeletionEnabled?: boolean;
+  rfc9402ComplianceEnabled?: boolean;
 }
 
 export interface WifiTriggerRule {

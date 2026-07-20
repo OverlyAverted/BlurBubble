@@ -42,7 +42,9 @@ import {
   VolumeX,
   Clock,
   RotateCcw,
-  History
+  History,
+  Grid3X3,
+  Target
 } from 'lucide-react';
 import { CitizenState, DetectionLog, PrivacyLevel } from './types';
 // @ts-ignore
@@ -64,6 +66,9 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   rangeMeters: 12,
   anonymousId: 'A8F90C12E345D8B6',
   facialRecognitionOptOut: true,
+  showWarpGrid: false,
+  autoCalibrate: true,
+  showDepthHeatmap: true,
   dataRetentionPref: 'zero_retention',
   registeredEntities: [
     {
@@ -295,7 +300,16 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   googleExtendedBlock: true,
   anthropicBlock: true,
   commonCrawlOptOut: true,
-  dataBrokersSweep: true
+  dataBrokersSweep: true,
+  thermalPulseEnabled: true,
+  retroScramblerEnabled: true,
+  lidarMeshFloodEnabled: true,
+  wifi7MacOptOutEnabled: true,
+  auracastSquelchEnabled: true,
+  uwbDistanceScramblerEnabled: true,
+  euAiActShieldEnabled: true,
+  bipaDeletionEnabled: true,
+  rfc9402ComplianceEnabled: true
 };
 
 const INITIAL_LOGS: DetectionLog[] = [
@@ -1502,6 +1516,69 @@ export default function App() {
                     </span>
                   </div>
                 )}
+
+                {/* 3D Perspective Grid Visual Guide & Toggle */}
+                <div 
+                  id="statusbar-warp-grid-toggle"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Avoid turning off/on the shield broadcasting
+                    const updatedWarp = !citizenState.showWarpGrid;
+                    setCitizenState(prev => ({ ...prev, showWarpGrid: updatedWarp }));
+                    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                      navigator.vibrate(30);
+                    }
+                    addLog({
+                      deviceModel: 'WEARABLE_SHIELD',
+                      action: updatedWarp ? 'censored' : 'ignored',
+                      shieldApplied: updatedWarp ? 'PERSPECTIVE GRID OVERLAY ON' : 'PERSPECTIVE GRID OVERLAY OFF',
+                      distance: 0,
+                      rotatedId: 'WARP_GRID_TOGGLE'
+                    });
+                  }}
+                  className={`flex items-center gap-1.5 ml-2 border-l border-slate-800/80 pl-2 cursor-pointer group hover:bg-slate-900/40 p-1 rounded transition-all`}
+                  title={citizenState.showWarpGrid ? "Face Warp Mesh Geometry Overlay is ACTIVE. Click to toggle." : "Click to overlay real-time 3D face mesh & perspective geometry on camera blurs"}
+                >
+                  {/* Miniature 3D Warping Grid Icon / Visual Guide */}
+                  <div className="relative w-4 h-4 overflow-hidden border border-slate-800/80 rounded bg-slate-950 flex items-center justify-center">
+                    {/* Animated grid background that rotates and skews in 3D representing face contour mapping */}
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ perspective: '40px' }}>
+                      <motion.div
+                        animate={{
+                          rotateX: [15, -15, 15],
+                          rotateY: [-20, 20, -20],
+                          scale: [1, 1.15, 1],
+                        }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 3,
+                          ease: 'easeInOut',
+                        }}
+                        className={`w-5 h-5 grid grid-cols-3 grid-rows-3 gap-[1px] ${
+                          citizenState.showWarpGrid ? 'bg-cyan-500/20' : 'bg-slate-800/10'
+                        }`}
+                      >
+                        {Array.from({ length: 9 }).map((_, i) => (
+                          <div 
+                            key={i} 
+                            className={`border-[0.5px] transition-colors duration-300 ${
+                              citizenState.showWarpGrid 
+                                ? 'border-cyan-400/85 bg-cyan-400/10' 
+                                : 'border-slate-700/40'
+                            }`} 
+                          />
+                        ))}
+                      </motion.div>
+                    </div>
+                    {/* Tiny pulsing indicator center */}
+                    <div className={`absolute w-1 h-1 rounded-full ${citizenState.showWarpGrid ? 'bg-cyan-400 animate-ping' : 'bg-slate-600'}`} />
+                  </div>
+
+                  <span className={`text-[8px] font-mono font-bold tracking-tight select-none ${
+                    citizenState.showWarpGrid ? 'text-cyan-400 font-extrabold' : 'text-slate-500 group-hover:text-slate-400'
+                  }`}>
+                    {citizenState.showWarpGrid ? 'WARP ON' : 'WARP OFF'}
+                  </span>
+                </div>
               </button>
 
               <AnimatePresence>
@@ -1640,7 +1717,7 @@ export default function App() {
                     </div>
 
                     {/* Auto-Hide Inactive Components Quick Control */}
-                    <div className="flex items-center justify-between bg-slate-900/50 border border-slate-900 rounded-xl px-3 py-2 mb-3">
+                    <div className="flex items-center justify-between bg-slate-900/50 border border-slate-900 rounded-xl px-3 py-2 mb-2.5">
                       <div className="flex items-center gap-2">
                         {autoHideInactive ? (
                           <EyeOff className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
@@ -1667,6 +1744,156 @@ export default function App() {
                             autoHideInactive ? 'translate-x-4 bg-white' : 'translate-x-0 bg-slate-400'
                           }`}
                         />
+                      </button>
+                    </div>
+
+                    {/* Perspective Warp Mesh Grid Overlay Quick Control */}
+                    <div className="flex items-center justify-between bg-slate-900/50 border border-slate-900 rounded-xl px-3 py-2 mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <Grid3X3 className={`w-3.5 h-3.5 ${citizenState.showWarpGrid ? 'text-cyan-400 animate-pulse' : 'text-slate-400'}`} />
+                        <span className="text-[10px] font-bold font-mono text-slate-300">Warp Grid Overlay</span>
+                      </div>
+                      <button
+                        type="button"
+                        id="toggle-warp-grid-tooltip-btn"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const updatedWarp = !citizenState.showWarpGrid;
+                          setCitizenState(prev => ({ ...prev, showWarpGrid: updatedWarp }));
+                          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                            navigator.vibrate(30);
+                          }
+                          addLog({
+                            deviceModel: 'WEARABLE_SHIELD',
+                            action: updatedWarp ? 'censored' : 'ignored',
+                            shieldApplied: updatedWarp ? 'PERSPECTIVE GRID OVERLAY ON' : 'PERSPECTIVE GRID OVERLAY OFF',
+                            distance: 0,
+                            rotatedId: 'WARP_GRID_TOGGLE'
+                          });
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          citizenState.showWarpGrid ? 'bg-cyan-500/85' : 'bg-slate-800'
+                        }`}
+                        title={citizenState.showWarpGrid ? "Hide perspective warp grid" : "Show perspective warp grid"}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            citizenState.showWarpGrid ? 'translate-x-4 bg-white' : 'translate-x-0 bg-slate-400'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Dynamic Auto-Calibrate Accelerometer/Gyro Sensor Fusion Control */}
+                    <div className="flex items-center justify-between bg-slate-900/50 border border-slate-900 rounded-xl px-3 py-2 mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <Cpu className={`w-3.5 h-3.5 ${citizenState.autoCalibrate ? 'text-cyan-400 animate-pulse' : 'text-slate-400'}`} />
+                        <span className="text-[10px] font-bold font-mono text-slate-300">Auto-Calibrate Sensors</span>
+                      </div>
+                      <button
+                        type="button"
+                        id="toggle-auto-calibrate-btn"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const updatedCalib = !citizenState.autoCalibrate;
+                          setCitizenState(prev => ({ ...prev, autoCalibrate: updatedCalib }));
+                          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                            navigator.vibrate(30);
+                          }
+                          addLog({
+                            deviceModel: 'WEARABLE_SHIELD',
+                            action: updatedCalib ? 'censored' : 'ignored',
+                            shieldApplied: updatedCalib ? 'AUTO-CALIBRATION ON' : 'AUTO-CALIBRATION OFF',
+                            distance: 0,
+                            rotatedId: 'AUTO_CALIB_TOGGLE'
+                          });
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          citizenState.autoCalibrate ? 'bg-cyan-500/85' : 'bg-slate-800'
+                        }`}
+                        title={citizenState.autoCalibrate ? "Disable dynamic accelerometer/gyro calibration" : "Enable dynamic accelerometer/gyro calibration"}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            citizenState.autoCalibrate ? 'translate-x-4 bg-white' : 'translate-x-0 bg-slate-400'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Depth Heatmap Mode Control */}
+                    <div className="flex items-center justify-between bg-slate-900/50 border border-slate-900 rounded-xl px-3 py-2 mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <Layers className={`w-3.5 h-3.5 ${citizenState.showDepthHeatmap ? 'text-red-400 animate-pulse' : 'text-slate-400'}`} />
+                        <span className="text-[10px] font-bold font-mono text-slate-300">Depth Heatmap Mode</span>
+                      </div>
+                      <button
+                        type="button"
+                        id="toggle-depth-heatmap-btn"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const updatedHeatmap = !citizenState.showDepthHeatmap;
+                          setCitizenState(prev => ({ ...prev, showDepthHeatmap: updatedHeatmap }));
+                          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                            navigator.vibrate(30);
+                          }
+                          addLog({
+                            deviceModel: 'WEARABLE_SHIELD',
+                            action: updatedHeatmap ? 'censored' : 'ignored',
+                            shieldApplied: updatedHeatmap ? 'DEPTH HEATMAP ON' : 'DEPTH HEATMAP OFF',
+                            distance: 0,
+                            rotatedId: 'DEPTH_HEATMAP_TOGGLE'
+                          });
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          citizenState.showDepthHeatmap ? 'bg-cyan-500/85' : 'bg-slate-800'
+                        }`}
+                        title={citizenState.showDepthHeatmap ? "Disable depth heatmap mode" : "Enable depth heatmap mode"}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            citizenState.showDepthHeatmap ? 'translate-x-4 bg-white' : 'translate-x-0 bg-slate-400'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Calibrate Warp 3D Mesh Button */}
+                    <div className="flex flex-col gap-1 mb-3">
+                      <button
+                        type="button"
+                        id="calibrate-warp-btn"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          // Dispatch custom event to recalibrate/reset the warping grid inside GlassesHUD
+                          const event = new CustomEvent('calibrate-warp');
+                          window.dispatchEvent(event);
+
+                          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                            navigator.vibrate([40, 20, 40]);
+                          }
+                          
+                          // Also make sure warp grid overlay is on to show the calibration
+                          setCitizenState(prev => ({ ...prev, showWarpGrid: true }));
+                          
+                          addLog({
+                            deviceModel: 'WEARABLE_SHIELD',
+                            action: 'censored',
+                            shieldApplied: 'CALIBRATE WARPING GRID',
+                            distance: 0,
+                            rotatedId: 'CALIBRATE_WARP_SIG'
+                          });
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-1.5 px-3 bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 hover:border-cyan-400/50 rounded-xl text-cyan-400 hover:text-cyan-300 font-mono text-[10px] uppercase font-bold tracking-tight transition duration-200 cursor-pointer shadow-[0_0_8px_rgba(34,211,238,0.15)] hover:shadow-[0_0_12px_rgba(34,211,238,0.3)]"
+                        title="Recenter and align the perspective warping grid to the facial tracking coordinates"
+                      >
+                        <Target className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
+                        Calibrate 3D Warp Pose
                       </button>
                     </div>
 
