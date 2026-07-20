@@ -74,7 +74,10 @@ import {
   X,
   Activity,
   Gavel,
-  CheckSquare
+  CheckSquare,
+  FlaskConical,
+  Compass,
+  Gamepad2
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import D3SignalMap from './D3SignalMap';
@@ -97,8 +100,8 @@ interface PrivacyBeaconProps {
   onChange: (newState: CitizenState) => void;
   logs: DetectionLog[];
   onClearLogs: () => void;
-  activeTab?: 'overview' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map';
-  onTabChange?: (tab: 'overview' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map') => void;
+  activeTab?: 'overview' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map' | 'experimental';
+  onTabChange?: (tab: 'overview' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map' | 'experimental') => void;
   onAddLog?: (log: any) => void;
   onTriggerAlert?: (title: string, body: string, type: 'blocking' | 'child_blocking' | 'video_found' | 'video_deleted' | 'battery_warning') => void;
 }
@@ -416,7 +419,7 @@ const BEACON_FEATURE_GROUPS = [
 
 export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, activeTab: externalActiveTab, onTabChange: externalOnTabChange, onAddLog, onTriggerAlert }: PrivacyBeaconProps) {
   const { t } = useI18n();
-  const [internalActiveTab, setInternalActiveTab] = useState<'overview' | 'settings' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map'>('overview');
+  const [internalActiveTab, setInternalActiveTab] = useState<'overview' | 'settings' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map' | 'experimental'>('overview');
   const [showContextHelp, setShowContextHelp] = useState(false);
   const showSignalHistory = !!state.showSignalHistory;
   const showPrivacyImpactScore = !!state.showPrivacyImpactScore;
@@ -3172,6 +3175,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                   { id: 'faces', label: 'My Blurred Faces', icon: '👤', category: 'defense', subCategory: 'identity', desc: 'Add photos of your face so smart cameras blur them', count: state.registeredFaces?.length || 0 },
                   { id: 'signal', label: 'Shield Broadcast Range', icon: '📡', category: 'defense', subCategory: 'signal', desc: 'Pick how far your Stop Recording signal can reach', status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
                   { id: 'wifi', label: 'Home WiFi Rules', icon: '📶', category: 'defense', subCategory: 'signal', desc: 'Turn shield on/off automatically when you join home WiFi', status: state.wifiRulesEnabled ? 'AUTO' : 'OFF' },
+                  { id: 'experimental', label: 'Experimental Tech', icon: '🧪', category: 'defense', subCategory: 'identity', desc: 'Activate and test speculative, state-of-the-art privacy shields', status: (state.thermalPulseEnabled || state.retroScramblerEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled) ? 'ACTIVE' : 'STANDBY' },
                   
                   // Wearables & Keys (hardware)
                   { id: 'licensing', label: 'Safety Badges & Checks', icon: '📋', category: 'hardware', desc: 'Official certificates showing our safety lab tests', count: state.hardwareLicenses?.length || 0 },
@@ -3258,6 +3262,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                     {activeTab === 'audio_scrub' && "Initiate automatic voice-print scrubbing and retroactive muting requests on popular podcast and audio stream databases."}
                     {activeTab === 'audio_map' && "Visualize local acoustic blind spots and saturation coverage spheres created by surrounding walls or interference."}
                     {activeTab === 'legal' && "Take a quick educational quiz to learn about local privacy laws, camera regulations, and legal rights."}
+                    {activeTab === 'experimental' && "Activate and simulate speculative, next-gen privacy countermeasures (FLIR masking, Retroreflective lenses, LiDAR noise) and check real-world hardware compatibility."}
                   </p>
                 </div>
               </div>
@@ -7959,123 +7964,25 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                           </div>
                         </div>
 
-                        {/* Thermal Infrared (FLIR) Pulse Masking */}
-                        <div className={`p-4 rounded-xl border transition-all ${
-                          state.thermalPulseEnabled 
-                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
-                        }`}>
-                          <div className="flex items-start justify-between">
+                        {/* Experimental Tech Lab Link */}
+                        <div 
+                          id="experimental-lab-link"
+                          onClick={() => setActiveTab('experimental')}
+                          className="p-4 rounded-xl border bg-slate-950/40 border-slate-900 hover:border-emerald-500/40 cursor-pointer transition flex flex-col justify-between group gap-3 col-span-1 md:col-span-2"
+                        >
+                          <div className="flex items-start justify-between gap-3">
                             <div className="space-y-1">
-                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                                <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                                Thermal Infrared (FLIR) Pulse Masker
+                              <span className="text-xs font-bold block text-white flex items-center gap-1.5 group-hover:text-emerald-400 transition-colors">
+                                <FlaskConical className="w-4 h-4 text-emerald-400 animate-pulse" />
+                                🧪 Speculative &amp; Experimental Shielding Lab
                               </span>
                               <span className="text-[10px] text-slate-400 block leading-relaxed">
-                                Emits rapid, micro-calibrated biothermal pulses. Masks heat signatures to prevent biometric FLIR face-mapping and thermal tracking.
+                                Looking for next-generation defense systems? Access and test our simulated biothermal FLIR pulse masking, retroreflective laser lens flares, 3D mesh projects, and computer-vision anti-lip-reading shields.
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => onChange({ ...state, thermalPulseEnabled: !state.thermalPulseEnabled })}
-                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
-                                state.thermalPulseEnabled
-                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                  : 'bg-slate-900 text-slate-400 border-slate-800'
-                              }`}
-                            >
-                              {state.thermalPulseEnabled ? 'ACTIVE' : 'MUTED'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Retroreflective Feedback Scrambler */}
-                        <div className={`p-4 rounded-xl border transition-all ${
-                          state.retroScramblerEnabled 
-                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
-                        }`}>
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-1">
-                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                                <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
-                                Retroreflective Lens Scrambler
-                              </span>
-                              <span className="text-[10px] text-slate-400 block leading-relaxed">
-                                Detects optical feedback from CCTV or smartphone camera lenses. Emits a safe, directed anti-reflection flare to overexpose unauthorized captures.
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => onChange({ ...state, retroScramblerEnabled: !state.retroScramblerEnabled })}
-                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
-                                state.retroScramblerEnabled
-                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                  : 'bg-slate-900 text-slate-400 border-slate-800'
-                              }`}
-                            >
-                              {state.retroScramblerEnabled ? 'ACTIVE' : 'MUTED'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Anti-Lip Reading Spatial Deflector */}
-                        <div className={`p-4 rounded-xl border transition-all ${
-                          state.antiLipReadingEnabled 
-                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
-                        }`}>
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-1">
-                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                                <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                                Anti-Lip Reading Coordinate Deflector
-                              </span>
-                              <span className="text-[10px] text-slate-400 block leading-relaxed">
-                                Dynamically feeds micro-oscillations into localized computer-vision frames. Prevents deep-learning models from reconstructing vocal conversations from video feeds.
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => onChange({ ...state, antiLipReadingEnabled: !state.antiLipReadingEnabled })}
-                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
-                                state.antiLipReadingEnabled
-                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                  : 'bg-slate-900 text-slate-400 border-slate-800'
-                              }`}
-                            >
-                              {state.antiLipReadingEnabled ? 'ARMED' : 'STANDBY'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* LiDAR 3D Mesh Floodlight Projector */}
-                        <div className={`p-4 rounded-xl border transition-all ${
-                          state.lidarMeshFloodEnabled 
-                            ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                            : 'bg-slate-950/20 border-slate-850/80 text-slate-400'
-                        }`}>
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-1">
-                              <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                                <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                                LiDAR 3D Mesh Deflection Projector
-                              </span>
-                              <span className="text-[10px] text-slate-400 block leading-relaxed">
-                                Floods the local airspace with high-frequency laser deflection pulses, scrambling 3D space telemetry and geometric environment scanning.
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => onChange({ ...state, lidarMeshFloodEnabled: !state.lidarMeshFloodEnabled })}
-                              className={`px-3 py-1 rounded text-[10px] font-bold font-mono uppercase border transition shrink-0 ${
-                                state.lidarMeshFloodEnabled
-                                  ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                  : 'bg-slate-900 text-slate-400 border-slate-800'
-                              }`}
-                            >
-                              {state.lidarMeshFloodEnabled ? 'ACTIVE' : 'MUTED'}
-                            </button>
+                            <span className="text-[10px] text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded font-mono font-bold uppercase transition group-hover:bg-emerald-500 group-hover:text-slate-950 shrink-0">
+                              OPEN LAB →
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -8739,6 +8646,454 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
             </div>
           </motion.div>
         )}
+
+          {/* Tab: Experimental Tech Lab */}
+          {activeTab === 'experimental' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              {/* Header Panel */}
+              <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-5 space-y-3 relative overflow-hidden">
+                <div className="absolute right-0 top-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5 font-sans">
+                      <FlaskConical className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      Speculative &amp; Experimental Countermeasures Lab
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-sans leading-relaxed">
+                      Sandbox for next-generation privacy shielding. Simulate biothermal masking, retroreflective lens disruption, and adversarial AI countermeasures.
+                    </p>
+                  </div>
+                  <span className="text-[10px] bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 px-2.5 py-0.5 rounded-full font-mono uppercase font-semibold">
+                    Speculative Tech Area
+                  </span>
+                </div>
+                
+                {/* Warning Card */}
+                <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-lg p-3 flex items-start gap-2.5 text-[10px] text-yellow-400/90 leading-relaxed font-sans">
+                  <span className="text-sm shrink-0">⚠️</span>
+                  <div>
+                    <strong className="block text-white mb-0.5">Physical Device Limitations</strong>
+                    These defenses are highly advanced simulations of prototype concepts. Standard smartphones do not possess near-IR or active-laser arrays natively. Refer to the diagnostic panel on the right to verify which shields can run directly on your current browser.
+                  </div>
+                </div>
+              </div>
+
+              {/* Two Column Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Left Column: Experimental Controls */}
+                <div className="space-y-4">
+                  <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 space-y-4">
+                    <h4 className="text-xs font-bold text-slate-300 font-mono tracking-wider uppercase border-b border-slate-900 pb-2">
+                      Active Shields Configuration
+                    </h4>
+
+                    <div className="space-y-3">
+                      {/* Thermal Infrared (FLIR) */}
+                      <div className={`p-3.5 rounded-xl border transition-all ${
+                        state.thermalPulseEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                              <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                              Thermal Infrared (FLIR) Pulse Masker
+                            </span>
+                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
+                              Emits rapid, micro-calibrated biothermal pulses. Simulates heat signature masking to prevent biometric FLIR face-mapping.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            id="toggle-thermal-masker"
+                            onClick={() => onChange({ ...state, thermalPulseEnabled: !state.thermalPulseEnabled })}
+                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
+                              state.thermalPulseEnabled
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                : 'bg-slate-900 text-slate-400 border-slate-800'
+                            }`}
+                          >
+                            {state.thermalPulseEnabled ? 'ACTIVE' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Retroreflective Lens Scrambler */}
+                      <div className={`p-3.5 rounded-xl border transition-all ${
+                        state.retroScramblerEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                              <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
+                              Retroreflective Lens Scrambler
+                            </span>
+                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
+                              Detects optical feedback from smartphone or CCTV camera lenses. Triggers targeted safe anti-reflection flares to overexpose captures.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            id="toggle-retro-scrambler"
+                            onClick={() => onChange({ ...state, retroScramblerEnabled: !state.retroScramblerEnabled })}
+                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
+                              state.retroScramblerEnabled
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                : 'bg-slate-900 text-slate-400 border-slate-800'
+                            }`}
+                          >
+                            {state.retroScramblerEnabled ? 'ACTIVE' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Anti-Lip Reading Spatial Deflector */}
+                      <div className={`p-3.5 rounded-xl border transition-all ${
+                        state.antiLipReadingEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                              <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                              Anti-Lip Reading Coordinate Deflector
+                            </span>
+                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
+                              Feeds micro-oscillations into real-time facial feature bounding boxes to prevent AI lip-reconstruction.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            id="toggle-lip-reading"
+                            onClick={() => onChange({ ...state, antiLipReadingEnabled: !state.antiLipReadingEnabled })}
+                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
+                              state.antiLipReadingEnabled
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                : 'bg-slate-900 text-slate-400 border-slate-800'
+                            }`}
+                          >
+                            {state.antiLipReadingEnabled ? 'ACTIVE' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* LiDAR 3D Mesh Deflection Projector */}
+                      <div className={`p-3.5 rounded-xl border transition-all ${
+                        state.lidarMeshFloodEnabled 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                              <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                              LiDAR 3D Mesh Deflection Projector
+                            </span>
+                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
+                              Emits spatial depth laser deflection pulses to scramble point-cloud 3D mapping scans of nearby devices.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            id="toggle-lidar-mesh"
+                            onClick={() => onChange({ ...state, lidarMeshFloodEnabled: !state.lidarMeshFloodEnabled })}
+                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
+                              state.lidarMeshFloodEnabled
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                : 'bg-slate-900 text-slate-400 border-slate-800'
+                            }`}
+                          >
+                            {state.lidarMeshFloodEnabled ? 'ACTIVE' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Adversarial Pixel Poisoning */}
+                      <div className={`p-3.5 rounded-xl border transition-all ${
+                        state.adversarialPoisoning 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                              <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                              Adversarial Pixel Poisoning
+                            </span>
+                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
+                              Injects specialized high-contrast color noise patterns into smart video feeds to corrupt convolutional neural networks.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            id="toggle-adversarial"
+                            onClick={() => onChange({ ...state, adversarialPoisoning: !state.adversarialPoisoning })}
+                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
+                              state.adversarialPoisoning
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                : 'bg-slate-900 text-slate-400 border-slate-800'
+                            }`}
+                          >
+                            {state.adversarialPoisoning ? 'ACTIVE' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Decoy Metadata Spoofing */}
+                      <div className={`p-3.5 rounded-xl border transition-all ${
+                        state.decoyPersonaBroadcast 
+                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
+                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-emerald-400" />
+                              Decoy Metadata &amp; BLE Spoofing
+                            </span>
+                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
+                              Broadcasting randomized device MAC payloads to generate multiple mock metadata targets, confusing localization tracking.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            id="toggle-decoy"
+                            onClick={() => onChange({ ...state, decoyPersonaBroadcast: !state.decoyPersonaBroadcast })}
+                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
+                              state.decoyPersonaBroadcast
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                : 'bg-slate-900 text-slate-400 border-slate-800'
+                            }`}
+                          >
+                            {state.decoyPersonaBroadcast ? 'ACTIVE' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Diagnostics & Live Intrusion Simulator */}
+                <div className="space-y-6">
+                  
+                  {/* Real-World Compatibility diagnostics */}
+                  <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                      <h4 className="text-xs font-bold text-slate-300 font-mono tracking-wider uppercase flex items-center gap-1.5">
+                        <Compass className="w-4 h-4 text-emerald-400" />
+                        Real-World Compatibility Diagnostics
+                      </h4>
+                      <span className="text-[9px] font-mono text-slate-500">USER DEVICE CHECK</span>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 leading-normal font-sans">
+                      Will this app work on your phone in real life? Standard browsers restrict direct hardware radio controls. Let's inspect your current device capabilities:
+                    </p>
+
+                    <div className="space-y-2.5">
+                      {/* geoloc */}
+                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
+                        <span className="text-slate-300 font-sans">GPS Geofencing / Zone Protection</span>
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="text-emerald-400">●</span>
+                          <span className="text-slate-300">NATIVELY SUPPORTED</span>
+                        </div>
+                      </div>
+
+                      {/* vibration */}
+                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
+                        <div className="space-y-0.5">
+                          <span className="text-slate-300 block font-sans">Haptic Pocket Buzzers (Alerts)</span>
+                          <span className="text-[9px] text-slate-500 block font-sans">Tested via browser Vibration API</span>
+                        </div>
+                        <button
+                          type="button"
+                          id="test-phone-buzz-btn"
+                          onClick={() => {
+                            if (navigator.vibrate) {
+                              navigator.vibrate([100, 50, 100]);
+                              if (onAddLog) {
+                                onAddLog({
+                                  title: 'Diagnostic Test',
+                                  text: 'Triggered pocket vibration buzzer pattern [100ms, 50ms, 100ms] natively.',
+                                  type: 'info'
+                                });
+                              }
+                            } else {
+                              if (onAddLog) {
+                                onAddLog({
+                                  title: 'Diagnostic Fail',
+                                  text: 'Vibration API is not supported on this browser/platform.',
+                                  type: 'warning'
+                                });
+                              }
+                            }
+                          }}
+                          className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded font-mono font-bold uppercase text-[9px] transition shrink-0"
+                        >
+                          TEST PHONE BUZZ
+                        </button>
+                      </div>
+
+                      {/* audio contexts */}
+                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
+                        <span className="text-slate-300 font-sans">Acoustic Mic Saturation / Scrambling</span>
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="text-emerald-400">●</span>
+                          <span className="text-slate-300">NATIVELY SUPPORTED (via AudioContext)</span>
+                        </div>
+                      </div>
+
+                      {/* web ble */}
+                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
+                        <div className="space-y-0.5">
+                          <span className="text-slate-300 block font-sans">WebBluetooth API (Device Interfacing)</span>
+                          <span className="text-[9px] text-slate-500 block font-sans">Requires Chrome, Edge, or Opera</span>
+                        </div>
+                        <span className={`font-mono px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                          'bluetooth' in navigator ? 'bg-emerald-500/10 text-emerald-400' : 'bg-yellow-500/10 text-yellow-500'
+                        }`}>
+                          {'bluetooth' in navigator ? 'AVAILABLE' : 'RESTRICTED / EMULATED'}
+                        </span>
+                      </div>
+
+                      {/* Companion badg */}
+                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
+                        <div className="space-y-0.5">
+                          <span className="text-slate-300 block font-sans">Physical Optical/IR Lasers</span>
+                          <span className="text-[9px] text-slate-500 block font-sans">Requires BlurBubble Companion Badge</span>
+                        </div>
+                        <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 font-mono px-1.5 py-0.5 rounded text-[8px] font-bold">
+                          COMPANION GEAR ONLY
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Simulated Recording Intrusion Live Test Sandbox */}
+                  <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                      <h4 className="text-xs font-bold text-slate-300 font-mono tracking-wider uppercase flex items-center gap-1.5">
+                        <Gamepad2 className="w-4 h-4 text-emerald-400" />
+                        Intrusion Simulation Feed
+                      </h4>
+                      <span className="text-[9px] bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-mono font-bold animate-pulse">
+                        LIVE ATTACK
+                      </span>
+                    </div>
+
+                    <div className="relative aspect-video bg-slate-950 border border-slate-900 rounded-lg overflow-hidden flex flex-col justify-between p-3">
+                      {/* Grid overlay */}
+                      <div className="absolute inset-0 bg-[linear-gradient(to_right,#020617_1px,transparent_1px),linear-gradient(to_bottom,#020617_1px,transparent_1px)] bg-[size:16px_16px] opacity-20 pointer-events-none" />
+                      
+                      {/* Top status bar */}
+                      <div className="relative z-10 flex items-center justify-between text-[9px] font-mono text-slate-500">
+                        <span>RECON_CAM_ID: SW-770</span>
+                        <span>RES: 1080P // fps: 30</span>
+                      </div>
+
+                      {/* Center wireframe face */}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="relative w-40 h-40">
+                          {/* Face boundary shape */}
+                          <div className={`absolute inset-0 border rounded-[50%_40%] transition-all duration-300 ${
+                            state.adversarialPoisoning 
+                              ? 'border-red-500/10 bg-red-500/5 animate-pulse' 
+                              : state.thermalPulseEnabled 
+                                ? 'border-yellow-500/20 bg-yellow-500/5 animate-ping'
+                                : 'border-emerald-500/40 bg-emerald-500/5'
+                          }`} />
+
+                          {/* Face features (eyes, nose, mouth) */}
+                          <div className="absolute inset-x-0 top-1/3 flex justify-around px-8">
+                            <div className={`w-3.5 h-2 rounded-full border border-emerald-500/60 relative ${state.retroScramblerEnabled ? 'bg-white shadow-[0_0_15px_#fff]' : ''}`} />
+                            <div className={`w-3.5 h-2 rounded-full border border-emerald-500/60 relative ${state.retroScramblerEnabled ? 'bg-white shadow-[0_0_15px_#fff]' : ''}`} />
+                          </div>
+                          
+                          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 w-1 h-6 border-l border-emerald-500/60" />
+
+                          {/* Lip line */}
+                          <div className={`absolute bottom-1/4 left-1/2 -translate-x-1/2 w-10 h-3 rounded-[50%] border-b transition-all ${
+                            state.antiLipReadingEnabled 
+                              ? 'border-red-400 border-t scale-y-125 animate-bounce' 
+                              : 'border-emerald-500/60'
+                          }`} />
+
+                          {/* Scrambling Waves Overlay */}
+                          {state.thermalPulseEnabled && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle,rgba(234,179,8,0.15)_0%,transparent_70%)] animate-pulse" />
+                          )}
+
+                          {state.retroScramblerEnabled && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-16 h-16 rounded-full bg-white opacity-90 animate-ping" />
+                              <div className="absolute w-20 h-20 rounded-full bg-emerald-400 opacity-60 animate-pulse" />
+                            </div>
+                          )}
+
+                          {state.lidarMeshFloodEnabled && (
+                            <div className="absolute inset-0 grid grid-cols-4 gap-2 opacity-30">
+                              {Array.from({ length: 16 }).map((_, i) => (
+                                <div key={i} className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" style={{ animationDelay: `${i * 100}ms` }} />
+                              ))}
+                            </div>
+                          )}
+
+                          {state.adversarialPoisoning && (
+                            <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center opacity-90 border border-red-500/40 rounded-xl">
+                              <span className="text-[10px] font-mono font-bold text-red-500 animate-pulse">CATASTROPHIC MATRIX POISONING</span>
+                              <span className="text-[8px] font-mono text-slate-500">FACIAL IDENTIFIER CORRUPTED</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Bottom HUD info */}
+                      <div className="relative z-10 flex flex-col gap-1 text-[9px] font-mono">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">TRACKING TARGET STATUS</span>
+                          <span className={`font-bold uppercase ${
+                            state.adversarialPoisoning 
+                              ? 'text-red-500' 
+                              : (state.thermalPulseEnabled || state.retroScramblerEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled)
+                                ? 'text-yellow-400 animate-pulse'
+                                : 'text-emerald-400'
+                          }`}>
+                            {state.adversarialPoisoning 
+                              ? 'LOST_TARGET' 
+                              : (state.thermalPulseEnabled || state.retroScramblerEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled)
+                                ? 'DEFLECTING / COMPROMISED' 
+                                : 'LOCKED_ON // NORMAL'}
+                          </span>
+                        </div>
+
+                        {/* Status bar */}
+                        <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-300 ${
+                              state.adversarialPoisoning 
+                                ? 'bg-red-500 w-5%' 
+                                : state.retroScramblerEnabled 
+                                  ? 'bg-yellow-400 w-25%' 
+                                  : (state.thermalPulseEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled)
+                                    ? 'bg-yellow-400 w-45%'
+                                    : 'bg-emerald-500 w-100%'
+                            }`} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
+          )}
 
           {/* Tab 2: Smart Tags & Objects (Child & Asset Protection) */}
           {activeTab === 'tags' && (

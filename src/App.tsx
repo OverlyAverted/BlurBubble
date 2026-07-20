@@ -419,7 +419,7 @@ export default function App() {
 
   const [isLangSelectorOpen, setIsLangSelectorOpen] = useState(false);
   const [activeView, setActiveView] = useState<'citizen' | 'glasses' | 'tech' | 'audit'>('citizen');
-  const [citizenTab, setCitizenTab] = useState<'overview' | 'settings' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map'>('overview');
+  const [citizenTab, setCitizenTab] = useState<'overview' | 'settings' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map' | 'experimental'>('overview');
   const [glassesTab, setGlassesTab] = useState<'webcam' | 'street' | 'scanner' | 'heatmap' | 'audio-lab'>('street');
   const [techTab, setTechTab] = useState<'timeline' | 'sdk_code' | 'pitch' | 'hardware' | 'crypto' | 'oem'>('timeline');
   const [showHelpCenter, setShowHelpCenter] = useState<boolean>(false);

@@ -50,6 +50,7 @@ const translations: Record<Language, Record<string, string>> = {
     'view.citizen.tags': 'Protected Toys & Bags',
     'view.citizen.signal': 'Shield Broadcast Range',
     'view.citizen.wifi': 'Home WiFi Rules',
+    'view.citizen.experimental': 'Experimental Tech',
 
     // Descs
     'desc.glasses.scanner': 'Scan for nearby active signals and tracking gear',
@@ -77,6 +78,7 @@ const translations: Record<Language, Record<string, string>> = {
     'desc.citizen.tags': 'Add virtual tags to blur items like backpacks',
     'desc.citizen.signal': 'Pick how far your Stop Recording signal can reach',
     'desc.citizen.wifi': 'Turn shield on/off automatically when you join home WiFi',
+    'desc.citizen.experimental': 'Test and simulate speculative next-gen privacy countermeasures',
 
     // Dashboard General Text
     'dash.shieldActive': 'SHIELD BROADCAST ACTIVE',
@@ -160,6 +162,7 @@ const translations: Record<Language, Record<string, string>> = {
     'view.citizen.tags': 'Jouets & Sacs Protégés',
     'view.citizen.signal': 'Portée d\'Émission du Bouclier',
     'view.citizen.wifi': 'Règles WiFi Domestiques',
+    'view.citizen.experimental': 'Tech Expérimentale',
 
     // Descs
     'desc.glasses.scanner': 'Rechercher des signaux actifs et des équipements de suivi à proximité',
@@ -187,6 +190,7 @@ const translations: Record<Language, Record<string, string>> = {
     'desc.citizen.tags': 'Ajoutez des balises virtuelles pour flouter des objets comme les sacs',
     'desc.citizen.signal': 'Choisissez la portée de votre signal d\'arrêt d\'enregistrement',
     'desc.citizen.wifi': 'Activez/désactivez le bouclier automatiquement en rejoignant votre WiFi',
+    'desc.citizen.experimental': 'Tester et simuler des contre-mesures de confidentialité spéculatives de nouvelle génération',
 
     // Dashboard General Text
     'dash.shieldActive': 'DIFFUSION DU BOUCLIER ACTIVE',
@@ -270,6 +274,7 @@ const translations: Record<Language, Record<string, string>> = {
     'view.citizen.tags': 'Geschützte Spielzeuge & Taschen',
     'view.citizen.signal': 'Schild-Sendereichweite',
     'view.citizen.wifi': 'Heim-WLAN-Regeln',
+    'view.citizen.experimental': 'Experimentelle Tech',
 
     // Descs
     'desc.glasses.scanner': 'Nach aktiven Signalen und Tracking-Geräten in der Nähe suchen',
@@ -297,6 +302,7 @@ const translations: Record<Language, Record<string, string>> = {
     'desc.citizen.tags': 'Fügen Sie virtuelle Tags hinzu, um Gegenstände wie Rucksäcke zu verpixeln',
     'desc.citizen.signal': 'Wählen Sie die Reichweite Ihres Stopp-Aufnahme-Signals',
     'desc.citizen.wifi': 'Schild automatisch ein-/ausschalten, wenn Sie sich im Heim-WLAN anmelden',
+    'desc.citizen.experimental': 'Testen und simulieren Sie spekulative Datenschutz-Gegenmaßnahmen der nächsten Generation',
 
     // Dashboard General Text
     'dash.shieldActive': 'SCHILD-ÜBERTRAGUNG AKTIV',
