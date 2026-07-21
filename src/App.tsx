@@ -172,6 +172,7 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   targetedPeripheralConnected: false,
   targetedSoundIntensity: 75,
   theme: 'stealth',
+  hapticIntensity: 'medium',
   disguiseUiActive: false,
   disguiseType: 'transit_route',
   smartSchedulingEnabled: true,
@@ -426,6 +427,7 @@ export default function App() {
   const [guideCategory, setGuideCategory] = useState<'intro' | 'shield' | 'hud' | 'audit' | 'faq' | 'tour' | 'support'>('intro');
   const [showRadarSweep, setShowRadarSweep] = useState(false);
   const [isIndicatorHovered, setIsIndicatorHovered] = useState(false);
+  const [statusbarRippleCount, setStatusbarRippleCount] = useState(0);
   const [integrityTrend, setIntegrityTrend] = useState<'STABLE' | 'RISING' | 'DROPPING' | 'MUTED'>('STABLE');
   const prevIntegrityRef = useRef<number>(0);
   const [showEmergencyConfirm, setShowEmergencyConfirm] = useState(false);
@@ -1399,18 +1401,32 @@ export default function App() {
           <div className="flex items-center gap-3">
             {/* Wrap statusbar-bubble-indicator button, its radar sweep overlay, and interactive tooltip inside a relative container with hover tracking */}
             <div 
-              className="relative"
+              className="relative select-none"
               onMouseEnter={() => {
                 setIsIndicatorHovered(true);
                 if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                  navigator.vibrate(15);
+                  const intensity = citizenState.hapticIntensity || 'medium';
+                  const duration = intensity === 'low' ? 5 : intensity === 'high' ? 30 : 15;
+                  navigator.vibrate(duration);
                 }
               }}
               onMouseLeave={() => setIsIndicatorHovered(false)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              style={{
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                touchAction: 'manipulation'
+              }}
             >
               <button 
                 id="statusbar-bubble-indicator"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
                   const updated = !citizenState.isBroadcasting;
                   setCitizenState(prev => ({ ...prev, isBroadcasting: updated }));
                   addLog({
@@ -1420,10 +1436,48 @@ export default function App() {
                     distance: 0,
                     rotatedId: 'BROADCAST_SIG_MANUAL'
                   });
+                  // Trigger vibration on click matching selected intensity
+                  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                    const intensity = citizenState.hapticIntensity || 'medium';
+                    const duration = intensity === 'low' ? 15 : intensity === 'high' ? 60 : 30;
+                    navigator.vibrate(duration);
+                  }
                   // Toggle radar sweep overlay on click
                   setShowRadarSweep(prev => !prev);
+                  setStatusbarRippleCount(prev => prev + 1);
+                  // Call auditory click feedback
+                  playAlertSound('tactical_click', 50);
                 }}
-                className={`flex items-center justify-center rounded-lg border transition-all cursor-pointer relative overflow-visible ${
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation();
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onPointerUp={(e) => {
+                  e.stopPropagation();
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                style={{
+                  WebkitTouchCallout: 'none',
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none',
+                  touchAction: 'manipulation'
+                }}
+                aria-label={citizenState.isBroadcasting ? 'Broadcast Active' : 'Broadcast Silent'}
+                className={`flex items-center justify-center rounded-lg border transition-all cursor-pointer relative overflow-visible select-none ${
                   citizenState.isBroadcasting ? 'gap-1.5 px-2 py-1' : 'p-1.5'
                 } ${
                   citizenState.isBroadcasting 
@@ -1436,6 +1490,17 @@ export default function App() {
                 }`}
                 title={citizenState.isBroadcasting ? `BlurBubble Broadcast Shield ACTIVE (Integrity: ${shieldIntegrity}%) - Click to open sweep controls` : "BlurBubble Broadcast Shield SILENT - Click to activate"}
               >
+                {/* Haptic Visual Ripple Effect */}
+                {statusbarRippleCount > 0 && (
+                  <motion.span
+                    key={`statusbar-ripple-${statusbarRippleCount}`}
+                    initial={{ scale: 0.1, opacity: 0.9 }}
+                    animate={{ scale: 3.5, opacity: 0 }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-emerald-400/30 border border-emerald-400/50 pointer-events-none z-20"
+                  />
+                )}
+
                 {/* Subtle Scan-line Effect during Hover State */}
                 {isIndicatorHovered && (
                   <div className="absolute inset-0 rounded-lg overflow-hidden pointer-events-none z-10">
@@ -1535,7 +1600,17 @@ export default function App() {
                       rotatedId: 'WARP_GRID_TOGGLE'
                     });
                   }}
-                  className={`flex items-center gap-1.5 ml-2 border-l border-slate-800/80 pl-2 cursor-pointer group hover:bg-slate-900/40 p-1 rounded transition-all`}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  style={{
+                    WebkitTouchCallout: 'none',
+                    WebkitUserSelect: 'none',
+                    userSelect: 'none',
+                    touchAction: 'manipulation'
+                  }}
+                  className={`flex items-center gap-1.5 ml-2 border-l border-slate-800/80 pl-2 cursor-pointer group hover:bg-slate-900/40 p-1 rounded transition-all select-none`}
                   title={citizenState.showWarpGrid ? "Face Warp Mesh Geometry Overlay is ACTIVE. Click to toggle." : "Click to overlay real-time 3D face mesh & perspective geometry on camera blurs"}
                 >
                   {/* Miniature 3D Warping Grid Icon / Visual Guide */}
@@ -1593,6 +1668,16 @@ export default function App() {
                       stiffness: 280,
                       damping: 22,
                       mass: 0.8
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    style={{
+                      WebkitTouchCallout: 'none',
+                      WebkitUserSelect: 'none',
+                      userSelect: 'none',
+                      touchAction: 'manipulation'
                     }}
                     className="absolute right-0 top-full mt-2 w-72 bg-slate-950/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-md p-4 text-slate-200 z-[60] flex flex-col font-sans select-none"
                   >
@@ -1716,6 +1801,57 @@ export default function App() {
                       </button>
                     </div>
 
+                    {/* Haptic Intensity Quick Control */}
+                    <div className="flex flex-col gap-1.5 bg-slate-900/50 border border-slate-900 rounded-xl px-3 py-2 mb-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Fingerprint className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                          <span className="text-[10px] font-bold font-mono text-slate-300">Haptic Intensity</span>
+                        </div>
+                        <span className="text-[8px] font-bold font-mono uppercase text-emerald-400">
+                          {citizenState.hapticIntensity || 'medium'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-900">
+                        {(['low', 'medium', 'high'] as const).map((level) => {
+                          const isActive = (citizenState.hapticIntensity || 'medium') === level;
+                          return (
+                            <button
+                              key={level}
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setCitizenState(prev => ({ ...prev, hapticIntensity: level }));
+                                
+                                // Test haptic preview matching selected intensity
+                                if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                                  if (level === 'low') navigator.vibrate(5);
+                                  else if (level === 'medium') navigator.vibrate(15);
+                                  else if (level === 'high') navigator.vibrate(30);
+                                }
+                                
+                                addLog({
+                                  deviceModel: 'WEARABLE_SHIELD',
+                                  action: 'censored',
+                                  shieldApplied: `HAPTIC INTENSITY: ${level.toUpperCase()}`,
+                                  distance: 0,
+                                  rotatedId: `HAPTIC_${level.toUpperCase()}`
+                                });
+                              }}
+                              className={`py-1 text-[8px] font-bold font-mono uppercase rounded transition-all duration-200 cursor-pointer ${
+                                isActive
+                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/35 font-extrabold shadow-[0_0_8px_rgba(16,185,129,0.15)] animate-pulse'
+                                  : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                              }`}
+                            >
+                              {level}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     {/* Auto-Hide Inactive Components Quick Control */}
                     <div className="flex items-center justify-between bg-slate-900/50 border border-slate-900 rounded-xl px-3 py-2 mb-2.5">
                       <div className="flex items-center gap-2">
@@ -1762,7 +1898,9 @@ export default function App() {
                           const updatedWarp = !citizenState.showWarpGrid;
                           setCitizenState(prev => ({ ...prev, showWarpGrid: updatedWarp }));
                           if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                            navigator.vibrate(30);
+                            const intensity = citizenState.hapticIntensity || 'medium';
+                            const duration = intensity === 'low' ? 10 : intensity === 'high' ? 50 : 30;
+                            navigator.vibrate(duration);
                           }
                           addLog({
                             deviceModel: 'WEARABLE_SHIELD',
@@ -1800,7 +1938,9 @@ export default function App() {
                           const updatedCalib = !citizenState.autoCalibrate;
                           setCitizenState(prev => ({ ...prev, autoCalibrate: updatedCalib }));
                           if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                            navigator.vibrate(30);
+                            const intensity = citizenState.hapticIntensity || 'medium';
+                            const duration = intensity === 'low' ? 10 : intensity === 'high' ? 50 : 30;
+                            navigator.vibrate(duration);
                           }
                           addLog({
                             deviceModel: 'WEARABLE_SHIELD',
@@ -1838,7 +1978,9 @@ export default function App() {
                           const updatedHeatmap = !citizenState.showDepthHeatmap;
                           setCitizenState(prev => ({ ...prev, showDepthHeatmap: updatedHeatmap }));
                           if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                            navigator.vibrate(30);
+                            const intensity = citizenState.hapticIntensity || 'medium';
+                            const duration = intensity === 'low' ? 10 : intensity === 'high' ? 50 : 30;
+                            navigator.vibrate(duration);
                           }
                           addLog({
                             deviceModel: 'WEARABLE_SHIELD',
@@ -1875,7 +2017,9 @@ export default function App() {
                           window.dispatchEvent(event);
 
                           if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                            navigator.vibrate([40, 20, 40]);
+                            const intensity = citizenState.hapticIntensity || 'medium';
+                            const pattern = intensity === 'low' ? [15, 10, 15] : intensity === 'high' ? [80, 30, 80] : [40, 20, 40];
+                            navigator.vibrate(pattern);
                           }
                           
                           // Also make sure warp grid overlay is on to show the calibration

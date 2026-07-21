@@ -116,6 +116,8 @@ export interface CitizenState {
   euAiActShieldEnabled?: boolean;
   bipaDeletionEnabled?: boolean;
   rfc9402ComplianceEnabled?: boolean;
+  bypassEmergencyConfirm?: boolean;
+  hapticIntensity?: 'low' | 'medium' | 'high';
 }
 
 export interface WifiTriggerRule {
