@@ -33,6 +33,7 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { CitizenState, DetectionLog } from '../types';
+import { AiComplianceGenerator } from './AiComplianceGenerator';
 
 interface ComplianceAuditProps {
   citizenState: CitizenState;
@@ -994,11 +995,14 @@ export default function ComplianceAudit({ citizenState, logs, onAddLog, onClearL
             </div>
 
             {/* Official Legal Disclaimer Footer inside report */}
-            <div className="pt-4 border-t border-dashed text-center">
+            <div className="pt-4 border-t border-dashed text-center mb-4">
               <p className="text-[7px] text-slate-400 leading-normal max-w-lg mx-auto">
                 LEGAL COMPLIANCE STATEMENT: The owner of this signature exerts explicit local bystander rights to be excluded from AI training loops, continuous telemetry streams, facial profiling caches, or commercial recording platforms. This digital ledger represents a real-world verifiable RF-proof record. Unauthorized interception breaches proposed localized boundary limits.
               </p>
             </div>
+
+            {/* Gemini 3.6 AI Cease-and-Desist Legal Generator */}
+            <AiComplianceGenerator addLog={onAddLog} />
 
           </div>
 

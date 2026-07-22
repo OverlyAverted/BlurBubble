@@ -71,6 +71,7 @@ export interface CitizenState {
   showGuideButton?: boolean;
   showTopBar?: boolean;
   showSignalHistory?: boolean;
+  showThreatOptimizer?: boolean;
   showPrivacyImpactScore?: boolean;
   showBatteryWidget?: boolean;
   showSignalMap?: boolean;

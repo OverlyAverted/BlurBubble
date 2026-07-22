@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { CitizenState, DetectionLog } from '../types';
+import { AiAcousticClassifier } from './AiAcousticClassifier';
 
 interface AudioLabProps {
   citizenState: CitizenState;
@@ -852,6 +853,9 @@ export default function AudioLab({ citizenState, addLog, isActive }: AudioLabPro
             Deploy Scrambler Parameters
           </button>
         </div>
+
+        {/* Gemini 3.6 Acoustic Classifier & Voice Crawler Shield */}
+        <AiAcousticClassifier citizenState={citizenState} addLog={addLog} />
 
       </div>
 

@@ -44,7 +44,10 @@ import {
   RotateCcw,
   History,
   Grid3X3,
-  Target
+  Target,
+  Zap,
+  Bot,
+  X
 } from 'lucide-react';
 import { CitizenState, DetectionLog, PrivacyLevel } from './types';
 // @ts-ignore
@@ -56,6 +59,8 @@ import ComplianceAudit from './components/ComplianceAudit';
 import OSHomeLauncher from './components/OSHomeLauncher';
 import NDAGatekeeper from './components/NDAGatekeeper';
 import RadarSweepOverlay from './components/RadarSweepOverlay';
+import { AiThreatOptimizer } from './components/AiThreatOptimizer';
+import { AiTacticalCopilot } from './components/AiTacticalCopilot';
 import { useI18n, languageNames, Language } from './lib/i18n';
 import { generateECDSAKeyPair, deriveKeyFingerprint, signCompliancePayload, verifyCompliancePayload } from './lib/privacyCrypto';
 
@@ -285,6 +290,7 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   showGuideButton: true,
   showTopBar: true,
   showSignalHistory: false,
+  showThreatOptimizer: false,
   showPrivacyImpactScore: false,
   showBatteryWidget: true,
   showSignalMap: true,
@@ -427,11 +433,45 @@ export default function App() {
   const [guideCategory, setGuideCategory] = useState<'intro' | 'shield' | 'hud' | 'audit' | 'faq' | 'tour' | 'support'>('intro');
   const [showRadarSweep, setShowRadarSweep] = useState(false);
   const [isIndicatorHovered, setIsIndicatorHovered] = useState(false);
+  const [showShieldContextMenu, setShowShieldContextMenu] = useState(false);
+  const [showCopilot, setShowCopilot] = useState(false);
   const [statusbarRippleCount, setStatusbarRippleCount] = useState(0);
+
+  // Outside click handler to close quick settings context menu
+  useEffect(() => {
+    if (!showShieldContextMenu) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('#shield-quick-settings-context-menu') && !target.closest('#statusbar-bubble-indicator')) {
+        setShowShieldContextMenu(false);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    window.addEventListener('contextmenu', handleOutsideClick);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick);
+      window.removeEventListener('contextmenu', handleOutsideClick);
+    };
+  }, [showShieldContextMenu]);
   const [integrityTrend, setIntegrityTrend] = useState<'STABLE' | 'RISING' | 'DROPPING' | 'MUTED'>('STABLE');
   const prevIntegrityRef = useRef<number>(0);
   const [showEmergencyConfirm, setShowEmergencyConfirm] = useState(false);
-  const [alertsMuted, setAlertsMuted] = useState(true);
+  const [alertsMuted, setAlertsMuted] = useState(() => {
+    try {
+      const saved = localStorage.getItem('blurbubble_alerts_muted');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('blurbubble_alerts_muted', JSON.stringify(alertsMuted));
+    } catch (e) {
+      console.error('Error saving alerts muted:', e);
+    }
+  }, [alertsMuted]);
 
   // Active deflection animation states
   const [isDeflecting, setIsDeflecting] = useState(false);
@@ -1414,6 +1454,11 @@ export default function App() {
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                setShowShieldContextMenu(prev => !prev);
+                if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                  navigator.vibrate(25);
+                }
+                playAlertSound('tactical_click', 60);
               }}
               style={{
                 WebkitTouchCallout: 'none',
@@ -1469,6 +1514,11 @@ export default function App() {
                 onContextMenu={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  setShowShieldContextMenu(prev => !prev);
+                  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                    navigator.vibrate(25);
+                  }
+                  playAlertSound('tactical_click', 60);
                 }}
                 style={{
                   WebkitTouchCallout: 'none',
@@ -1488,7 +1538,7 @@ export default function App() {
                         : 'bg-amber-950/20 border-amber-500/30 text-amber-500/95 shadow-[0_0_8px_rgba(245,158,11,0.15)] animate-pulse'
                     : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-400'
                 }`}
-                title={citizenState.isBroadcasting ? `BlurBubble Broadcast Shield ACTIVE (Integrity: ${shieldIntegrity}%) - Click to open sweep controls` : "BlurBubble Broadcast Shield SILENT - Click to activate"}
+                title={citizenState.isBroadcasting ? `BlurBubble Broadcast Shield ACTIVE (Integrity: ${shieldIntegrity}%) - Left click for sweep, Right-click for Quick Settings` : "BlurBubble Broadcast Shield SILENT - Left click to activate, Right-click for Quick Settings"}
               >
                 {/* Haptic Visual Ripple Effect */}
                 {statusbarRippleCount > 0 && (
@@ -1657,8 +1707,292 @@ export default function App() {
               </button>
 
               <AnimatePresence>
+                {/* Custom Quick-Settings Context Menu for Shield (Triggered on Right-Click) */}
+                {showShieldContextMenu && (
+                  <motion.div
+                    id="shield-quick-settings-context-menu"
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    className="absolute right-0 top-full mt-2 w-80 bg-slate-950/98 border border-emerald-500/40 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.25)] backdrop-blur-xl p-4 text-slate-200 z-[100] flex flex-col font-sans select-none"
+                  >
+                    {/* Context Menu Header */}
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                          <Shield className="w-4 h-4 animate-pulse" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono text-emerald-400 block">
+                            Shield Quick Settings
+                          </span>
+                          <span className="text-[8px] font-mono text-slate-400">
+                            Right-Click Context Control Panel
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowShieldContextMenu(false)}
+                        className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Main Broadcast Power Toggle */}
+                    <div className="flex items-center justify-between bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`p-2 rounded-lg border ${
+                          citizenState.isBroadcasting 
+                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' 
+                            : 'bg-rose-500/20 border-rose-500/40 text-rose-400'
+                        }`}>
+                          <Radio className="w-4 h-4 animate-pulse" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold font-mono text-white block">
+                            {citizenState.isBroadcasting ? 'Broadcasting Shield ACTIVE' : 'Broadcasting SILENT'}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400">
+                            {citizenState.isBroadcasting ? 'RF signal pulse masking active' : 'Signal muted, device unmasked'}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = !citizenState.isBroadcasting;
+                          setCitizenState(prev => {
+                            const next = { ...prev, isBroadcasting: updated };
+                            try {
+                              localStorage.setItem('blurbubble_citizen_state', JSON.stringify(next));
+                            } catch (e) {
+                              console.error('Failed saving citizen state to localStorage:', e);
+                            }
+                            return next;
+                          });
+                          addLog({
+                            deviceModel: 'WEARABLE_SHIELD',
+                            action: updated ? 'censored' : 'ignored',
+                            shieldApplied: updated ? 'QUICK_SETTINGS_ACTIVE' : 'QUICK_SETTINGS_MUTED',
+                            distance: 0,
+                            rotatedId: 'QUICK_SETTINGS_TOGGLE'
+                          });
+                          playAlertSound('tactical_click', 60);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg border text-[9px] font-mono font-bold uppercase tracking-wider transition cursor-pointer ${
+                          citizenState.isBroadcasting
+                            ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 hover:bg-emerald-500/30'
+                            : 'bg-rose-500/20 border-rose-400 text-rose-300 hover:bg-rose-500/30'
+                        }`}
+                      >
+                        {citizenState.isBroadcasting ? 'MUTE' : 'ENABLE'}
+                      </button>
+                    </div>
+
+                    {/* Blur/Censorship Mode Selection */}
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] font-bold font-mono uppercase text-slate-400 tracking-wider">
+                          Privacy Filter Mode
+                        </span>
+                        <span className="text-[8px] font-mono text-emerald-400 uppercase font-bold">
+                          {citizenState.privacyLevel.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {[
+                          { id: 'strict_blur', label: 'Frosted Blur', icon: '🛡️' },
+                          { id: 'pixelate', label: 'Pixelate', icon: '🟧' },
+                          { id: 'emoji', label: 'Emoji Mask', icon: '😀' },
+                          { id: 'magic_removal', label: 'Magic Eraser', icon: '✨' },
+                          { id: 'black_bar', label: 'Black Bar', icon: '⬛' },
+                          { id: 'none', label: 'Unmasked', icon: '🔓' },
+                        ].map((mode) => {
+                          const isActive = citizenState.privacyLevel === mode.id;
+                          return (
+                            <button
+                              key={mode.id}
+                              type="button"
+                              onClick={() => {
+                                setCitizenState(prev => {
+                                  const next = { ...prev, privacyLevel: mode.id as any };
+                                  try {
+                                    localStorage.setItem('blurbubble_citizen_state', JSON.stringify(next));
+                                  } catch (e) {
+                                    console.error('Failed saving citizen state to localStorage:', e);
+                                  }
+                                  return next;
+                                });
+                                playAlertSound('tactical_click', 50);
+                              }}
+                              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-[9px] font-mono transition cursor-pointer ${
+                                isActive
+                                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 font-bold shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                                  : 'bg-slate-900/60 border-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                              }`}
+                            >
+                              <span className="text-xs">{mode.icon}</span>
+                              <span className="truncate">{mode.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Broadcast Coverage Range */}
+                    <div className="mb-3 bg-slate-900/60 border border-slate-800 rounded-xl p-2.5">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] font-bold font-mono uppercase text-slate-400 tracking-wider">
+                          Protection Radius
+                        </span>
+                        <span className="text-[10px] font-bold font-mono text-cyan-400">
+                          {citizenState.rangeMeters} Meters
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[5, 15, 30, 50].map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => {
+                              setCitizenState(prev => {
+                                const next = { ...prev, rangeMeters: m };
+                                try {
+                                  localStorage.setItem('blurbubble_citizen_state', JSON.stringify(next));
+                                } catch (e) {
+                                  console.error('Failed saving citizen state to localStorage:', e);
+                                }
+                                return next;
+                              });
+                              playAlertSound('tactical_click', 40);
+                            }}
+                            className={`py-1 rounded text-[9px] font-mono font-bold transition cursor-pointer ${
+                              citizenState.rangeMeters === m
+                                ? 'bg-cyan-500/20 border border-cyan-400 text-cyan-300'
+                                : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-slate-200'
+                            }`}
+                          >
+                            {m}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Quick Feature Toggles */}
+                    <div className="space-y-1.5 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCitizenState(prev => {
+                            const next = { ...prev, showWarpGrid: !prev.showWarpGrid };
+                            try {
+                              localStorage.setItem('blurbubble_citizen_state', JSON.stringify(next));
+                            } catch (e) {
+                              console.error('Failed saving citizen state to localStorage:', e);
+                            }
+                            return next;
+                          });
+                          playAlertSound('tactical_click', 40);
+                        }}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[9px] font-mono transition cursor-pointer ${
+                          citizenState.showWarpGrid
+                            ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 font-bold'
+                            : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:bg-slate-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Grid3X3 className="w-3 h-3 text-cyan-400" />
+                          3D Perspective Warp Grid
+                        </span>
+                        <span>{citizenState.showWarpGrid ? '[ON]' : '[OFF]'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAlertsMuted(prev => {
+                            const next = !prev;
+                            try {
+                              localStorage.setItem('blurbubble_alerts_muted', JSON.stringify(next));
+                            } catch (e) {
+                              console.error('Failed saving alerts_muted to localStorage:', e);
+                            }
+                            return next;
+                          });
+                          playAlertSound('tactical_click', 40);
+                        }}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[9px] font-mono transition cursor-pointer ${
+                          alertsMuted
+                            ? 'bg-rose-500/15 border-rose-500/40 text-rose-300 font-bold'
+                            : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {alertsMuted ? <VolumeX className="w-3 h-3 text-rose-400" /> : <Volume2 className="w-3 h-3 text-emerald-400" />}
+                          Notification Audio Alerts
+                        </span>
+                        <span>{alertsMuted ? '[MUTED]' : '[ACTIVE]'}</span>
+                      </button>
+                    </div>
+
+                    {/* Emergency Lockdown Panic Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCitizenState(prev => {
+                          const next = {
+                            ...prev,
+                            emergencyPrivacyActive: true,
+                            isBroadcasting: true,
+                            privacyLevel: 'strict_blur' as const,
+                            irDisruptionEnabled: true,
+                            rangeMeters: 50,
+                          };
+                          try {
+                            localStorage.setItem('blurbubble_citizen_state', JSON.stringify(next));
+                          } catch (e) {
+                            console.error('Failed saving citizen state to localStorage:', e);
+                          }
+                          return next;
+                        });
+                        triggerAlert(
+                          '🚨 Emergency Privacy Activated!',
+                          'Maximum lockdown enabled: Strict Blur, IR Disruption & 50m max shield range.',
+                          'blocking'
+                        );
+                        playAlertSound('emergency_alarm', 90);
+                        setShowShieldContextMenu(false);
+                      }}
+                      className="w-full py-2 px-3 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 border border-red-400/50 rounded-xl text-white font-extrabold font-mono text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 transition shadow-[0_0_15px_rgba(239,68,68,0.3)] cursor-pointer"
+                    >
+                      <Zap className="w-3.5 h-3.5 fill-current animate-bounce" />
+                      Emergency Shield Lockdown
+                    </button>
+
+                    {/* Link to Full Settings */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveView('citizen');
+                        setCitizenTab('settings');
+                        setShowShieldContextMenu(false);
+                      }}
+                      className="w-full mt-2 text-center text-[8px] font-mono text-slate-400 hover:text-emerald-400 transition cursor-pointer underline"
+                    >
+                      Open Advanced Beacon Configuration ➔
+                    </button>
+                  </motion.div>
+                )}
+
                 {/* Detailed Hover Telemetry Tooltip */}
-                {isIndicatorHovered && !showRadarSweep && (
+                {isIndicatorHovered && !showRadarSweep && !showShieldContextMenu && (
                   <motion.div
                     initial={{ opacity: 0, y: -20, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -2486,6 +2820,29 @@ export default function App() {
                           <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showSignalHistory ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
                         </button>
 
+                        {/* 7b. Gemini 3.6 Threat Analysis & Shield Optimizer */}
+                        <button
+                          type="button"
+                          onClick={() => setCitizenState(prev => ({ ...prev, showThreatOptimizer: !prev.showThreatOptimizer }))}
+                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                            citizenState.showThreatOptimizer
+                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                          }`}
+                          title="Toggle visibility of Gemini 3.6 AI Threat Analysis & Shield Optimizer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Sparkles className={`w-3.5 h-3.5 ${citizenState.showThreatOptimizer ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="flex items-center gap-1.5">
+                              Gemini 3.6 AI Threat Optimizer
+                              <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                                AI
+                              </span>
+                            </span>
+                          </div>
+                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showThreatOptimizer ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                        </button>
+
                         {/* 8. Privacy Impact Score Gauge */}
                         <button
                           type="button"
@@ -2753,6 +3110,19 @@ export default function App() {
                 </button>
               </div>
             )}
+
+            {/* AI Tactical Copilot Quick Launch Button */}
+            <button
+              id="ai-copilot-trigger-btn"
+              type="button"
+              onClick={() => setShowCopilot(!showCopilot)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono font-bold bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 hover:text-white shadow-[0_0_15px_rgba(16,185,129,0.2)] transition cursor-pointer shrink-0"
+              title="Open Gemini 3.6 AI Tactical Privacy Copilot Chat"
+            >
+              <Bot className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <span>AI COPILOT</span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-400 text-slate-950 font-black">3.6</span>
+            </button>
           </div>
         </div>
       </header>
@@ -2979,16 +3349,25 @@ export default function App() {
               transition={{ duration: 0.2 }}
             >
               {activeView === 'citizen' && (
-                <PrivacyBeacon
-                  state={citizenState}
-                  onChange={setCitizenState}
-                  logs={logs}
-                  onClearLogs={clearLogs}
-                  activeTab={citizenTab}
-                  onTabChange={setCitizenTab}
-                  onAddLog={addLog}
-                  onTriggerAlert={triggerAlert}
-                />
+                <>
+                  {citizenState.showThreatOptimizer && citizenTab === 'overview' && (
+                    <AiThreatOptimizer
+                      citizenState={citizenState}
+                      onChange={setCitizenState}
+                      addLog={addLog}
+                    />
+                  )}
+                  <PrivacyBeacon
+                    state={citizenState}
+                    onChange={setCitizenState}
+                    logs={logs}
+                    onClearLogs={clearLogs}
+                    activeTab={citizenTab}
+                    onTabChange={setCitizenTab}
+                    onAddLog={addLog}
+                    onTriggerAlert={triggerAlert}
+                  />
+                </>
               )}
 
               {activeView === 'glasses' && (
@@ -4661,6 +5040,13 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Gemini 3.6 AI Tactical Privacy Copilot Drawer */}
+      <AiTacticalCopilot
+        citizenState={citizenState}
+        isOpen={showCopilot}
+        onClose={() => setShowCopilot(false)}
+      />
     </div>
   );
 }

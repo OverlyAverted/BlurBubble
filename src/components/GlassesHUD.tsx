@@ -49,6 +49,7 @@ import { CitizenState, Pedestrian, PrivacyLevel, DetectionLog, RegisteredEntity 
 import AudioLab from './AudioLab';
 import GpuShaderCore from './GpuShaderCore';
 import PrivacyThreatMap from './PrivacyThreatMap';
+import { AiVisionCensorship } from './AiVisionCensorship';
 
 interface GlassesHUDProps {
   citizenState: CitizenState;
@@ -1291,11 +1292,11 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
         // Virtual webcam simulator stream
         offscreenCanvas.width = w;
         offscreenCanvas.height = h;
-        offscreenCtx.fillStyle = '#090d16';
+        offscreenCtx.fillStyle = '#0a0f1d';
         offscreenCtx.fillRect(0, 0, w, h);
 
-        // Tech grid lines on offscreen
-        offscreenCtx.strokeStyle = 'rgba(6, 182, 212, 0.1)';
+        // Subtle background tech grid lines on offscreen
+        offscreenCtx.strokeStyle = 'rgba(6, 182, 212, 0.12)';
         offscreenCtx.lineWidth = 1;
         for (let i = 0; i < w; i += 16) {
           offscreenCtx.beginPath();
@@ -1310,32 +1311,49 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
           offscreenCtx.stroke();
         }
 
-        // Animated target face silhouette
-        offscreenCtx.strokeStyle = '#34d399';
-        offscreenCtx.fillStyle = 'rgba(52, 211, 153, 0.05)';
-        offscreenCtx.lineWidth = 1.5;
-
-        const pulse = 1 + Math.sin(performance.now() * 0.005) * 0.05;
+        const pulse = 1 + Math.sin(performance.now() * 0.005) * 0.04;
         const cx = w / 2;
         const cy = h / 2;
-        const r = Math.min(w, h) * 0.35 * pulse;
+        const rx = w * 0.32 * pulse;
+        const ry = h * 0.42 * pulse;
 
-        // Draw face contour
+        // Realistic face skin-tone radial gradient
+        const faceGrad = offscreenCtx.createRadialGradient(cx, cy - ry * 0.1, rx * 0.2, cx, cy, ry);
+        faceGrad.addColorStop(0, '#f2d6c1'); // Skin highlight
+        faceGrad.addColorStop(0.6, '#d9a07b'); // Midtone
+        faceGrad.addColorStop(1, '#9e623f'); // Shadow edge
+
+        // Draw realistic facial oval contour
+        offscreenCtx.save();
         offscreenCtx.beginPath();
-        offscreenCtx.arc(cx, cy, r, 0, Math.PI * 2);
+        offscreenCtx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        offscreenCtx.fillStyle = faceGrad;
         offscreenCtx.fill();
+        offscreenCtx.strokeStyle = 'rgba(52, 211, 153, 0.8)';
+        offscreenCtx.lineWidth = 1.5;
         offscreenCtx.stroke();
 
-        // Eyes
-        offscreenCtx.fillStyle = '#34d399';
+        // Eye features
+        offscreenCtx.fillStyle = '#2d1b11';
         offscreenCtx.beginPath();
-        offscreenCtx.arc(cx - r * 0.4, cy - r * 0.2, r * 0.08, 0, Math.PI * 2);
-        offscreenCtx.arc(cx + r * 0.4, cy - r * 0.2, r * 0.08, 0, Math.PI * 2);
+        offscreenCtx.ellipse(cx - rx * 0.4, cy - ry * 0.15, rx * 0.14, ry * 0.08, 0, 0, Math.PI * 2);
+        offscreenCtx.ellipse(cx + rx * 0.4, cy - ry * 0.15, rx * 0.14, ry * 0.08, 0, 0, Math.PI * 2);
         offscreenCtx.fill();
 
-        // Warning scan lines
-        offscreenCtx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
-        offscreenCtx.strokeRect(cx - r, cy - r, r * 2, r * 2);
+        // Iris highlights
+        offscreenCtx.fillStyle = '#38bdf8';
+        offscreenCtx.beginPath();
+        offscreenCtx.arc(cx - rx * 0.4, cy - ry * 0.15, rx * 0.06, 0, Math.PI * 2);
+        offscreenCtx.arc(cx + rx * 0.4, cy - ry * 0.15, rx * 0.06, 0, Math.PI * 2);
+        offscreenCtx.fill();
+
+        // Lips
+        offscreenCtx.fillStyle = '#b85353';
+        offscreenCtx.beginPath();
+        offscreenCtx.ellipse(cx, cy + ry * 0.45, rx * 0.28, ry * 0.08, 0, 0, Math.PI * 2);
+        offscreenCtx.fill();
+
+        offscreenCtx.restore();
 
         sourceLoaded = true;
       }
@@ -1931,40 +1949,40 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
     switch (level) {
       case 'magic_removal':
         return {
-          backgroundImage: 'conic-gradient(from 0deg, rgba(30, 41, 59, 0.4), rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.4))',
-          backdropFilter: 'blur(35px) saturate(0.2)',
-          WebkitBackdropFilter: 'blur(35px) saturate(0.2)',
-          boxShadow: '0 0 25px rgba(16, 185, 129, 0.35)',
+          backgroundImage: 'radial-gradient(ellipse at center, rgba(16, 185, 129, 0.25), rgba(15, 23, 42, 0.4))',
+          backdropFilter: 'blur(28px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(28px) saturate(1.4)',
+          boxShadow: '0 0 20px rgba(16, 185, 129, 0.35)',
           border: '1.5px solid rgba(16, 185, 129, 0.6)',
         };
       case 'strict_blur':
         return {
-          backdropFilter: 'blur(80px) saturate(1.3) contrast(1.4) brightness(0.65)',
-          WebkitBackdropFilter: 'blur(80px) saturate(1.3) contrast(1.4) brightness(0.65)',
-          background: 'rgba(15, 23, 42, 0.85)', // Strong 85% slate opacity ensures perfect obscuration of facial features
-          boxShadow: '0 0 45px rgba(16, 185, 129, 0.6)',
-          border: '2px solid rgba(16, 185, 129, 0.5)',
+          backdropFilter: 'blur(22px) saturate(160%) contrast(108%) brightness(1.05)',
+          WebkitBackdropFilter: 'blur(22px) saturate(160%) contrast(108%) brightness(1.05)',
+          background: 'radial-gradient(ellipse at center, rgba(255, 255, 255, 0.25) 0%, rgba(15, 23, 42, 0.25) 70%, rgba(52, 211, 153, 0.2) 100%)',
+          boxShadow: '0 0 25px rgba(52, 211, 153, 0.35), inset 0 0 15px rgba(255, 255, 255, 0.3)',
+          border: '1.5px solid rgba(52, 211, 153, 0.65)',
         };
       case 'pixelate':
         return {
-          backgroundImage: 'radial-gradient(rgba(15, 23, 42, 0.98) 4px, transparent 0)',
+          backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.3) 2px, transparent 0)',
           backgroundSize: '10px 10px',
-          backdropFilter: 'blur(15px) saturate(0.3) brightness(0.7)',
-          WebkitBackdropFilter: 'blur(15px) saturate(0.3) brightness(0.7)',
-          background: 'rgba(15, 23, 42, 0.9)', // Extremely opaque 90% slate backing
-          boxShadow: '0 0 35px rgba(245, 158, 11, 0.5)',
-          border: '2px solid rgba(245, 158, 11, 0.45)',
+          backdropFilter: 'blur(12px) saturate(140%) brightness(1.02)',
+          WebkitBackdropFilter: 'blur(12px) saturate(140%) brightness(1.02)',
+          background: 'rgba(15, 23, 42, 0.35)',
+          boxShadow: '0 0 20px rgba(245, 158, 11, 0.4)',
+          border: '1.5px solid rgba(245, 158, 11, 0.5)',
         };
       case 'emoji':
         return {
-          background: 'rgba(15, 23, 42, 0.95)',
-          border: '2px dashed #3b82f6',
-          boxShadow: '0 0 25px rgba(59, 130, 246, 0.4)',
+          backdropFilter: 'blur(14px) saturate(150%)',
+          WebkitBackdropFilter: 'blur(14px) saturate(150%)',
+          background: 'rgba(15, 23, 42, 0.35)',
+          border: '1.5px dashed #3b82f6',
+          boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
         };
       case 'black_bar':
-        return {
-          // Handled individually
-        };
+        return {};
       default:
         return {};
     }
@@ -2819,32 +2837,15 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                           scaleFactor = scaleFactor * (1.0 + Math.sin(renderTick * 5) * accelModifier);
                         }
                         const isBody = aiTrackingMode === 'body';
-                        const baseWidth = isBody ? 176 : 192;
-                        const baseHeight = isBody ? 288 : 192;
+                        const baseWidth = isBody ? 140 : 110;
+                        const baseHeight = isBody ? 240 : 135;
 
                         const dynamicWidth = baseWidth * scaleFactor;
                         const dynamicHeight = baseHeight * scaleFactor;
 
-                        const wave = Math.sin(renderTick * 2.0) * 1.5;
-                        const wave2 = Math.cos(renderTick * 1.6) * 1.5;
-                        const wave3 = Math.sin(renderTick * 1.1) * 2.0;
-
                         const dynamicClipPath = isBody 
                           ? 'none' 
-                          : `polygon(
-                              ${50 + wave}% ${5 + wave2}%, 
-                              ${68 + wave2}% ${13 - wave}%, 
-                              ${82 + wave3}% ${28 + wave2}%, 
-                              ${86 - wave}% ${48 + wave3}%, 
-                              ${80 + wave2}% ${70 - wave}%, 
-                              ${68 - wave3}% ${86 + wave2}%, 
-                              ${50 - wave}% ${95 - wave3}%, 
-                              ${32 + wave2}% ${86 - wave}%, 
-                              ${20 - wave3}% ${70 + wave2}%, 
-                              ${14 + wave}% ${48 - wave3}%, 
-                              ${18 - wave2}% ${28 - wave}%, 
-                              ${32 + wave3}% ${13 + wave2}%
-                            )`;
+                          : 'ellipse(46% 48% at 50% 50%)';
 
                         let rotX = (blurPosition.y - 40) * 0.45 + Math.sin(renderTick * 0.6) * 3;
                         let rotY = -(blurPosition.x - 50) * 0.45 + Math.cos(renderTick * 0.6) * 3;
@@ -2873,17 +2874,17 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                               WebkitClipPath: dynamicClipPath,
                             }}
                             className={`absolute flex items-center justify-center cursor-move z-10 overflow-hidden ${
-                              isBody ? 'rounded-t-[5rem] rounded-b-[4rem]' : ''
+                              isBody ? 'rounded-t-[5rem] rounded-b-[4rem]' : 'rounded-full'
                             }`}
                           >
                           {/* Live WebAssembly/Vectorized dynamic pixel-processing canvas */}
                           <canvas
                             ref={wasmCanvasRef}
-                            width={aiTrackingMode === 'body' ? 140 : 180}
-                            height={aiTrackingMode === 'body' ? 220 : 180}
+                            width={aiTrackingMode === 'body' ? 140 : 120}
+                            height={aiTrackingMode === 'body' ? 220 : 140}
                             className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none z-0 rounded-full"
                             style={{
-                              opacity: (citizenState.privacyLevel === 'none' || citizenState.privacyLevel === 'black_bar' || citizenState.privacyLevel === 'magic_removal') ? 0 : 0.95,
+                              opacity: (citizenState.privacyLevel === 'none' || citizenState.privacyLevel === 'black_bar' || citizenState.privacyLevel === 'magic_removal') ? 0 : 0.85,
                             }}
                           />
 
@@ -2891,7 +2892,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                           <div 
                             onMouseDown={handleMouseDown}
                             className={`absolute inset-0 flex items-center justify-center group z-20 ${
-                              aiTrackingMode === 'body' ? 'rounded-t-[5rem] rounded-b-[4rem]' : ''
+                              aiTrackingMode === 'body' ? 'rounded-t-[5rem] rounded-b-[4rem]' : 'rounded-full'
                             } ${
                               showDiagnostics
                                 ? (citizenState.emergencyPrivacyActive ? 'border-2 border-red-500 bg-red-950/20' : 'border-2 border-emerald-400/80')
@@ -2921,54 +2922,28 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                           {citizenState.privacyLevel !== 'none' && citizenState.privacyLevel !== 'black_bar' && citizenState.privacyLevel !== 'magic_removal' && (
                             <div 
                               className={`w-full h-full relative z-10 ${
-                                aiTrackingMode === 'body' ? 'rounded-t-[5rem] rounded-b-[4rem]' : ''
+                                aiTrackingMode === 'body' ? 'rounded-t-[5rem] rounded-b-[4rem]' : 'rounded-full'
                               }`}
                               style={getOverlayStyles(citizenState.privacyLevel)}
                             >
-                              {/* 100% Secure Visual Blur obscuration layer inside the strict blur container */}
+                              {/* Elegant Frosted Glass privacy lens layer */}
                               {citizenState.privacyLevel === 'strict_blur' && (
                                 <div className="absolute inset-0 overflow-hidden rounded-full flex items-center justify-center pointer-events-none">
-                                  {/* Heavy concentric layered shapes to guarantee absolutely zero facial detail leak */}
-                                  <div className="absolute w-[130%] h-[130%] bg-slate-950/40 rounded-full filter blur-[12px]" />
-                                  <div className="absolute w-[90%] h-[90%] bg-emerald-950/20 rounded-full filter blur-[8px] mix-blend-screen opacity-80 animate-pulse" />
-                                  <div className="absolute w-[60%] h-[60%] bg-slate-900/30 rounded-full filter blur-[6px]" />
+                                  {/* Soft frosted reflection glare */}
+                                  <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 via-white/10 to-transparent opacity-80 mix-blend-overlay" />
+                                  <div className="absolute inset-0 rounded-full border border-emerald-400/40 shadow-[inset_0_0_15px_rgba(255,255,255,0.25)]" />
                                   
-                                  {/* Real-time 3D Polygonal Mesh Draped Overlay */}
-                                  <svg className="absolute inset-0 w-full h-full text-emerald-400/25 mix-blend-screen animate-pulse" viewBox="0 0 100 100" fill="none">
-                                    <path 
-                                      d="
-                                        M 50,5 L 30,15 L 50,30 L 70,15 Z
-                                        M 30,15 L 10,40 L 30,45 L 50,30 Z
-                                        M 70,15 L 90,40 L 70,45 L 50,30 Z
-                                        M 30,45 L 50,60 L 70,45 Z
-                                        M 10,40 L 20,70 L 40,80 L 50,60 L 30,45 Z
-                                        M 90,40 L 80,70 L 60,80 L 50,60 L 70,45 Z
-                                        M 40,80 L 50,95 L 60,80 Z
-                                      " 
-                                      stroke="currentColor" 
-                                      strokeWidth="0.5" 
-                                    />
-                                    <g className="text-emerald-400/50">
-                                      <circle cx="50" cy="5" r="1.2" fill="currentColor" />
-                                      <circle cx="30" cy="15" r="1.2" fill="currentColor" />
-                                      <circle cx="70" cy="15" r="1.2" fill="currentColor" />
-                                      <circle cx="50" cy="30" r="1.2" fill="currentColor" />
-                                      <circle cx="10" cy="40" r="1.2" fill="currentColor" />
-                                      <circle cx="90" cy="40" r="1.2" fill="currentColor" />
-                                      <circle cx="30" cy="45" r="1.2" fill="currentColor" />
-                                      <circle cx="70" cy="45" r="1.2" fill="currentColor" />
-                                      <circle cx="50" cy="60" r="1.2" fill="currentColor" />
-                                      <circle cx="20" cy="70" r="1.2" fill="currentColor" />
-                                      <circle cx="80" cy="70" r="1.2" fill="currentColor" />
-                                      <circle cx="40" cy="80" r="1.2" fill="currentColor" />
-                                      <circle cx="60" cy="80" r="1.2" fill="currentColor" />
-                                      <circle cx="50" cy="95" r="1.2" fill="currentColor" />
-                                    </g>
+                                  {/* Elegant Facial Contour SVG Lines */}
+                                  <svg className="absolute inset-0 w-full h-full text-emerald-400/30 mix-blend-screen animate-pulse" viewBox="0 0 100 100" fill="none">
+                                    <ellipse cx="50" cy="50" rx="38" ry="44" stroke="currentColor" strokeWidth="0.8" strokeDasharray="3 3" />
+                                    <ellipse cx="50" cy="42" rx="20" ry="10" stroke="currentColor" strokeWidth="0.5" opacity="0.6" /> {/* Eye level contour */}
+                                    <path d="M 50,20 L 50,65 M 35,42 L 65,42" stroke="currentColor" strokeWidth="0.5" opacity="0.4" /> {/* Facial crosshair */}
+                                    <circle cx="50" cy="42" r="3" stroke="currentColor" strokeWidth="0.8" />
                                   </svg>
 
                                   <div className="absolute text-center select-none">
-                                    <span className="text-[8px] font-mono text-emerald-400 font-extrabold uppercase tracking-widest block bg-slate-950/90 px-2 py-0.5 rounded border border-emerald-500/30">
-                                      🛡️ OBSCURED
+                                    <span className="text-[7.5px] font-mono text-emerald-300 font-extrabold uppercase tracking-widest block bg-slate-950/80 px-2 py-0.5 rounded border border-emerald-500/30 shadow-md">
+                                      🛡️ FROSTED LENS
                                     </span>
                                   </div>
                                 </div>
@@ -5817,6 +5792,9 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
         </div>
       </div>
       )}
+
+      {/* Gemini 3.6 Vision AI Optical Censorship Assistant */}
+      <AiVisionCensorship citizenState={citizenState} onChange={onChange || (() => {})} addLog={addLog} />
     </div>
   );
 }
