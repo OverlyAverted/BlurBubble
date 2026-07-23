@@ -60,6 +60,7 @@ import OSHomeLauncher from './components/OSHomeLauncher';
 import NDAGatekeeper from './components/NDAGatekeeper';
 import RadarSweepOverlay from './components/RadarSweepOverlay';
 import { AiThreatOptimizer } from './components/AiThreatOptimizer';
+import { AutomatedShieldEngine } from './components/AutomatedShieldEngine';
 import { AiTacticalCopilot } from './components/AiTacticalCopilot';
 import { useI18n, languageNames, Language } from './lib/i18n';
 import { generateECDSAKeyPair, deriveKeyFingerprint, signCompliancePayload, verifyCompliancePayload } from './lib/privacyCrypto';
@@ -291,6 +292,11 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   showTopBar: true,
   showSignalHistory: false,
   showThreatOptimizer: false,
+  showAutomationHub: false,
+  autoKeyRotationInterval: 15,
+  autoThreatScanInterval: 0,
+  autoAcousticTakedowns: true,
+  autoPowerSaverThrottling: true,
   showPrivacyImpactScore: false,
   showBatteryWidget: true,
   showSignalMap: true,
@@ -2843,6 +2849,29 @@ export default function App() {
                           <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showThreatOptimizer ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
                         </button>
 
+                        {/* 7c. Automated Shield Operations Hub */}
+                        <button
+                          type="button"
+                          onClick={() => setCitizenState(prev => ({ ...prev, showAutomationHub: !prev.showAutomationHub }))}
+                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                            citizenState.showAutomationHub
+                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                          }`}
+                          title="Toggle visibility of Automated Shield & Privacy Operations Hub"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Bot className={`w-3.5 h-3.5 ${citizenState.showAutomationHub ? 'text-emerald-400' : 'text-slate-500'}`} />
+                            <span className="flex items-center gap-1.5">
+                              Automated Shield Operations Hub
+                              <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                                AUTO
+                              </span>
+                            </span>
+                          </div>
+                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showAutomationHub ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                        </button>
+
                         {/* 8. Privacy Impact Score Gauge */}
                         <button
                           type="button"
@@ -3355,6 +3384,14 @@ export default function App() {
                       citizenState={citizenState}
                       onChange={setCitizenState}
                       addLog={addLog}
+                    />
+                  )}
+                  {citizenState.showAutomationHub && citizenTab === 'overview' && (
+                    <AutomatedShieldEngine
+                      citizenState={citizenState}
+                      onChange={setCitizenState}
+                      addLog={addLog}
+                      triggerAlert={triggerAlert}
                     />
                   )}
                   <PrivacyBeacon

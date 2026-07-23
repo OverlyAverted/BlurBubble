@@ -72,6 +72,11 @@ export interface CitizenState {
   showTopBar?: boolean;
   showSignalHistory?: boolean;
   showThreatOptimizer?: boolean;
+  showAutomationHub?: boolean;
+  autoKeyRotationInterval?: number; // 0 = off, 15, 30, 60, 180 seconds
+  autoThreatScanInterval?: number;  // 0 = off, 30, 60, 120 seconds
+  autoAcousticTakedowns?: boolean;
+  autoPowerSaverThrottling?: boolean;
   showPrivacyImpactScore?: boolean;
   showBatteryWidget?: boolean;
   showSignalMap?: boolean;
