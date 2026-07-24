@@ -78,6 +78,17 @@ To provide multi-layered defense in any physical environment, the BlurBubble pro
 
 ---
 
+## 1.6 Non-Intrusive Selective Bounding Architecture (Zero Collateral Impact)
+
+A foundational architectural requirement of BlurBubble is **Zero Collateral Obscuration**. BlurBubble is engineered to be strictly non-intrusive:
+
+1. **Selective Subject Redaction**: BlurBubble never blocks, jams, or disables camera hardware or microphones from recording general ambient scenes. When a camera or smartphone records a concert, tourist landmark, family gathering, or public street, the entire background, scenery, and non-broadcasting bystanders are captured in 100% full, uncompressed clarity.
+2. **Precision Target Isolation**: On compliant hardware (smartphones, AI smart glasses, bodycams, action cameras), the Image Signal Processor (ISP) and Neural Processing Unit (NPU) isolate ONLY the bounding box and 3D mesh of the specific individual broadcasting the opt-out beacon (or a minor wearing a paired child tag).
+3. **Non-Disruptive Audio Scrambling**: For acoustic recording, only the registered vocal frequencies of the opted-out individual are watermarked or scrubbed, preserving all ambient environmental music, applause, and surrounding speech intact.
+4. **Preservation of Photography Rights**: This non-intrusive approach ensures that personal privacy protection coexists harmoniously with the public's freedom to film and photograph their surroundings.
+
+---
+
 ## 2. Advanced Patentable Methods & Technical Innovations
 
 ### Method A: Client-Side Zero-Knowledge Biometric Face Vault

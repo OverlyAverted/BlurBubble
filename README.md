@@ -43,6 +43,7 @@ In the modern world, always-on smart glasses, security systems, action cameras, 
 2. **The Intercept (The Recording Device)**: When someone wearing compliant smart glasses or holding an action camera walks near you, their device detects your signal.
 3. **The Mask (Instant Blurring)**: Before the camera can save any footage of you to its memory card or live-stream it to the web, the camera's internal processor applies an automatic, high-fidelity blur around your face, your children in school uniform, or your private screens. Your raw data is **never stored or uploaded**.
 4. **The Net (Platform Sweep)**: For old-school spy cameras or non-compliant devices, our simulated web crawler actively scans public social media (TikTok, Instagram, Facebook, YouTube) and audio networks (Spotify, SoundCloud). It identifies unconsented exposures of your registered biometrics and issues automatic retroactive blurring or takedown compliance requests.
+5. **Non-Intrusive & Selective**: BlurBubble NEVER jams, disables, or stops cameras from filming general surroundings. Anyone taking a photo or video at a concert, park, or tourist site captures the full background, scenery, and un-tagged bystanders in 100% crisp clarity. ONLY the specific opted-out person (or child wearing a tag) is blurred and voice-scrubbed.
 
 ---
 

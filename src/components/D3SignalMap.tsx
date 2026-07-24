@@ -51,6 +51,113 @@ export default function D3SignalMap({ state, onChange, onAddLog }: D3SignalMapPr
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredNode, setHoveredNode] = useState<VisualNode | null>(null);
   const [lastPing, setLastPing] = useState<{ x: number; y: number } | null>(null);
+  const [showSensorOverlay, setShowSensorOverlay] = useState(true);
+
+  // GPS Geolocation Sensor State
+  const [gpsInfo, setGpsInfo] = useState<{
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    altitude: number;
+    speed: number;
+    status: 'locked' | 'searching' | 'simulated';
+    satellites: number;
+    hdop: number;
+  }>({
+    latitude: state.gpsLatitude || 37.7749,
+    longitude: state.gpsLongitude || -122.4194,
+    accuracy: state.gpsAccuracyMeters || 2.4,
+    altitude: state.gpsAltitudeMeters || 18,
+    speed: 0,
+    status: state.gpsLockState || 'simulated',
+    satellites: 14,
+    hdop: 0.7
+  });
+
+  // Real-time Geolocation Sensor Listener
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy, altitude, speed } = pos.coords;
+          const newGps = {
+            latitude,
+            longitude,
+            accuracy: Math.round(accuracy * 10) / 10,
+            altitude: altitude ? Math.round(altitude) : 18,
+            speed: speed ? Math.round(speed * 3.6) : 0,
+            status: 'locked' as const,
+            satellites: 16,
+            hdop: 0.6
+          };
+          setGpsInfo(newGps);
+          onChange({
+            ...state,
+            gpsLatitude: latitude,
+            gpsLongitude: longitude,
+            gpsAccuracyMeters: accuracy,
+            gpsLockState: 'locked'
+          });
+        },
+        (err) => {
+          console.log('GPS watch standard fallback to simulated RTK:', err.message);
+          setGpsInfo(prev => ({ ...prev, status: 'simulated' }));
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 2000 }
+      );
+      return () => navigator.geolocation.clearWatch(watchId);
+    }
+  }, []);
+
+  // Handle GPS manual re-sync button
+  const handleResyncGps = () => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          setGpsInfo(prev => ({
+            ...prev,
+            latitude,
+            longitude,
+            accuracy: Math.round(accuracy * 10) / 10,
+            status: 'locked'
+          }));
+          if (onAddLog) {
+            onAddLog({
+              deviceModel: 'PHONE_GPS_GNSS',
+              action: 'discovered',
+              shieldApplied: `GPS_SIGNAL_FIX_ACQUIRED: ${latitude.toFixed(5)}°, ${longitude.toFixed(5)}° (±${accuracy.toFixed(1)}m)`,
+              distance: Math.round(accuracy),
+              rotatedId: 'GNSS_RECAL'
+            });
+          }
+        },
+        () => {
+          // Micro-drift simulation
+          const dLat = (Math.random() - 0.5) * 0.0002;
+          const dLng = (Math.random() - 0.5) * 0.0002;
+          const newLat = gpsInfo.latitude + dLat;
+          const newLng = gpsInfo.longitude + dLng;
+          setGpsInfo(prev => ({
+            ...prev,
+            latitude: newLat,
+            longitude: newLng,
+            accuracy: 2.1,
+            status: 'simulated'
+          }));
+          if (onAddLog) {
+            onAddLog({
+              deviceModel: 'PHONE_GPS_RTK_SIMULATOR',
+              action: 'discovered',
+              shieldApplied: `RTK_GPS_RECALIBRATED: ${newLat.toFixed(5)}°, ${newLng.toFixed(5)}°`,
+              distance: 2,
+              rotatedId: 'GPS_FUSION'
+            });
+          }
+        }
+      );
+    }
+  };
 
   // Maintain internal local coordinates for the tags
   const [nodes, setNodes] = useState<VisualNode[]>([]);
@@ -273,6 +380,33 @@ export default function D3SignalMap({ state, onChange, onAddLog }: D3SignalMapPr
         .attr('font-weight', 'extrabold')
         .attr('filter', 'url(#emerald-glow)')
         .text(`ACTIVE SHIELD BOUNDARY (${shieldRadiusMeters}M)`);
+    }
+
+    // 3b. GPS Geolocation Precision & Uncertainty Ring Overlay
+    if (showSensorOverlay && gpsInfo.accuracy) {
+      const gpsRadiusPx = radiusScale(Math.min(gpsInfo.accuracy, maxRadiusMeters));
+      const gpsZone = svg.append('g').attr('id', 'gps-uncertainty-ring');
+      
+      // Dashed Cyan GPS Uncertainty Ring
+      gpsZone.append('circle')
+        .attr('cx', centerX)
+        .attr('cy', centerY)
+        .attr('r', gpsRadiusPx)
+        .attr('fill', 'rgba(6, 182, 212, 0.04)')
+        .attr('stroke', '#06b6d4')
+        .attr('stroke-width', '1.2')
+        .attr('stroke-dasharray', '3,3');
+
+      // GPS Tag label
+      gpsZone.append('text')
+        .attr('x', centerX)
+        .attr('y', centerY + gpsRadiusPx + 10)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#22d3ee')
+        .attr('font-size', '7.5px')
+        .attr('font-family', 'monospace')
+        .attr('font-weight', 'bold')
+        .text(`GPS PRECISION UNCERTAINTY (±${gpsInfo.accuracy}M)`);
     }
 
     // 4. Radar sweep line & wedge animation
@@ -527,7 +661,7 @@ export default function D3SignalMap({ state, onChange, onAddLog }: D3SignalMapPr
       nodeElem.call(dragBehavior as any);
     });
 
-  }, [dimensions, nodes, state.isBroadcasting, state.rangeMeters, radarSpin, selectedNodeId, state.lowBatteryThreshold]);
+  }, [dimensions, nodes, state.isBroadcasting, state.rangeMeters, radarSpin, selectedNodeId, state.lowBatteryThreshold, showSensorOverlay, gpsInfo]);
 
   // Handle map click to emit an interactive "sonar ping pulse ripple" at that spot!
   const handleMapClick = (event: React.MouseEvent<SVGSVGElement>) => {
@@ -591,6 +725,28 @@ export default function D3SignalMap({ state, onChange, onAddLog }: D3SignalMapPr
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={handleResyncGps}
+            className="text-cyan-400 hover:text-cyan-300 transition-colors text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/40 border border-cyan-800/60 flex items-center gap-1 cursor-pointer"
+            title="Refresh GPS Satellite Fix & GNSS Coords"
+          >
+            <Navigation className="w-2.5 h-2.5 animate-pulse" />
+            Sync GPS ({gpsInfo.status === 'locked' ? 'GNSS FIX' : 'RTK SIM'})
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSensorOverlay(!showSensorOverlay)}
+            className={`text-[10px] font-mono px-2 py-0.5 rounded border flex items-center gap-1 cursor-pointer transition-colors ${
+              showSensorOverlay 
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                : 'bg-slate-900 text-slate-400 border-slate-800'
+            }`}
+            title="Toggle Real-Time Sensor Coverage HUD Overlay"
+          >
+            <MapPin className="w-2.5 h-2.5" />
+            Sensor Overlay {showSensorOverlay ? 'ON' : 'OFF'}
+          </button>
+          <button
+            type="button"
             onClick={() => setNodes(prev => prev.map(n => ({ ...n, initialDistance: 5 + Math.random() * 12 })))}
             className="text-slate-400 hover:text-white transition-colors text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950/65 border border-slate-800 flex items-center gap-1 cursor-pointer"
             title="Recalibrate and disperse all devices"
@@ -623,6 +779,46 @@ export default function D3SignalMap({ state, onChange, onAddLog }: D3SignalMapPr
               Drag node badges to recalibrate distances. Click empty canvas to pulse sonar ping.
             </p>
           </div>
+
+          {/* Floating Sensor Coverage Overlay HUD */}
+          {showSensorOverlay && (
+            <div className="absolute top-6 right-6 z-10 pointer-events-auto bg-slate-950/90 backdrop-blur-md border border-cyan-900/60 p-2.5 rounded-xl space-y-1.5 text-left max-w-[240px] shadow-lg">
+              <div className="flex items-center justify-between border-b border-cyan-900/40 pb-1">
+                <span className="text-[9px] font-extrabold text-cyan-400 font-mono uppercase tracking-wider flex items-center gap-1">
+                  <Navigation className="w-3 h-3 text-cyan-400 animate-pulse" />
+                  GPS Sensor Coverage HUD
+                </span>
+                <span className={`text-[7.5px] font-mono px-1 py-0.2 rounded uppercase font-bold ${
+                  gpsInfo.status === 'locked' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                }`}>
+                  {gpsInfo.status === 'locked' ? 'GNSS LOCK' : 'RTK FUSION'}
+                </span>
+              </div>
+
+              <div className="space-y-1 text-[8.5px] font-mono text-slate-300">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Lat/Lng:</span>
+                  <span className="text-white font-bold">{gpsInfo.latitude.toFixed(5)}°, {gpsInfo.longitude.toFixed(5)}°</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">GPS Precision:</span>
+                  <span className="text-cyan-300 font-bold">±{gpsInfo.accuracy} meters</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Shield Radius:</span>
+                  <span className="text-emerald-400 font-bold">{state.rangeMeters || 12}m ({Math.round(Math.PI * Math.pow(state.rangeMeters || 12, 2))}m²)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Multi-Sensor Mode:</span>
+                  <span className="text-emerald-300 font-bold">GPS + BLE + UWB ToF</span>
+                </div>
+              </div>
+
+              <div className="pt-1 border-t border-slate-900 text-[7.5px] font-sans text-emerald-400 leading-tight">
+                <strong>Selective Protection Active:</strong> Surrounding scenery & non-broadcasting bystanders remain 100% un-obscured in clear sight.
+              </div>
+            </div>
+          )}
 
           {/* D3 Canvas container */}
           <div className="w-full h-[350px] bg-slate-950/30 rounded-xl border border-slate-900/50 relative overflow-hidden">

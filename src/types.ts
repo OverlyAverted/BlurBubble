@@ -124,6 +124,12 @@ export interface CitizenState {
   rfc9402ComplianceEnabled?: boolean;
   bypassEmergencyConfirm?: boolean;
   hapticIntensity?: 'low' | 'medium' | 'high';
+  gpsLatitude?: number;
+  gpsLongitude?: number;
+  gpsAccuracyMeters?: number;
+  gpsAltitudeMeters?: number;
+  gpsLockState?: 'locked' | 'searching' | 'simulated';
+  gpsHighPrecisionFusion?: boolean;
 }
 
 export interface WifiTriggerRule {

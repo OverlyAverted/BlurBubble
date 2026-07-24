@@ -18,6 +18,11 @@ To prevent anyone from tracing your movements, BlurBubble rotates your beacon's 
 **Through automated School Geofences.**  
 You can link a cheap, durable Bluetooth tag (such as a Pebblebee or Tile) to your child’s school bag or uniform. When the child enters a registered school boundary, the school’s static BlurBubble beacon establishes an automated protection zone. Nearby compliant devices (like visitor smart glasses or smartphones) instantly catch the signal at the school gates and automatically blur the kids' faces in real-time.
 
+### 3b. Will BlurBubble stop someone from taking photos or videos of the surroundings or other people? Is it intrusive?
+**No! BlurBubble is strictly non-intrusive and selective.**  
+BlurBubble NEVER jams, disables, or stops cameras or microphones from recording general scenes. If someone is filming a concert, street, family event, or public park, their camera records the full scenery, background, and un-tagged bystanders in 100% crisp, full clarity.  
+ONLY the specific person broadcasting a BlurBubble opt-out signal (or a child wearing a child tag right next to them) has their specific face obfuscated and voice scrubbed in the recorded media. Everyone else in the frame remains completely untouched and clear. This guarantees personal privacy without intruding on anyone else's right to capture photos or video.
+
 ### 4. What happens if someone uses an old camera or a "jailbroken" device that doesn't comply?
 **Our AI Streaming Crawler has you covered.**  
 While compliant hardware (from brands like Apple, Meta, Google, Snap, DJI, and GoPro) blurs your face instantly inside the device, some rogue users might capture raw footage. To protect you, BlurBubble includes an automated web crawler that sweeps popular social media (TikTok, Instagram, YouTube) and audio streaming directories (Spotify, Apple Podcasts, SoundCloud). If it detects your registered biometrics, school uniform hashes, or voiceprints in a public upload, it automatically issues a legally compliant takedown and retroactive blurring demand.
