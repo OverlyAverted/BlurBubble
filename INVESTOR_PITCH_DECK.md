@@ -1,6 +1,6 @@
 # 💼 BlurBubble Investor Pitch Deck & Market Analysis
 **Company Name: BlurBubble Inc.**  
-**Proprietary Technology Portfolio: Paul Gordon Stuart (licensing@blurbubble.org)**  
+**Proprietary Technology Portfolio: Paul Stuart (overly.averted@icloud.com)**  
 **Confidential Offering Memorandum — Series Seed Round**
 
 ---

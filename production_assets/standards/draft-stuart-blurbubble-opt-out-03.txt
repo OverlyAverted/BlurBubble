@@ -195,6 +195,6 @@ Table of Contents
 
 Author's Address
 
-   Matthew Stuart, Editor
-   BlurBubble Organization
-   Email: standards@blurbubble.org
+   Paul Stuart, Author & Sole Developer
+   BlurBubble
+   Email: overly.averted@icloud.com

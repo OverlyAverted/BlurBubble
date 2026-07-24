@@ -1,6 +1,6 @@
 # GNU General Public License v3.0
 
-**Copyright (C) 2026 Paul Gordon Stuart (licensing@blurbubble.org)**
+**Copyright (C) 2026 Paul Stuart (overly.averted@icloud.com)**
 
 Everyone is permitted to copy and distribute verbatim copies of this license document, but changing it is not allowed.
 

@@ -1,6 +1,6 @@
 # 🏢 BIG TECH PROPOSALS: NATIVE OPERATING SYSTEM COMPLIANCE
 **Date of Issuance: July 10, 2026**  
-**Originating Office: Office of the Inventor, Paul Gordon Stuart (licensing@blurbubble.org)**  
+**Originating Office: Office of the Inventor, Paul Stuart (overly.averted@icloud.com)**  
 **Subject: Standardizing the BlurBubble Localized Privacy Broadcast Protocol (RFC-9402)**
 
 ---
@@ -38,9 +38,9 @@ We look forward to arranging a technical briefing with your CoreOS and Neural En
 
 Sincerely,
 
-**Paul Gordon Stuart**  
+**Paul Stuart**  
 *Inventor & Founder, BlurBubble Protocol*  
-*licensing@blurbubble.org*
+*overly.averted@icloud.com*
 
 ---
 
@@ -102,9 +102,9 @@ We are ready to present our C++ SDKs, reference firmware implementations, and Ho
 
 Sincerely,
 
-**Paul Gordon Stuart**  
+**Paul Stuart**  
 *Inventor & Founder, BlurBubble Protocol*  
-*licensing@blurbubble.org*
+*overly.averted@icloud.com*
 
 ---
 
@@ -135,6 +135,6 @@ We would be honored to demonstrate our bare-metal C++ firmware hooks, ESP32/nRF5
 
 Sincerely,
 
-**Paul Gordon Stuart**  
+**Paul Stuart**  
 *Inventor & Founder, BlurBubble Protocol*  
-*licensing@blurbubble.org*
+*overly.averted@icloud.com*

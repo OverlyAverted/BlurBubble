@@ -89,4 +89,4 @@ To qualify as a **BlurBubble Certified Compliant Hardware/Software Provider**, y
 
 ---
 
-*BlurBubble is a tactical open-source standard for citizen privacy. For API and licensing inquires, contact `compliance@blurbubble.org`.*
+*BlurBubble is a tactical open-source standard for citizen privacy. For API and licensing inquires, contact `overly.averted@icloud.com`.*

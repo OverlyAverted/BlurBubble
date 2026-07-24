@@ -8,8 +8,8 @@
 This certifies and declares that the original inventorship, copyright, and brand asset ownership of the **BlurBubble** ecosystem are vested strictly and exclusively in the sole creator and inventor:
 
 ### 👤 SOLE CREATOR & INVENTOR:
-*   **Name:** Paul Gordon Stuart  
-*   **Designated Email Contact:** licensing@blurbubble.org  
+*   **Name:** Paul Stuart  
+*   **Designated Email Contact:** overly.averted@icloud.com  
 *   **Legal Standing:** Sole Creator, Inventor, and Copyright Owner (100% Original Author)
 
 ---
@@ -26,7 +26,7 @@ The entire software codebase, including simulators, cryptographic designs, and c
 ### 2. Commercial / Proprietary Licensing Option (For Tech Giants & Hardware OEMs)
 If a commercial hardware manufacturer or platform vendor (e.g., Apple, Meta, Google, Snap, DJI, GoPro) wants to integrate the BlurBubble opt-out protocol or background BLE drivers into their proprietary closed-source operating systems or hardware chips:
 - **They CANNOT use the GPLv3 version** without open-sourcing their entire camera/ISP operating system, which they will refuse to do.
-- **Commercial Exemption Required:** They must purchase a separate, proprietary commercial license directly from the copyright holder, **Paul Gordon Stuart**.
+- **Commercial Exemption Required:** They must purchase a separate, proprietary commercial license directly from the copyright holder, **Paul Stuart**.
 - **This Dual-Licensing Strategy is highly lucrative** and represents the industry-standard way for open-source founders to protect community freedom while unlocking multi-million dollar corporate licensing revenue.
 
 ---
@@ -34,13 +34,13 @@ If a commercial hardware manufacturer or platform vendor (e.g., Apple, Meta, Goo
 ## 🛡️ Retained Brand Assets & Trademarks
 
 While the source code is free under the GPLv3, certain branding assets remain protected:
-- **Trademarks:** The names "BlurBubble™", "Stop Recording Me™", and all official branding graphics are trademarks of Paul Gordon Stuart.
+- **Trademarks:** The names "BlurBubble™", "Stop Recording Me™", and all official branding graphics are trademarks of Paul Stuart.
 - **Commercial Use of Brand:** Any commercial product claiming official BlurBubble compatibility or endorsement must obtain written authorization from the trademark owner.
 
 ---
 
 ## ✍️ AUTHORIZED DECLARATION
-I, **Paul Gordon Stuart**, certify that I am the sole author and copyright owner of the BlurBubble codebase, and that I have made this software public under the GNU GPLv3 copyleft terms while retaining all personal and commercial proprietary dual-licensing rights.
+I, **Paul Stuart**, certify that I am the sole author and copyright owner of the BlurBubble codebase, and that I have made this software public under the GNU GPLv3 copyleft terms while retaining all personal and commercial proprietary dual-licensing rights.
 
-**Authorized Signature:** Paul Gordon Stuart  
-**E-mail of Record:** licensing@blurbubble.org  
+**Authorized Signature:** Paul Stuart  
+**E-mail of Record:** overly.averted@icloud.com  

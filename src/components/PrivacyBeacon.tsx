@@ -1825,8 +1825,8 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
   const [newEscrowClearance, setNewEscrowClearance] = useState('Level-1 Public Safety Warrant Required');
 
   // Legal & Compliance States (Privacy Signal Declaration)
-  const [declarantName, setDeclarantName] = useState('Philip Stuart');
-  const [declarantEmail, setDeclarantEmail] = useState('licensing@blurbubble.org');
+  const [declarantName, setDeclarantName] = useState('Paul Stuart');
+  const [declarantEmail, setDeclarantEmail] = useState('overly.averted@icloud.com');
   const [declarantBeaconId, setDeclarantBeaconId] = useState<string>('all');
   const [declarantCustomDevice, setDeclarantCustomDevice] = useState('');
   const [declarantCustomSerial, setDeclarantCustomSerial] = useState('');
@@ -2094,7 +2094,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
 
   // Daily Summary Email Generator States
   const [logsActiveTab, setLogsActiveTab] = useState<'ledger' | 'email'>('ledger');
-  const [emailRecipient, setEmailRecipient] = useState('reports@blurbubble.org');
+  const [emailRecipient, setEmailRecipient] = useState('overly.averted@icloud.com');
   const [emailReportTime, setEmailReportTime] = useState('08:00');
   const [isAutoReportEnabled, setIsAutoReportEnabled] = useState(true);
   const [emailReportType, setEmailReportType] = useState<'standard' | 'forensic'>('standard');
@@ -4401,7 +4401,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
 
                       <span className="text-[9px] text-slate-400 leading-snug">
                         {state.targetedShieldingEnabled !== false 
-                          ? "🔒 Protects Paul G. Stuart only. Innocent bystanders are unaffected." 
+                          ? "🔒 Protects Paul Stuart only. Innocent bystanders are unaffected." 
                           : "⚠️ Overrides all nearby fields. Might disrupt normal recordings."}
                       </span>
                     </div>
@@ -4532,7 +4532,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                           <div className="flex justify-between items-center text-[10px] font-mono">
                             <span className="text-slate-300 font-bold flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                              Track A: Paul G. Stuart (Protected Voice)
+                              Track A: Paul Stuart (Protected Voice)
                             </span>
                             <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ${
                               state.vocalScramblerEnabled 
@@ -10933,7 +10933,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                         setAllowedUploadLogs(["[SCANNING] YouTube API detected upload 'Summer Picnic 2026' by @family_vlogs..."]);
                         
                         setTimeout(() => {
-                          setAllowedUploadLogs(prev => [...prev, "[AI MATCH] Face vector matching: 'Paul Gordon Stuart' matched at 99.1% confidence."]);
+                          setAllowedUploadLogs(prev => [...prev, "[AI MATCH] Face vector matching: 'Paul Stuart' matched at 99.1% confidence."]);
                         }, 400);
 
                         setTimeout(() => {
@@ -11027,7 +11027,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                         setAllowedUploadLogs(["[SCANNING] Public Instagram stream detected upload by @stranger_cam..."]);
                         
                         setTimeout(() => {
-                          setAllowedUploadLogs(prev => [...prev, "[AI MATCH] Face vector matching: 'Paul Gordon Stuart' matched at 98.5% confidence."]);
+                          setAllowedUploadLogs(prev => [...prev, "[AI MATCH] Face vector matching: 'Paul Stuart' matched at 98.5% confidence."]);
                         }, 500);
 
                         setTimeout(() => {
@@ -11409,7 +11409,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                         <div className="bg-slate-100 p-2.5 rounded border border-slate-200 font-mono text-[10px] space-y-1 text-slate-700">
                           <p><strong>Platform:</strong> {selectedLetterTakedown.platform.toUpperCase()}</p>
                           <p className="truncate"><strong>Media URL:</strong> {selectedLetterTakedown.url}</p>
-                          <p><strong>Matched Identity:</strong> Paul Gordon Stuart (Edinburgh, Scotland)</p>
+                          <p><strong>Matched Identity:</strong> Paul Stuart</p>
                           <p><strong>Vector Hash:</strong> {selectedLetterTakedown.id}</p>
                           <p><strong>Action Mandated:</strong> Coordinated Dynamic Face/Body Blur</p>
                         </div>
@@ -11419,11 +11419,11 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                         </p>
 
                         <p className="border-t border-slate-200 pt-3">
-                          Failure to apply the appropriate obfuscation filters within the statutory 30-day window will result in a formal escalation to the <strong>United Kingdom Information Commissioner's Office (ICO)</strong> and Scottish legal courts for civil digital trespass.
+                          Failure to apply the appropriate obfuscation filters within the statutory 30-day window will result in a formal escalation to the <strong>United Kingdom Information Commissioner's Office (ICO)</strong> and legal courts for civil digital trespass.
                         </p>
 
                         <div className="pt-3 font-sans text-[10px] text-slate-500 flex justify-between">
-                          <span>Signed: Paul Gordon Stuart (@paul_stuart)</span>
+                          <span>Signed: Paul Stuart (@paul_stuart)</span>
                           <span>Dated: July 1, 2026</span>
                         </div>
                       </div>
@@ -11431,7 +11431,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                       <div className="flex gap-2 justify-end">
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(`GDPR Article 17 & UK DPA 2018 Demand Notice:\nPlatform: ${selectedLetterTakedown.platform.toUpperCase()}\nURL: ${selectedLetterTakedown.url}\nIdent: Paul Gordon Stuart (Edinburgh, Scotland)\nAction: Coordinate facial coordinate blur at platform CDN.`);
+                            navigator.clipboard.writeText(`GDPR Article 17 & UK DPA 2018 Demand Notice:\nPlatform: ${selectedLetterTakedown.platform.toUpperCase()}\nURL: ${selectedLetterTakedown.url}\nIdent: Paul Stuart\nAction: Coordinate facial coordinate blur at platform CDN.`);
                             alert("Copied legal notice outline summary to clipboard!");
                           }}
                           className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition"

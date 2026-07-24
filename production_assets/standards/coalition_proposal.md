@@ -60,4 +60,4 @@ To join the Coalition or coordinate policy, advocates are provided with:
 2.  **Open-Source Hardware Designs:** nRF52840 firmware located at `/production_assets/firmware/nrf52840_beacon.cpp` to manufacture child-safe backpack fobs.
 3.  **Mobile Reference App:** Kotlin/Swift bridges allowing existing smartphones to act as opt-out beacons immediately.
 
-*For alliance inquiries, contact the working group at `coalition@blurbubble.org`.*
+*For alliance inquiries, contact `overly.averted@icloud.com`.*

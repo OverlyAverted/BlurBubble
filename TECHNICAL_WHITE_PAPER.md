@@ -1,6 +1,6 @@
 # 📘 BlurBubble Technical White Paper & Engineering Specifications
 **Document Reference: BB-WP-2026-v1.0**  
-**Author / Inventor / Sole Owner: Paul Gordon Stuart (licensing@blurbubble.org)**  
+**Author / Inventor / Sole Owner: Paul Stuart (overly.averted@icloud.com)**  
 **Status: Complete (MVP / Launch-Ready Architecture)**
 
 ---

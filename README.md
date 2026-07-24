@@ -117,7 +117,7 @@ To guarantee that visual privacy remains a free, un-monopolized public utility, 
 ### 💼 2. Proprietary Dual-Licensing Option
 For technology giants or hardware OEMs (e.g. Apple, Meta, Google, GoPro) who wish to embed BlurBubble's background drivers or patent-specification firmware inside closed-source proprietary operating systems:
 - They **cannot** utilize the GPLv3 code without open-sourcing their entire OS.
-- Therefore, they must acquire a separate, custom **Commercial Compliance License** directly from the sole creator and copyright owner: **Paul Gordon Stuart** ([licensing@blurbubble.org](mailto:licensing@blurbubble.org)). This dual-licensing model funds open-source community development while allowing seamless big-tech compliance.
+- Therefore, they must acquire a separate, custom **Commercial Compliance License** directly from the sole creator and copyright owner: **Paul Stuart** ([overly.averted@icloud.com](mailto:overly.averted@icloud.com)). This dual-licensing model funds open-source community development while allowing seamless big-tech compliance.
 
 ---
 

@@ -6,9 +6,9 @@
 ---
 
 ## 🛡️ SYSTEM AND METHODS FOR DYNAMIC LOCALIZED BIOMETRIC OPT-OUT BEACONING AND REAL-TIME COGNITIVE CENSORSHIP COORDINATION
-**Inventor:** Paul Gordon Stuart  
-**Contact Email:** patent@blurbubble.org  
-**Primary Assignee / Owner:** Paul Gordon Stuart (100% Sole Proprietor and Patent Holder)
+**Inventor:** Paul Stuart  
+**Contact Email:** overly.averted@icloud.com  
+**Primary Assignee / Owner:** Paul Stuart (100% Sole Proprietor and Patent Holder)
 
 ---
 
@@ -130,7 +130,7 @@ I Claim:
 
 11. **The apparatus of Claim 10,** wherein the custom polygon blur mask utilizes CSS clip-path coordinate polygons following a twelve-point rounded hexagon frame to isolate the face boundary with precision.
 
-12. **The system of Claim 1,** wherein 100% of the patent rights, intellectual properties, trademarks, copyright indices, and commercial licensing assets are vested solely, permanently, and exclusively to the Inventor, **Paul Gordon Stuart (licensing@blurbubble.org)**.
+12. **The system of Claim 1,** wherein 100% of the patent rights, intellectual properties, trademarks, copyright indices, and commercial licensing assets are vested solely, permanently, and exclusively to the Inventor, **Paul Stuart (overly.averted@icloud.com)**.
 
 13. **The system of Claim 12,** wherein any unauthorized replication, copying, compilation, cloning, or distribution of the associated source-code or user interface schemas for financial or competitive gain triggers immediate statutory liabilities under international copyright treaties.
 
@@ -154,8 +154,8 @@ I Claim:
 ---
 
 ## DECLARATION OF ORIGINALITY AND INTENT
-I, **Paul Gordon Stuart**, declare under penalty of perjury under the laws of the United States and international patent protocols that I am the original and first inventor of the systems, methods, and configurations described herein, and that 100% of all software repositories, designs, algorithms, and commercial derivatives are owned solely, exclusively, and fully by myself.
+I, **Paul Stuart**, declare under penalty of perjury under the laws of the United States and international patent protocols that I am the original and first inventor of the systems, methods, and configurations described herein, and that 100% of all software repositories, designs, algorithms, and commercial derivatives are owned solely, exclusively, and fully by myself.
 
-**Signed:** Paul Gordon Stuart  
+**Signed:** Paul Stuart  
 **Date:** July 10, 2026  
-**Address of Record:** Secured on file with Paul Gordon Stuart (licensing@blurbubble.org)  
+**Address of Record:** Secured on file with Paul Stuart (overly.averted@icloud.com)  

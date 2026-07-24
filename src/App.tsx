@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { haptics } from './lib/haptics';
 import { 
   Shield, 
   Eye, 
@@ -516,7 +517,7 @@ export default function App() {
         id: 'ticket-init-1',
         category: 'Feature Request',
         message: 'Requesting Apple Vision Pro spatial blur integration for high-density environments.',
-        email: 'alex_creates@gmail.com',
+        email: 'overly.averted@icloud.com',
         status: 'resolved',
         timestamp: '2026-07-07 14:22',
         ticketNum: 'T-8841'
@@ -529,7 +530,7 @@ export default function App() {
   }, [supportTickets]);
 
   // Support Desk Form States
-  const [feedbackEmail, setFeedbackEmail] = useState('support@blurbubble.org');
+  const [feedbackEmail, setFeedbackEmail] = useState('overly.averted@icloud.com');
   const [feedbackCategory, setFeedbackCategory] = useState('Feature Request');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
@@ -591,7 +592,7 @@ export default function App() {
         id: 'ticket-init-1',
         category: 'Feature Request',
         message: 'Requesting Apple Vision Pro spatial blur integration for high-density environments.',
-        email: 'alex_creates@gmail.com',
+        email: 'overly.averted@icloud.com',
         status: 'resolved',
         timestamp: '2026-07-07 14:22',
         ticketNum: 'T-8841'
@@ -690,6 +691,12 @@ export default function App() {
     }
     return INITIAL_CITIZEN_STATE;
   });
+
+  useEffect(() => {
+    if (citizenState.hapticIntensity) {
+      haptics.setIntensity(citizenState.hapticIntensity);
+    }
+  }, [citizenState.hapticIntensity]);
 
   const [shieldActiveSeconds, setShieldActiveSeconds] = useState<number>(0);
 
@@ -4755,7 +4762,7 @@ export default function App() {
                                     id: `ticket-${Date.now()}`,
                                     category: feedbackCategory,
                                     message: feedbackMessage,
-                                    email: feedbackEmail || 'support@blurbubble.org',
+                                    email: feedbackEmail || 'overly.averted@icloud.com',
                                     status: 'open' as const,
                                     timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
                                     ticketNum
