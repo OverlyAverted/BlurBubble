@@ -81,6 +81,8 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import D3SignalMap from './D3SignalMap';
+import GoogleMapsPrivacyRadar from './GoogleMapsPrivacyRadar';
+import AppleMapsPrivacyRadar from './AppleMapsPrivacyRadar';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -3235,6 +3237,8 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                   { id: 'tags', label: 'Protected Toys & Bags', icon: '🎒', category: 'defense', subCategory: 'identity', desc: 'Add virtual tags to blur items like backpacks', count: state.registeredEntities?.length || 0 },
                   { id: 'faces', label: 'My Blurred Faces', icon: '👤', category: 'defense', subCategory: 'identity', desc: 'Add photos of your face so smart cameras blur them', count: state.registeredFaces?.length || 0 },
                   { id: 'signal', label: 'Shield Broadcast Range', icon: '📡', category: 'defense', subCategory: 'signal', desc: 'Pick how far your Stop Recording signal can reach', status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
+                  { id: 'google_maps_radar', label: 'Google Maps Privacy Radar', icon: '🗺️', category: 'defense', subCategory: 'signal', desc: 'Real-time Google Maps search with live spatial privacy perimeters & camera threat markers', status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
+                  { id: 'apple_maps_radar', label: 'Apple Maps Privacy Shield', icon: '🍏', category: 'defense', subCategory: 'signal', desc: 'Apple Maps MapKit JS vector radar, 360° Look Around street view obfuscation & Find My BLE scrambler', status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
                   { id: 'wifi', label: 'Home WiFi Rules', icon: '📶', category: 'defense', subCategory: 'signal', desc: 'Turn shield on/off automatically when you join home WiFi', status: state.wifiRulesEnabled ? 'AUTO' : 'OFF' },
                   { id: 'experimental', label: 'Experimental Tech', icon: '🧪', category: 'defense', subCategory: 'identity', desc: 'Activate and test speculative, state-of-the-art privacy shields', status: (state.thermalPulseEnabled || state.retroScramblerEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled) ? 'ACTIVE' : 'STANDBY' },
                   
@@ -8730,6 +8734,20 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
             </div>
           </motion.div>
         )}
+
+          {/* Tab: Google Maps Privacy Radar */}
+          {activeTab === 'google_maps_radar' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              <GoogleMapsPrivacyRadar citizenState={state} addLog={onAddLog} />
+            </motion.div>
+          )}
+
+          {/* Tab: Apple Maps Privacy Shield */}
+          {activeTab === 'apple_maps_radar' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              <AppleMapsPrivacyRadar citizenState={state} addLog={onAddLog} />
+            </motion.div>
+          )}
 
           {/* Tab: Experimental Tech Lab */}
           {activeTab === 'experimental' && (

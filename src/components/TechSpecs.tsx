@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { vocalScramblerAudio } from '../lib/vocalScramblerAudio';
+import { TechOutreachHub } from './TechOutreachHub';
 import { 
   Shield, 
   Radio, 
@@ -57,6 +58,7 @@ interface TechSpecsProps {
   } | null;
   vocalAlertsEnabled?: boolean;
   onToggleVocalAlerts?: () => void;
+  onAddLog?: (log: any) => void;
 }
 
 export default function TechSpecs({ 
@@ -64,7 +66,8 @@ export default function TechSpecs({
   onTabChange: externalOnTabChange,
   cryptoState,
   vocalAlertsEnabled = true,
-  onToggleVocalAlerts
+  onToggleVocalAlerts,
+  onAddLog
 }: TechSpecsProps = {}) {
   const [internalSpecsTab, setInternalSpecsTab] = useState<'timeline' | 'sdk_code' | 'pitch' | 'hardware' | 'crypto' | 'oem' | 'portal'>('timeline');
   const specsTab = externalActiveTab || internalSpecsTab;
@@ -882,90 +885,90 @@ export default function TechSpecs({
   return (
     <div className="space-y-8 text-slate-300">
       {/* Premium Sub-Tab Switcher */}
-      <div className="flex flex-wrap bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 gap-1.5 max-w-4xl mx-auto">
-        <button
-          id="spec-tab-pitch"
-          onClick={() => setSpecsTab('pitch')}
-          className={`flex-1 min-w-[120px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
-            specsTab === 'pitch'
-              ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 text-purple-400'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
-          }`}
-        >
-          <Rocket className="w-4 h-4" />
-          Future Ideas &amp; Project Valuation
-        </button>
-        <button
-          id="spec-tab-timeline"
-          onClick={() => setSpecsTab('timeline')}
-          className={`flex-1 min-w-[120px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
-            specsTab === 'timeline'
-              ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 text-emerald-400'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          How the App Protects You
-        </button>
+      <div className="flex flex-wrap bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 gap-1.5 max-w-4xl mx-auto max-w-full overflow-x-auto scrollbar-none">
         <button
           id="spec-tab-hardware"
           onClick={() => setSpecsTab('hardware')}
-          className={`flex-1 min-w-[120px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
             specsTab === 'hardware'
               ? 'bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 text-cyan-400'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
           <Activity className="w-4 h-4" />
-          My Connected Tags &amp; Devices
+          Tech &amp; Hardware Specs &amp; RF Lab
         </button>
         <button
           id="spec-tab-code"
           onClick={() => setSpecsTab('sdk_code')}
-          className={`flex-1 min-w-[120px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
             specsTab === 'sdk_code'
               ? 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-500/30 text-blue-400'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
           <Code className="w-4 h-4" />
-          Under the Hood (Simple Code)
-        </button>
-        <button
-          id="spec-tab-crypto"
-          onClick={() => setSpecsTab('crypto')}
-          className={`flex-1 min-w-[120px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
-            specsTab === 'crypto'
-              ? 'bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border border-emerald-500/30 text-emerald-400 font-black shadow-[0_0_12px_rgba(16,185,129,0.15)]'
-              : 'text-slate-400 hover:text-slate-200 border border-transparent'
-          }`}
-        >
-          <Key className="w-4 h-4 text-emerald-400" />
-          Web Crypto Vault
+          Tech &amp; Guides: SDK &amp; Developer Code
         </button>
         <button
           id="spec-tab-oem"
           onClick={() => setSpecsTab('oem')}
-          className={`flex-1 min-w-[120px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
             specsTab === 'oem'
               ? 'bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 border border-cyan-500/30 text-cyan-400 font-black shadow-[0_0_12px_rgba(34,211,238,0.15)]'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
           <Cpu className="w-4 h-4 text-cyan-400 animate-pulse" />
-          Global Compliance SDK
+          BigTech &amp; OEM Compliance SDK
         </button>
         <button
           id="spec-tab-portal"
           onClick={() => setSpecsTab('portal')}
-          className={`flex-1 min-w-[120px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
             specsTab === 'portal'
               ? 'bg-gradient-to-r from-emerald-500/15 to-cyan-500/15 border border-emerald-500/40 text-emerald-400 font-black shadow-[0_0_15px_rgba(16,185,129,0.2)] animate-pulse'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
           <Briefcase className="w-4 h-4 text-emerald-400" />
-          B2B Developer Portal
+          SDK Portal &amp; B2B Sandbox
+        </button>
+        <button
+          id="spec-tab-pitch"
+          onClick={() => setSpecsTab('pitch')}
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
+            specsTab === 'pitch'
+              ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 text-purple-400'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
+          }`}
+        >
+          <Rocket className="w-4 h-4" />
+          Tech &amp; Pitch Deck Presentation
+        </button>
+        <button
+          id="spec-tab-timeline"
+          onClick={() => setSpecsTab('timeline')}
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
+            specsTab === 'timeline'
+              ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 text-emerald-400'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          R&amp;D Roadmap &amp; Tech Architecture
+        </button>
+        <button
+          id="spec-tab-crypto"
+          onClick={() => setSpecsTab('crypto')}
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
+            specsTab === 'crypto'
+              ? 'bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border border-emerald-500/30 text-emerald-400 font-black shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+              : 'text-slate-400 hover:text-slate-200 border border-transparent'
+          }`}
+        >
+          <Key className="w-4 h-4 text-emerald-400" />
+          ECC-256 Web Crypto Vault
         </button>
       </div>
 
@@ -2105,6 +2108,9 @@ void main() {
       {/* Tab 3: Venture Road, Business & Investor Pitch */}
       {specsTab === 'pitch' && (
         <div className="space-y-6 animate-fadeIn">
+          {/* Automated Server-Side Outreach API Component */}
+          <TechOutreachHub addLog={onAddLog || (() => {})} />
+
           {/* Working App status */}
           <div className="bg-gradient-to-r from-purple-950/30 via-slate-900/80 to-pink-950/30 border border-purple-500/30 rounded-2xl p-6 backdrop-blur-md">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
@@ -4422,10 +4428,15 @@ void OnRawFrameCaptured(YUVFrame* frame, BLEScannerEnvelope* envelope) {
               </div>
             </div>
           )}
+        </div>
+      )}
 
-          {/* Tab 7: specsTab === 'portal' (B2B Compliance & Developer Sandbox) */}
-          {specsTab === 'portal' && (
+      {/* Tab 7: specsTab === 'portal' (B2B Compliance & Developer Sandbox) */}
+      {specsTab === 'portal' && (
             <div className="space-y-8 animate-fadeIn">
+              {/* Automated Server-Side Outreach API & Pitch Hub Component */}
+              <TechOutreachHub addLog={onAddLog || (() => {})} />
+
               {/* Portal Header Banner */}
               <div className="bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-950/90 border border-slate-850 rounded-2xl p-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl -mr-24 -mt-24 pointer-events-none" />
@@ -5614,7 +5625,5 @@ void OnRawFrameCaptured(YUVFrame* frame, BLEScannerEnvelope* envelope) {
             </div>
           )}
         </div>
-      )}
-    </div>
   );
 }

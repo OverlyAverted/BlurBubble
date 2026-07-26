@@ -48,8 +48,13 @@ import {
   Target,
   Zap,
   Bot,
-  X
+  X,
+  Search,
+  Globe,
+  Calculator,
+  Key
 } from 'lucide-react';
+import { GlobalSearchModal, SearchItem } from './components/GlobalSearchModal';
 import { CitizenState, DetectionLog, PrivacyLevel } from './types';
 // @ts-ignore
 import appLogo from './assets/images/app_logo_1783164957092.jpg';
@@ -286,7 +291,7 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   totalLockdownMode: false,
   hierarchyRulesEnabled: true,
   showMetricsBar: true,
-  showControlBar: true,
+  showControlBar: false,
   showAuditLogs: true,
   showEmergencyButton: true,
   showGuideButton: true,
@@ -298,9 +303,9 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   autoThreatScanInterval: 0,
   autoAcousticTakedowns: true,
   autoPowerSaverThrottling: true,
-  showPrivacyImpactScore: false,
-  showBatteryWidget: true,
-  showSignalMap: true,
+  showPrivacyImpactScore: true,
+  showBatteryWidget: false,
+  showSignalMap: false,
   intelligentBatteryOptimization: true,
   adversarialPoisoning: true,
   decoyPersonaBroadcast: false,
@@ -398,15 +403,16 @@ const VIEW_GROUPS = [
   },
   {
     id: 'tech',
-    label: 'Friendly Help Guides',
+    label: 'Tech, Hardware & Guides',
     icon: '📖',
     options: [
-      { value: 'tech:pitch', label: 'App Future Plans & Ideas', icon: '🚀', desc: 'Simple guide to our goals, ideas, and dreams' },
-      { value: 'tech:timeline', label: 'How We Keep You Safe', icon: '🛡️', desc: 'A timeline of how we protect you step-by-step' },
-      { value: 'tech:hardware', label: 'Connected Gear & Tags', icon: '⚡', desc: 'Check on your badges and battery levels' },
-      { value: 'tech:sdk_code', label: 'Computer Code Behind It', icon: '💻', desc: 'Super simple look at the code that does the magic' },
-      { value: 'tech:crypto', label: 'Web Crypto Shield Vault', icon: '🔑', desc: 'Inspect real-time browser ECDSA public keys and active signatures' },
-      { value: 'tech:oem', label: 'Global Compliance SDK', icon: '🔌', desc: 'Hardware protocols & OS integration templates for companies like Apple & Google' },
+      { value: 'tech:hardware', label: 'Tech & Hardware Specs & RF Lab', icon: '⚡', desc: 'Hardware specs, BLE transceiver, RF spectrum analyzer & vocal scrambler' },
+      { value: 'tech:sdk_code', label: 'Tech & Guides: SDK & Developer Code', icon: '💻', desc: 'Open-source code, mobile SDK integration & ESP32 C++ firmware' },
+      { value: 'tech:oem', label: 'BigTech & OEM Compliance SDK', icon: '🔌', desc: 'Hardware protocols & OS integration templates for Apple, Google, Meta, DJI' },
+      { value: 'tech:portal', label: 'SDK Portal & B2B Sandbox', icon: '🌐', desc: 'Developer API keys, webhook simulators & B2B test sandbox' },
+      { value: 'tech:pitch', label: 'Tech & Pitch Deck Presentation', icon: '🚀', desc: 'Investment pitch deck, grants, forum scout & startup roadmap' },
+      { value: 'tech:timeline', label: 'R&D Roadmap & Tech Architecture', icon: '🛡️', desc: 'A technical timeline of privacy architecture & milestones' },
+      { value: 'tech:crypto', label: 'ECC-256 Web Crypto Shield Vault', icon: '🔑', desc: 'Inspect real-time browser ECDSA public keys & signature rotators' },
     ]
   }
 ];
@@ -432,10 +438,11 @@ export default function App() {
   };
 
   const [isLangSelectorOpen, setIsLangSelectorOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeView, setActiveView] = useState<'citizen' | 'glasses' | 'tech' | 'audit'>('citizen');
   const [citizenTab, setCitizenTab] = useState<'overview' | 'settings' | 'signal' | 'tags' | 'faces' | 'scrub' | 'perimeter' | 'retention' | 'escrow' | 'licensing' | 'legal' | 'pairing' | 'wifi' | 'biometric' | 'hierarchy' | 'targeted' | 'audio_shield' | 'audio_scrub' | 'audio_map' | 'experimental'>('overview');
   const [glassesTab, setGlassesTab] = useState<'webcam' | 'street' | 'scanner' | 'heatmap' | 'audio-lab'>('street');
-  const [techTab, setTechTab] = useState<'timeline' | 'sdk_code' | 'pitch' | 'hardware' | 'crypto' | 'oem'>('timeline');
+  const [techTab, setTechTab] = useState<'timeline' | 'sdk_code' | 'pitch' | 'hardware' | 'crypto' | 'oem' | 'portal'>('timeline');
   const [showHelpCenter, setShowHelpCenter] = useState<boolean>(false);
   const [guideCategory, setGuideCategory] = useState<'intro' | 'shield' | 'hud' | 'audit' | 'faq' | 'tour' | 'support'>('intro');
   const [showRadarSweep, setShowRadarSweep] = useState(false);
@@ -443,6 +450,18 @@ export default function App() {
   const [showShieldContextMenu, setShowShieldContextMenu] = useState(false);
   const [showCopilot, setShowCopilot] = useState(false);
   const [statusbarRippleCount, setStatusbarRippleCount] = useState(0);
+
+  // Global keyboard shortcut listener (Ctrl+K or Cmd+K to open Search)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Outside click handler to close quick settings context menu
   useEffect(() => {
@@ -605,10 +624,10 @@ export default function App() {
   const [isViewSelectorOpen, setIsViewSelectorOpen] = useState(false);
   const [isCustomizerExpanded, setIsCustomizerExpanded] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    beacon: false,
-    glasses: false,
-    tech: false,
-    audit: false
+    beacon: true,
+    glasses: true,
+    tech: true,
+    audit: true
   });
 
   // Real-time clock for top simulated OS Status Bar
@@ -625,8 +644,61 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  const VIEW_ORDER: Array<'citizen' | 'glasses' | 'tech' | 'audit'> = ['citizen', 'glasses', 'tech', 'audit'];
+
+  const HAPTIC_PATTERNS: Record<'citizen' | 'glasses' | 'tech' | 'audit', number[]> = {
+    citizen: [25, 40, 25],          // Transceiver Beacon Dual Pulse
+    glasses: [12, 15, 12, 15, 12],   // Camera HUD Triple Shutter
+    tech: [35, 20, 15],             // Technical Staccato
+    audit: [60]                     // Official Audit Stamp
+  };
+
+  const handleViewChangeWithHaptic = (newView: 'citizen' | 'glasses' | 'tech' | 'audit') => {
+    if (newView === activeView) return;
+    setActiveView(newView);
+    
+    // Trigger distinct haptic pattern for each tab view
+    const pattern = HAPTIC_PATTERNS[newView] || [25];
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(pattern);
+      } catch (e) {
+        // Fallback catch
+      }
+    }
+    haptics.trigger(pattern);
+
+    addLog({
+      deviceModel: 'GESTURE_HAPTIC_NAV',
+      action: 'censored',
+      shieldApplied: `SWIPE_NAVIGATED_TO_${newView.toUpperCase()}_VIEW`,
+      distance: 0,
+      rotatedId: `HAPTIC_PATTERN_${newView.toUpperCase()}`
+    });
+  };
+
+  const handleSwipeDragEnd = (_event: any, info: any) => {
+    const threshold = 45;
+    const velocityThreshold = 200;
+    
+    const currentIndex = VIEW_ORDER.indexOf(activeView);
+    if (currentIndex === -1) return;
+
+    if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
+      // Swiping Left -> Move to Next Tab
+      if (currentIndex < VIEW_ORDER.length - 1) {
+        handleViewChangeWithHaptic(VIEW_ORDER[currentIndex + 1]);
+      }
+    } else if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
+      // Swiping Right -> Move to Previous Tab
+      if (currentIndex > 0) {
+        handleViewChangeWithHaptic(VIEW_ORDER[currentIndex - 1]);
+      }
+    }
+  };
+
   const handleLaunchApp = (view: 'citizen' | 'glasses' | 'tech' | 'audit', tab?: string) => {
-    setActiveView(view);
+    handleViewChangeWithHaptic(view);
     if (tab) {
       if (view === 'citizen') {
         setCitizenTab(tab as any);
@@ -676,6 +748,7 @@ export default function App() {
   const [simulatedTouchState, setSimulatedTouchState] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
   const [passcodeAttempt, setPasscodeAttempt] = useState<string>('');
   const [showPasscodeOption, setShowPasscodeOption] = useState<boolean>(false);
+  const [showScoreDetails, setShowScoreDetails] = useState<boolean>(false);
   
   // Citizen state setup with safe localStorage hydration
   const [citizenState, setCitizenState] = useState<CitizenState>(() => {
@@ -697,6 +770,322 @@ export default function App() {
       haptics.setIntensity(citizenState.hapticIntensity);
     }
   }, [citizenState.hapticIntensity]);
+
+  const searchItems: SearchItem[] = [
+    // --- SCREENS & VIEWS ---
+    {
+      id: 'screen-home',
+      title: 'Main Dashboard (Citizen Shield Overview)',
+      description: 'Central privacy status, active BLE beacon radar, and instant protection controls',
+      category: 'Screens',
+      keywords: ['home', 'main', 'dashboard', 'citizen', 'shield', 'radar', 'overview', 'beacon'],
+      icon: <Home className="w-4 h-4 text-emerald-400" />,
+      badge: 'Main View',
+      onSelect: () => {
+        setActiveView('citizen');
+        setCitizenTab('overview');
+      }
+    },
+    {
+      id: 'screen-signal-radius',
+      title: 'Signal Radius & Transmission Power',
+      description: 'Adjust physical meter broadcast radius, power levels, and RF shield range',
+      category: 'Screens',
+      keywords: ['signal', 'radius', 'power', 'range', 'meters', 'broadcast', 'rf', 'distance'],
+      icon: <Radio className="w-4 h-4 text-emerald-400" />,
+      badge: 'Citizen Shield',
+      onSelect: () => {
+        setActiveView('citizen');
+        setCitizenTab('signal');
+      }
+    },
+    {
+      id: 'screen-wearable-beacons',
+      title: 'Active Wearable Beacons & Tags',
+      description: 'Manage child keyfobs, smart watch beacons, airtags, and RSSI signal telemetry',
+      category: 'Screens',
+      keywords: ['beacons', 'tags', 'child', 'fob', 'airtag', 'wearable', 'battery', 'keyfob'],
+      icon: <Radio className="w-4 h-4 text-emerald-400" />,
+      badge: 'Beacons',
+      onSelect: () => {
+        setActiveView('citizen');
+        setCitizenTab('tags');
+      }
+    },
+    {
+      id: 'screen-vibration-engine',
+      title: 'Haptic & Vibration Pattern Engine',
+      description: 'Customize tactile millisecond pulse alerts, test vibration motors, and set alert patterns',
+      category: 'Screens',
+      keywords: ['vibration', 'haptic', 'tactile', 'motor', 'alert', 'pulse', 'pattern', 'silent'],
+      icon: <Activity className="w-4 h-4 text-emerald-400" />,
+      badge: 'Haptics',
+      onSelect: () => {
+        setActiveView('citizen');
+        setCitizenTab('experimental');
+      }
+    },
+    {
+      id: 'screen-acoustic-crawler',
+      title: 'Acoustic Crawler & Platform Indexer',
+      description: 'Simulate automated indexing checks across Spotify, Apple Podcasts, and audio databases',
+      category: 'Screens',
+      keywords: ['acoustic', 'audio', 'crawler', 'spotify', 'podcasts', 'indexer', 'watermark', 'voice'],
+      icon: <Volume2 className="w-4 h-4 text-cyan-400" />,
+      badge: 'Audio Shield',
+      onSelect: () => {
+        setActiveView('citizen');
+        setCitizenTab('audio_shield');
+      }
+    },
+    {
+      id: 'screen-glasses-hud',
+      title: 'Glasses & HUD - Camera Censorship Feed',
+      description: 'Interactive smart glasses overlay with live optical censorship (Pixelate, Emoji, Magic Removal)',
+      category: 'Screens',
+      keywords: ['glasses', 'hud', 'camera', 'feed', 'webcam', 'censorship', 'pixelate', 'emoji', 'magic'],
+      icon: <Eye className="w-4 h-4 text-emerald-400" />,
+      badge: 'Smart Glasses',
+      onSelect: () => {
+        setActiveView('glasses');
+        setGlassesTab('street');
+      }
+    },
+    {
+      id: 'screen-glasses-models',
+      title: 'Glasses Models & Camouflage Specs',
+      description: 'Inspect supported smart glasses hardware (Ray-Ban Meta, Snap Spectacles, Apple Vision)',
+      category: 'Screens',
+      keywords: ['ray-ban', 'meta', 'snap', 'spectacles', 'hardware', 'models', 'glasses', 'apple'],
+      icon: <Eye className="w-4 h-4 text-emerald-400" />,
+      badge: 'Smart Glasses',
+      onSelect: () => {
+        setActiveView('glasses');
+        setGlassesTab('scanner');
+      }
+    },
+    {
+      id: 'screen-tech-hardware',
+      title: 'Tech & Hardware Specs & RF Lab',
+      description: 'Hardware transceiver specs, BLE spectrum analyzer, RF noise levels & vocal scrambler',
+      category: 'Screens',
+      keywords: ['tech', 'hardware', 'specs', 'rf', 'lab', 'transceiver', 'analyzer', 'ble', 'spectrum', 'scrambler', 'gear'],
+      icon: <Cpu className="w-4 h-4 text-emerald-400" />,
+      badge: 'Tech & Hardware',
+      onSelect: () => {
+        setActiveView('tech');
+        setTechTab('hardware');
+      }
+    },
+    {
+      id: 'screen-tech-sdk-code',
+      title: 'Tech & Guides: SDK & Developer Code',
+      description: 'Open-source code examples, mobile SDK integration guides & ESP32 C++ firmware compiler',
+      category: 'Screens',
+      keywords: ['tech', 'guides', 'sdk', 'developer', 'code', 'c++', 'esp32', 'firmware', 'compiler', 'open-source', 'guide', 'tutorial'],
+      icon: <FileCode className="w-4 h-4 text-emerald-400" />,
+      badge: 'Tech & Guides',
+      onSelect: () => {
+        setActiveView('tech');
+        setTechTab('sdk_code');
+      }
+    },
+    {
+      id: 'screen-tech-oem',
+      title: 'BigTech & OEM Compliance SDK (RFC-9402)',
+      description: 'Hardware protocols & OS integration templates for Apple, Google, Meta, and DJI smart cameras',
+      category: 'Screens',
+      keywords: ['tech', 'oem', 'bigtech', 'apple', 'google', 'meta', 'dji', 'compliance', 'rfc-9402', 'protocol', 'sdk', 'hardware'],
+      icon: <Layers className="w-4 h-4 text-cyan-400" />,
+      badge: 'OEM Compliance',
+      onSelect: () => {
+        setActiveView('tech');
+        setTechTab('oem');
+      }
+    },
+    {
+      id: 'screen-tech-portal',
+      title: 'SDK Portal & B2B Sandbox',
+      description: 'Developer API key management, webhook event simulators & B2B integration test sandbox',
+      category: 'Screens',
+      keywords: ['tech', 'portal', 'b2b', 'sandbox', 'developer', 'api', 'webhook', 'keys', 'testing'],
+      icon: <Globe className="w-4 h-4 text-blue-400" />,
+      badge: 'SDK Portal',
+      onSelect: () => {
+        setActiveView('tech');
+        setTechTab('portal');
+      }
+    },
+    {
+      id: 'screen-tech-pitch',
+      title: 'Tech & Pitch Deck Presentation',
+      description: 'Investment pitch presentation, startup grants roadmap, forum scout & directory submitter',
+      category: 'Screens',
+      keywords: ['tech', 'pitch', 'deck', 'presentation', 'investor', 'grants', 'forum', 'scout', 'startup', 'roadmap'],
+      icon: <Zap className="w-4 h-4 text-amber-400" />,
+      badge: 'Pitch Deck',
+      onSelect: () => {
+        setActiveView('tech');
+        setTechTab('pitch');
+      }
+    },
+    {
+      id: 'screen-tech-timeline',
+      title: 'R&D Roadmap & Tech Architecture',
+      description: 'Technical privacy architecture milestones, sensor fusion roadmap & decentralized protocol evolution',
+      category: 'Screens',
+      keywords: ['tech', 'roadmap', 'architecture', 'timeline', 'r&d', 'milestones', 'evolution'],
+      icon: <Activity className="w-4 h-4 text-purple-400" />,
+      badge: 'R&D Roadmap',
+      onSelect: () => {
+        setActiveView('tech');
+        setTechTab('timeline');
+      }
+    },
+    {
+      id: 'screen-tech-crypto',
+      title: 'ECC-256 Web Crypto Shield Vault',
+      description: 'Inspect real-time browser ECDSA public keys, WebAssembly NPU signatures & key rotators',
+      category: 'Screens',
+      keywords: ['tech', 'crypto', 'ecc-256', 'ecdsa', 'keys', 'vault', 'fingerprint', 'security', 'signature'],
+      icon: <Key className="w-4 h-4 text-emerald-400" />,
+      badge: 'Crypto Vault',
+      onSelect: () => {
+        setActiveView('tech');
+        setTechTab('crypto');
+      }
+    },
+    {
+      id: 'screen-audit-ledger',
+      title: 'Safety Proof - RFC-9402 Compliance Audit Ledger',
+      description: 'View real-time cryptographic compliance receipts, handshake logs, and verifiable proof',
+      category: 'Screens',
+      keywords: ['audit', 'compliance', 'rfc-9402', 'ledger', 'proof', 'safety', 'logs', 'crypto', 'receipt'],
+      icon: <Shield className="w-4 h-4 text-emerald-400" />,
+      badge: 'Compliance',
+      onSelect: () => {
+        setActiveView('audit');
+      }
+    },
+
+    // --- SETTINGS & CONTROLS ---
+    {
+      id: 'setting-app-customizer',
+      title: 'App Interface Options (Choose What Boxes to Show)',
+      description: 'Toggle visibility of top status bar, telemetry boxes, signal maps, battery widgets, and scores',
+      category: 'Settings & Controls',
+      keywords: ['options', 'customizer', 'boxes', 'widgets', 'interface', 'toggle', 'show', 'hide'],
+      icon: <Settings className="w-4 h-4 text-amber-400" />,
+      badge: 'Interface Options',
+      onSelect: () => {
+        setIsCustomizerExpanded(true);
+      }
+    },
+    {
+      id: 'setting-language-en',
+      title: 'Switch App Language to English',
+      description: 'Set interface language to English (EN)',
+      category: 'Settings & Controls',
+      keywords: ['language', 'english', 'en', 'translation', 'i18n'],
+      icon: <Globe className="w-4 h-4 text-blue-400" />,
+      onSelect: () => {
+        setLanguage('en');
+      }
+    },
+    {
+      id: 'setting-language-de',
+      title: 'Switch App Language to German (Deutsch)',
+      description: 'Set interface language to German (Deutsch)',
+      category: 'Settings & Controls',
+      keywords: ['language', 'german', 'deutsch', 'de', 'translation', 'i18n'],
+      icon: <Globe className="w-4 h-4 text-blue-400" />,
+      onSelect: () => {
+        setLanguage('de');
+      }
+    },
+    {
+      id: 'setting-language-fr',
+      title: 'Switch App Language to French (Français)',
+      description: 'Set interface language to French (FR)',
+      category: 'Settings & Controls',
+      keywords: ['language', 'french', 'francais', 'fr', 'translation', 'i18n'],
+      icon: <Globe className="w-4 h-4 text-blue-400" />,
+      onSelect: () => {
+        setLanguage('fr');
+      }
+    },
+    {
+      id: 'setting-mute-alerts',
+      title: citizenState.alertsMuted ? 'Unmute Audio Alerts' : 'Mute Audio Alerts',
+      description: citizenState.alertsMuted ? 'Re-enable audio warning tones and alerts' : 'Mute all system audio warning tones',
+      category: 'Settings & Controls',
+      keywords: ['mute', 'audio', 'sound', 'alerts', 'unmute', 'quiet', 'silent'],
+      icon: citizenState.alertsMuted ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-red-400" />,
+      onSelect: () => {
+        setCitizenState(prev => ({ ...prev, alertsMuted: !prev.alertsMuted }));
+      }
+    },
+    {
+      id: 'setting-vocal-alerts',
+      title: vocalAlertsEnabled ? 'Disable Speech Alerts' : 'Enable Speech Alerts (Web Speech)',
+      description: 'Toggle spoken vocal assistant alerts and compliance broadcasts',
+      category: 'Settings & Controls',
+      keywords: ['speech', 'vocal', 'voice', 'spoken', 'tts', 'alerts', 'assistant'],
+      icon: <Volume2 className="w-4 h-4 text-emerald-400" />,
+      onSelect: () => {
+        setVocalAlertsEnabled(!vocalAlertsEnabled);
+      }
+    },
+    {
+      id: 'setting-emergency-calc',
+      title: 'Emergency Disguise Camouflage (Fake Calculator)',
+      description: 'Instantly lock screen into a fully functional stealth calculator mode',
+      category: 'Settings & Controls',
+      keywords: ['emergency', 'disguise', 'camouflage', 'calculator', 'fake', 'lock', 'stealth'],
+      icon: <Calculator className="w-4 h-4 text-amber-400" />,
+      badge: 'Camouflage',
+      onSelect: () => {
+        setCitizenState(prev => ({ ...prev, disguiseUiActive: true }));
+      }
+    },
+
+    // --- AUTOMATIONS & TOOLS ---
+    {
+      id: 'action-master-autopilot',
+      title: '🚀 Execute Master Autopilot Suite',
+      description: 'Runs parallel Gemini 3.6 Flash pitching, forum scouting, ProductHunt listing generation & ESP32 C++ firmware compilation',
+      category: 'Automations & Tools',
+      keywords: ['autopilot', 'automation', 'run', 'execute', 'pitch', 'forum', 'scout', 'listing', 'firmware', 'c++'],
+      icon: <Zap className="w-4 h-4 text-emerald-400" />,
+      badge: 'Autopilot Suite',
+      onSelect: () => {
+        setActiveView('tech');
+        setTechTab('pitch');
+      }
+    },
+    {
+      id: 'action-emergency-shield',
+      title: '🛡️ Trigger Max Emergency Privacy Shield Broadcast',
+      description: 'Immediately set transmission power to maximum meters and broadcast active opt-out',
+      category: 'Automations & Tools',
+      keywords: ['emergency', 'shield', 'broadcast', 'max', 'power', 'radius', 'transmit'],
+      icon: <Shield className="w-4 h-4 text-emerald-400" />,
+      onSelect: () => {
+        setCitizenState(prev => ({ ...prev, isBroadcasting: true, rangeMeters: 50 }));
+      }
+    },
+    {
+      id: 'action-user-guide',
+      title: 'Open Interactive User Guide & Support Center',
+      description: 'View helpful step-by-step instructions, FAQ, and submit feedback tickets',
+      category: 'Automations & Tools',
+      keywords: ['guide', 'help', 'instructions', 'faq', 'support', 'info', 'tutorial'],
+      icon: <HelpCircle className="w-4 h-4 text-cyan-400" />,
+      onSelect: () => {
+        setShowHelpCenter(true);
+      }
+    }
+  ];
 
   const [shieldActiveSeconds, setShieldActiveSeconds] = useState<number>(0);
 
@@ -1394,6 +1783,53 @@ export default function App() {
         + (citizenState.dataRetentionPref === 'zero_retention' ? 15 : 0) 
         + (citizenState.irDisruptionEnabled ? 10 : 0))
     : 0;
+
+  // Real-time Privacy Impact Score Calculation (0 - 100)
+  // Dynamically calculated based on active shield settings, distance to detected threats, and encryption strength
+  const validDistances = logs.map(l => l.distance).filter((d): d is number => typeof d === 'number' && !isNaN(d) && d > 0);
+  const minThreatDistance = validDistances.length > 0 ? Math.min(...validDistances) : 22.5;
+
+  // 1. Active Shield Settings Score Component (0 - 40 pts)
+  let scoreShield = 0;
+  if (citizenState.isBroadcasting) {
+    scoreShield += 20; // Base active RF broadcast shielding
+    if (citizenState.privacyLevel === 'strict_blur' || citizenState.privacyLevel === 'magic_removal') {
+      scoreShield += 10;
+    } else if (citizenState.privacyLevel !== 'none') {
+      scoreShield += 7;
+    }
+    if (citizenState.facialRecognitionOptOut) scoreShield += 5;
+    if (citizenState.dataRetentionPref === 'zero_retention') scoreShield += 2.5;
+    if (citizenState.irDisruptionEnabled) scoreShield += 2.5;
+  }
+
+  // 2. Distance to Detected Threats Score Component (0 - 35 pts)
+  let scoreThreatDistance = 0;
+  if (minThreatDistance >= 20) {
+    scoreThreatDistance = 35; // Safe perimeter distance buffer
+  } else if (minThreatDistance >= 10) {
+    if (citizenState.isBroadcasting && citizenState.rangeMeters >= minThreatDistance) {
+      scoreThreatDistance = 30; // Intercepted at safe distance
+    } else {
+      scoreThreatDistance = 18;
+    }
+  } else {
+    // Threat is close (< 10m)
+    if (citizenState.isBroadcasting && citizenState.rangeMeters >= minThreatDistance) {
+      scoreThreatDistance = 25; // Masked at close range
+    } else if (citizenState.isBroadcasting) {
+      scoreThreatDistance = 10; // Active shield but insufficient coverage radius
+    } else {
+      scoreThreatDistance = 0; // Unshielded threat at close proximity!
+    }
+  }
+
+  // 3. Encryption Strength Score Component (0 - 25 pts)
+  let scoreEncryption = 15; // ECC-256 base zero-knowledge enclave
+  if (citizenState.autoKeyRotationInterval > 0) scoreEncryption += 5;
+  if (cryptoState && cryptoState.verified) scoreEncryption += 5;
+
+  const privacyImpactScore = Math.max(0, Math.min(100, Math.round(scoreShield + scoreThreatDistance + scoreEncryption)));
 
   useEffect(() => {
     if (!citizenState.isBroadcasting) {
@@ -2655,26 +3091,43 @@ export default function App() {
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 w-full sm:w-auto relative">
             {/* Left group of upper nav containing Home Button and App Interface Options directly underneath */}
             <div className={`flex flex-col gap-2 w-full sm:w-auto relative ${isCustomizerExpanded ? 'z-50' : isViewSelectorOpen ? 'z-10' : 'z-30'}`}>
-              {/* Home / Main Dashboard Button */}
-              <button
-                id="back-to-home-btn"
-                type="button"
-                onClick={() => {
-                  setActiveView('citizen');
-                  setCitizenTab('overview');
-                  setIsViewSelectorOpen(false);
-                  setIsCustomizerExpanded(false);
-                }}
-                className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-black transition-all border ${
-                  activeView === 'citizen' && citizenTab === 'overview'
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:bg-slate-850 hover:text-white hover:border-slate-700 hover:shadow-[0_0_12px_rgba(16,185,129,0.15)] cursor-pointer'
-                }`}
-                title="Go back to the Main Dashboard"
-              >
-                <Home className={`w-4 h-4 ${activeView === 'citizen' && citizenTab === 'overview' ? 'text-emerald-400' : 'text-slate-400 animate-pulse'}`} />
-                <span>{t('nav.home')}</span>
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* Home / Main Dashboard Button */}
+                <button
+                  id="back-to-home-btn"
+                  type="button"
+                  onClick={() => {
+                    setActiveView('citizen');
+                    setCitizenTab('overview');
+                    setIsViewSelectorOpen(false);
+                    setIsCustomizerExpanded(false);
+                  }}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all border ${
+                    activeView === 'citizen' && citizenTab === 'overview'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
+                      : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:bg-slate-850 hover:text-white hover:border-slate-700 hover:shadow-[0_0_12px_rgba(16,185,129,0.15)] cursor-pointer'
+                  }`}
+                  title="Go back to the Main Dashboard"
+                >
+                  <Home className={`w-4 h-4 ${activeView === 'citizen' && citizenTab === 'overview' ? 'text-emerald-400' : 'text-slate-400 animate-pulse'}`} />
+                  <span>{t('nav.home')}</span>
+                </button>
+
+                {/* Global Search Button Trigger */}
+                <button
+                  id="global-app-search-trigger"
+                  type="button"
+                  onClick={() => setIsSearchOpen(true)}
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition shadow-lg cursor-pointer group shrink-0"
+                  title="Search screens, settings, controls & tools (Ctrl+K)"
+                >
+                  <Search className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                  <span>Search...</span>
+                  <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded">
+                    ⌘K
+                  </kbd>
+                </button>
+              </div>
 
               {/* Collapsible App Customization Menu under need the home screen button */}
               <div className="relative w-full z-40">
@@ -2698,9 +3151,47 @@ export default function App() {
                   <>
                     {/* Backdrop to close the customizer when clicking outside */}
                     <div className="fixed inset-0 z-30" onClick={() => setIsCustomizerExpanded(false)} />
-                    <div className="absolute top-full left-0 mt-2 w-full min-w-[280px] sm:min-w-[320px] bg-slate-950/95 border border-slate-800/80 rounded-2xl shadow-2xl z-50 p-4 flex flex-col gap-2.5 max-h-[380px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-150 glow-emerald">
-                      <div className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider mb-0.5 px-1">
-                        Choose What Boxes to Show
+                    <div className="absolute top-full left-0 mt-2 w-full min-w-[280px] sm:min-w-[320px] max-w-[calc(100vw-2rem)] bg-slate-950/95 border border-slate-800/80 rounded-2xl shadow-2xl z-50 p-4 flex flex-col gap-2.5 max-h-[380px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-150 glow-emerald">
+                      <div className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider mb-0.5 px-1 flex items-center justify-between">
+                        <span>Choose What Boxes to Show</span>
+                        <span className="text-[8px] font-mono text-emerald-400">PRESETS</span>
+                      </div>
+                      {/* Presets quick bar */}
+                      <div className="grid grid-cols-2 gap-1.5 mb-1">
+                        <button
+                          type="button"
+                          onClick={() => setCitizenState(prev => ({
+                            ...prev,
+                            showMetricsBar: false,
+                            showControlBar: false,
+                            showBatteryWidget: false,
+                            showSignalMap: false,
+                            showSignalHistory: false,
+                            showThreatOptimizer: false,
+                            showAutomationHub: false,
+                            showPrivacyImpactScore: false
+                          }))}
+                          className="py-1.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-[10px] text-emerald-400 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          title="Hide all dashboard widgets for the cleanest privacy panel view"
+                        >
+                          <Shield className="w-3 h-3 text-emerald-400" />
+                          <span>Clean Home Screen</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCitizenState(prev => ({
+                            ...prev,
+                            showMetricsBar: true,
+                            showControlBar: true,
+                            showBatteryWidget: true,
+                            showSignalMap: true
+                          }))}
+                          className="py-1.5 px-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl text-[10px] text-slate-300 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          title="Show all metrics, maps, and hardware status boxes"
+                        >
+                          <Grid3X3 className="w-3 h-3 text-cyan-400" />
+                          <span>Show All Widgets</span>
+                        </button>
                       </div>
                       <div className="grid grid-cols-1 gap-1.5">
                         {/* 1. Status Bar */}
@@ -3017,7 +3508,7 @@ export default function App() {
 
               {/* Collapsible Dropdown Popover */}
               {isViewSelectorOpen && (
-                <div className="absolute top-full left-0 mt-2 w-full min-w-[280px] sm:min-w-[320px] bg-slate-950/95 border border-slate-800/80 rounded-2xl shadow-2xl z-40 max-h-[380px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-100 divide-y divide-slate-900 glow-emerald">
+                <div className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 w-full min-w-[280px] sm:min-w-[320px] max-w-[calc(100vw-2rem)] bg-slate-950/95 border border-slate-800/80 rounded-2xl shadow-2xl z-40 max-h-[380px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-100 divide-y divide-slate-900 glow-emerald">
                   <div className="py-1.5">
                     {VIEW_GROUPS.map((group) => {
                       const isExpanded = !!expandedGroups[group.id];
@@ -3311,8 +3802,71 @@ export default function App() {
               </button>
             </div>
             {/* Window Content */}
-            <div className="p-5 bg-slate-900/30">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-5 bg-slate-900/30 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* Real-time Privacy Impact Score Indicator */}
+                <div id="privacy-impact-score-card" className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-emerald-500/40 p-4 rounded-xl space-y-2 relative overflow-hidden shadow-[0_0_20px_rgba(16,185,129,0.12)] group">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold flex items-center gap-1 font-mono">
+                      <Award className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
+                      Privacy Impact Score
+                    </span>
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase ${
+                      privacyImpactScore >= 80 
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' 
+                        : privacyImpactScore >= 50 
+                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' 
+                          : 'bg-rose-500/15 border-rose-500/40 text-rose-300 animate-pulse'
+                    }`}>
+                      {privacyImpactScore >= 85 ? 'OPTIMAL' : privacyImpactScore >= 65 ? 'STRONG' : privacyImpactScore >= 45 ? 'MODERATE' : 'VULNERABLE'}
+                    </span>
+                  </div>
+
+                  {/* Dynamic Score Readout & Gauge */}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-baseline gap-1">
+                      <span className={`text-2xl font-black font-mono tracking-tight ${
+                        privacyImpactScore >= 80 ? 'text-emerald-400' : privacyImpactScore >= 50 ? 'text-amber-400' : 'text-rose-400'
+                      }`}>
+                        {privacyImpactScore}
+                      </span>
+                      <span className="text-xs text-slate-500 font-mono font-bold">/100</span>
+                    </div>
+
+                    <button
+                      id="toggle-score-breakdown-btn"
+                      type="button"
+                      onClick={() => setShowScoreDetails(!showScoreDetails)}
+                      className="text-[9px] font-mono text-cyan-400 hover:text-cyan-300 underline cursor-pointer transition-colors"
+                      title="View real-time score calculation breakdown"
+                    >
+                      {showScoreDetails ? 'Hide Details' : 'Breakdown ➔'}
+                    </button>
+                  </div>
+
+                  {/* Animated Progress Gauge */}
+                  <div className="w-full bg-slate-900 border border-slate-800 rounded-full h-2 overflow-hidden relative">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${privacyImpactScore}%` }}
+                      transition={{ duration: 0.5, ease: 'easeOut' }}
+                      className={`h-full rounded-full ${
+                        privacyImpactScore >= 80 
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' 
+                          : privacyImpactScore >= 50 
+                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]' 
+                            : 'bg-gradient-to-r from-red-600 to-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Telemetry Summary Footer */}
+                  <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-0.5">
+                    <span className="truncate">Threat: <strong className="text-slate-200">{minThreatDistance.toFixed(1)}m</strong></span>
+                    <span>Shield: <strong className={citizenState.isBroadcasting ? 'text-emerald-400' : 'text-rose-400'}>{citizenState.isBroadcasting ? 'ACTIVE' : 'OFF'}</strong></span>
+                  </div>
+                </div>
+
                 <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-1">
                   <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block">
                     Censors Applied
@@ -3353,6 +3907,84 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Expandable Privacy Impact Score Detailed Breakdown Card */}
+              <AnimatePresence>
+                {showScoreDetails && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pt-3 border-t border-slate-800/80 bg-slate-950/80 p-4 rounded-xl border">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
+                          <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                            Real-Time Privacy Impact Score Breakdown
+                          </h4>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          Weighted Multi-Factor Formula
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        {/* Factor 1 */}
+                        <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-slate-300 font-mono text-[11px]">1. Active Shield Settings</span>
+                            <span className="font-mono font-bold text-emerald-400">{scoreShield} / 40 pts</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            RF Broadcast: <strong className={citizenState.isBroadcasting ? 'text-emerald-400' : 'text-rose-400'}>{citizenState.isBroadcasting ? 'ACTIVE (+20)' : 'DISABLED (0)'}</strong>
+                            <br />
+                            Obfuscation: <strong className="text-slate-200">{citizenState.privacyLevel.replace('_', ' ').toUpperCase()}</strong>
+                            <br />
+                            Face Opt-Out: <strong className={citizenState.facialRecognitionOptOut ? 'text-emerald-400' : 'text-slate-500'}>{citizenState.facialRecognitionOptOut ? 'ENABLED (+5)' : 'OFF (0)'}</strong>
+                          </p>
+                        </div>
+
+                        {/* Factor 2 */}
+                        <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-slate-300 font-mono text-[11px]">2. Distance to Detected Threats</span>
+                            <span className="font-mono font-bold text-emerald-400">{scoreThreatDistance} / 35 pts</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Nearest Threat: <strong className="text-slate-200">{minThreatDistance.toFixed(1)}m away</strong>
+                            <br />
+                            Perimeter Radius: <strong className="text-slate-200">{citizenState.rangeMeters}m</strong>
+                            <br />
+                            Intercept Status: <strong className={citizenState.isBroadcasting && citizenState.rangeMeters >= minThreatDistance ? 'text-emerald-400' : 'text-amber-400'}>
+                              {minThreatDistance >= 20 ? 'CLEAR BUFFER (+35)' : citizenState.isBroadcasting && citizenState.rangeMeters >= minThreatDistance ? 'INTERCEPTED & MASKED (+25)' : 'UNMASKED EXPOSURE (+10)'}
+                            </strong>
+                          </p>
+                        </div>
+
+                        {/* Factor 3 */}
+                        <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-slate-300 font-mono text-[11px]">3. Cryptographic Strength</span>
+                            <span className="font-mono font-bold text-emerald-400">{scoreEncryption} / 25 pts</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            Cipher Suite: <strong className="text-slate-200">ECC-256 (ECDSA) (+15)</strong>
+                            <br />
+                            Ephemeral Rotation: <strong className={citizenState.autoKeyRotationInterval > 0 ? 'text-emerald-400' : 'text-slate-500'}>
+                              {citizenState.autoKeyRotationInterval > 0 ? `Every ${citizenState.autoKeyRotationInterval}m (+5)` : 'OFF (0)'}
+                            </strong>
+                            <br />
+                            Vault Handshake: <strong className="text-slate-200">{cryptoState?.verified ? 'VERIFIED (+5)' : 'ACTIVE (+5)'}</strong>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -3379,10 +4011,11 @@ export default function App() {
           ) : (
             <motion.div
               key={activeView}
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
+              exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
+              className="w-full max-w-full overflow-x-hidden"
             >
               {activeView === 'citizen' && (
                 <>
@@ -3432,6 +4065,7 @@ export default function App() {
                   cryptoState={cryptoState}
                   vocalAlertsEnabled={vocalAlertsEnabled}
                   onToggleVocalAlerts={() => setVocalAlertsEnabled(!vocalAlertsEnabled)}
+                  onAddLog={addLog}
                 />
               )}
 
@@ -3477,7 +4111,7 @@ export default function App() {
               }
             }}
             whileDrag={{ scale: 0.98, opacity: 0.8 }}
-            className="fixed top-20 right-4 md:right-8 z-50 max-w-sm w-full bg-slate-950/95 border border-slate-800 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-xl p-4 overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y select-none"
+            className="fixed top-20 right-4 left-4 sm:left-auto sm:right-8 z-50 max-w-sm w-full max-w-[calc(100vw-2rem)] bg-slate-950/95 border border-slate-800 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-xl p-4 overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y select-none"
           >
             {/* Ambient indicator glow */}
             <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
@@ -5090,6 +5724,13 @@ export default function App() {
         citizenState={citizenState}
         isOpen={showCopilot}
         onClose={() => setShowCopilot(false)}
+      />
+
+      {/* Global Application Command Palette & Search Modal */}
+      <GlobalSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        items={searchItems}
       />
     </div>
   );
