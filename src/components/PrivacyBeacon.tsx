@@ -8738,14 +8738,14 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
           {/* Tab: Google Maps Privacy Radar */}
           {activeTab === 'google_maps_radar' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <GoogleMapsPrivacyRadar citizenState={state} addLog={onAddLog} />
+              <GoogleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
             </motion.div>
           )}
 
           {/* Tab: Apple Maps Privacy Shield */}
           {activeTab === 'apple_maps_radar' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <AppleMapsPrivacyRadar citizenState={state} addLog={onAddLog} />
+              <AppleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
             </motion.div>
           )}
 
@@ -12726,6 +12726,117 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                 <p className="text-xs text-slate-400 leading-relaxed font-sans">
                   Establish permanent hardware boundary shields. When a person wearing recording glasses or using a smartphone camera enters these geo-fenced boundaries (such as a school entrance, residential yard, or playground), the stationary beacon overrides and enforces a local "Opt-Out" blur command to secure the perimeter.
                 </p>
+              </div>
+
+              {/* Mapping Service Settings for Geofencing Visualization */}
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400">
+                      <Globe className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        Geofencing Visualization Mapping Service
+                        <span className="text-[9px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase">
+                          {state.preferredMapProvider === 'apple' ? 'Apple MapKit' : 'Google Maps'}
+                        </span>
+                      </h4>
+                      <p className="text-[10px] font-mono text-slate-400">
+                        Select your preferred mapping service for Safe School Zones and geofence boundary radar visualizations.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Option 1: Google Maps */}
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...state, preferredMapProvider: 'google' })}
+                    className={`p-3.5 rounded-xl border text-left transition cursor-pointer space-y-2 flex flex-col justify-between ${
+                      (state.preferredMapProvider || 'google') === 'google'
+                        ? 'bg-emerald-950/30 border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50'
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs font-mono">
+                          G
+                        </span>
+                        <div>
+                          <h5 className="text-xs font-mono font-bold text-white">Google Maps Platform</h5>
+                          <span className="text-[9px] font-mono text-slate-400">Vector Tiles & Advanced Markers</span>
+                        </div>
+                      </div>
+                      {(state.preferredMapProvider || 'google') === 'google' && (
+                        <span className="p-1 bg-emerald-500 text-slate-950 rounded-full shrink-0">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-mono text-slate-400 leading-relaxed">
+                      High-density CCTV, ALPR & Municipal camera overlays with real-time Haversine distance calculations and custom map circles.
+                    </p>
+                  </button>
+
+                  {/* Option 2: Apple Maps */}
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...state, preferredMapProvider: 'apple' })}
+                    className={`p-3.5 rounded-xl border text-left transition cursor-pointer space-y-2 flex flex-col justify-between ${
+                      state.preferredMapProvider === 'apple'
+                        ? 'bg-emerald-950/30 border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50'
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold text-xs font-mono">
+                          
+                        </span>
+                        <div>
+                          <h5 className="text-xs font-mono font-bold text-white">Apple MapKit JS</h5>
+                          <span className="text-[9px] font-mono text-slate-400">Cupertino Style & AirTag BLE Seed</span>
+                        </div>
+                      </div>
+                      {state.preferredMapProvider === 'apple' && (
+                        <span className="p-1 bg-emerald-500 text-slate-950 rounded-full shrink-0">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-mono text-slate-400 leading-relaxed">
+                      Sleek dark-mode vector rendering with Find My AirTag rotation, Apple Park presets, and quick location switching.
+                    </p>
+                  </button>
+                </div>
+
+                {/* Embedded Live Geofencing Visualization Container */}
+                <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
+                      <Compass className="w-3.5 h-3.5 text-emerald-400" />
+                      Live Geofencing Visualization ({state.preferredMapProvider === 'apple' ? 'Apple Maps Engine' : 'Google Maps Engine'}):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(state.preferredMapProvider === 'apple' ? 'apple_maps_radar' : 'google_maps_radar')}
+                      className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 underline flex items-center gap-1 cursor-pointer"
+                    >
+                      Full View ↗
+                    </button>
+                  </div>
+
+                  <div className="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 p-2">
+                    {state.preferredMapProvider === 'apple' ? (
+                      <AppleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
+                    ) : (
+                      <GoogleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Add New Sensor Gate */}

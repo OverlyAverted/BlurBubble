@@ -130,6 +130,24 @@ export interface CitizenState {
   gpsAltitudeMeters?: number;
   gpsLockState?: 'locked' | 'searching' | 'simulated';
   gpsHighPrecisionFusion?: boolean;
+  geofencingEnabled?: boolean;
+  geofenceZones?: GeofenceZone[];
+  activeGeofenceTriggered?: boolean;
+  activeGeofenceZoneName?: string;
+  preferredMapProvider?: 'google' | 'apple';
+}
+
+export interface GeofenceZone {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+  isActive: boolean;
+  targetPrivacyLevel: PrivacyLevel;
+  triggerOnEnter: boolean;
+  description?: string;
+  category?: 'high_surveillance' | 'government' | 'event' | 'custom' | 'corporate';
 }
 
 export interface WifiTriggerRule {

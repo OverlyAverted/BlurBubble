@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { 
   MapPin, ShieldCheck, ShieldAlert, Camera, Radio, Search, Navigation, 
-  Eye, Zap, AlertTriangle, Layers, Crosshair, CheckCircle2, Lock, Info, Sparkles, RefreshCw
+  Eye, Zap, AlertTriangle, Layers, Crosshair, CheckCircle2, Lock, Info, Sparkles, RefreshCw,
+  Plus, Trash2, Sliders, Shield, Compass, ChevronRight, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CitizenState, DetectionLog } from '../types';
+import { CitizenState, DetectionLog, GeofenceZone } from '../types';
+import { evaluateGeofences, getHaversineDistanceMeters } from '../utils/geofence';
 
 const API_KEY =
   process.env.GOOGLE_MAPS_PLATFORM_KEY ||
@@ -162,21 +164,202 @@ function MapShieldCircle({ center, radiusMeters }: { center: { lat: number; lng:
   return null;
 }
 
+// Custom Draw Geofence Circle on Google Map
+function GeofenceMapCircle({ zone }: { zone: GeofenceZone; key?: string }) {
+  const map = useMap();
+  const circleRef = useRef<google.maps.Circle | null>(null);
+
+  useEffect(() => {
+    if (!map) return;
+
+    if (!circleRef.current) {
+      circleRef.current = new google.maps.Circle({
+        strokeColor: zone.isActive ? '#f43f5e' : '#64748b',
+        strokeOpacity: 0.9,
+        strokeWeight: 2,
+        fillColor: zone.isActive ? '#f43f5e' : '#64748b',
+        fillOpacity: zone.isActive ? 0.22 : 0.08,
+        map,
+        center: { lat: zone.lat, lng: zone.lng },
+        radius: zone.radiusMeters,
+      });
+    } else {
+      circleRef.current.setCenter({ lat: zone.lat, lng: zone.lng });
+      circleRef.current.setRadius(zone.radiusMeters);
+      circleRef.current.setOptions({
+        strokeColor: zone.isActive ? '#f43f5e' : '#64748b',
+        fillColor: zone.isActive ? '#f43f5e' : '#64748b',
+        fillOpacity: zone.isActive ? 0.22 : 0.08,
+      });
+    }
+
+    return () => {
+      if (circleRef.current) {
+        circleRef.current.setMap(null);
+        circleRef.current = null;
+      }
+    };
+  }, [map, zone.lat, zone.lng, zone.radiusMeters, zone.isActive]);
+
+  return null;
+}
+
 export function GoogleMapsPrivacyRadar({ 
   citizenState, 
-  addLog 
+  onChange,
+  addLog,
+  onTriggerAlert
 }: { 
   citizenState: CitizenState; 
+  onChange?: (newState: CitizenState) => void;
   addLog?: (log: any) => void; 
+  onTriggerAlert?: (title: string, body: string, type?: string) => void;
 }) {
   const [userPos, setUserPos] = useState(INITIAL_USER_POS);
   const [threats, setThreats] = useState<ThreatMarker[]>(DEFAULT_THREATS);
   const [selectedThreat, setSelectedThreat] = useState<ThreatMarker | null>(null);
   const [activeZoneName, setActiveZoneName] = useState('San Francisco Tech Hub Privacy Perimeter');
   const [showSetupModal, setShowSetupModal] = useState(false);
+  const [showAddZoneModal, setShowAddZoneModal] = useState(false);
+  const [newZoneName, setNewZoneName] = useState('');
+  const [newZoneRadius, setNewZoneRadius] = useState(250);
+  const [newZoneCategory, setNewZoneCategory] = useState<'high_surveillance' | 'government' | 'event' | 'custom' | 'corporate'>('high_surveillance');
   const [mapZoom, setMapZoom] = useState(15);
 
-  // Recalculate threat distances relative to userPos
+  // Real-time Geofence Trigger Evaluator
+  const geofenceResult = evaluateGeofences(userPos, citizenState.geofenceZones || []);
+  const activeTriggeredZone = geofenceResult.insideZone;
+
+  // Auto-switch shield mode to strict_blur when entering high-risk geofence
+  useEffect(() => {
+    if (!citizenState.geofencingEnabled || !citizenState.geofenceZones) return;
+
+    if (activeTriggeredZone) {
+      const targetLevel = activeTriggeredZone.targetPrivacyLevel || 'strict_blur';
+
+      if (citizenState.privacyLevel !== targetLevel || !citizenState.activeGeofenceTriggered) {
+        if (onChange) {
+          onChange({
+            ...citizenState,
+            privacyLevel: targetLevel,
+            activeGeofenceTriggered: true,
+            activeGeofenceZoneName: activeTriggeredZone.name
+          });
+        }
+
+        if (onTriggerAlert) {
+          onTriggerAlert(
+            `📍 GEOFENCE STRICT BLUR ACTIVATED`,
+            `Entered ${activeTriggeredZone.name}. Privacy shield automatically set to STRICT BLUR mode.`,
+            'child_blocking'
+          );
+        }
+
+        if (addLog) {
+          addLog({
+            deviceModel: `GEOFENCE ALARM: ${activeTriggeredZone.name}`,
+            action: 'censored',
+            shieldApplied: `${targetLevel.toUpperCase()} (AUTOMATIC GEOFENCE ESCALATION)`,
+            distance: geofenceResult.distanceMeters,
+            rotatedId: activeTriggeredZone.id
+          });
+        }
+
+        if ('vibrate' in navigator) {
+          navigator.vibrate([200, 100, 200, 100, 300]);
+        }
+      }
+    } else {
+      if (citizenState.activeGeofenceTriggered) {
+        if (onChange) {
+          onChange({
+            ...citizenState,
+            activeGeofenceTriggered: false,
+            activeGeofenceZoneName: undefined
+          });
+        }
+      }
+    }
+  }, [userPos, citizenState.geofencingEnabled, citizenState.geofenceZones, activeTriggeredZone]);
+
+  // Geofence Management Handlers
+  const handleToggleGeofencing = () => {
+    if (onChange) {
+      onChange({
+        ...citizenState,
+        geofencingEnabled: !citizenState.geofencingEnabled
+      });
+    }
+  };
+
+  const handleToggleZone = (zoneId: string) => {
+    if (onChange && citizenState.geofenceZones) {
+      const updated = citizenState.geofenceZones.map(z =>
+        z.id === zoneId ? { ...z, isActive: !z.isActive } : z
+      );
+      onChange({
+        ...citizenState,
+        geofenceZones: updated
+      });
+    }
+  };
+
+  const handleDeleteZone = (zoneId: string) => {
+    if (onChange && citizenState.geofenceZones) {
+      const updated = citizenState.geofenceZones.filter(z => z.id !== zoneId);
+      onChange({
+        ...citizenState,
+        geofenceZones: updated
+      });
+    }
+  };
+
+  const handleAddCustomZone = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newZoneName.trim() || !onChange) return;
+
+    const newZone: GeofenceZone = {
+      id: `geo-custom-${Date.now()}`,
+      name: newZoneName.trim(),
+      lat: userPos.lat,
+      lng: userPos.lng,
+      radiusMeters: newZoneRadius,
+      isActive: true,
+      targetPrivacyLevel: 'strict_blur',
+      triggerOnEnter: true,
+      category: newZoneCategory,
+      description: `User-defined high-risk geofence area centered at GPS ${userPos.lat.toFixed(4)}, ${userPos.lng.toFixed(4)}`
+    };
+
+    const currentZones = citizenState.geofenceZones || [];
+    onChange({
+      ...citizenState,
+      geofenceZones: [...currentZones, newZone]
+    });
+
+    setNewZoneName('');
+    setShowAddZoneModal(false);
+
+    if (addLog) {
+      addLog({
+        deviceModel: `NEW GEOFENCE: ${newZone.name}`,
+        action: 'discovered',
+        shieldApplied: 'GEOFENCE_REGISTERED',
+        distance: newZoneRadius,
+        rotatedId: newZone.id
+      });
+    }
+  };
+
+  const handleSimulateMoveToZone = (zone: GeofenceZone) => {
+    setUserPos({ lat: zone.lat, lng: zone.lng });
+    setActiveZoneName(zone.name);
+  };
+
+  const handleSimulateExitGeofence = () => {
+    setUserPos({ lat: 37.7500, lng: -122.4300 });
+    setActiveZoneName('Neutral Residential Area (Outside Geofences)');
+  };
   const calculateDistanceMeters = (p1: { lat: number; lng: number }, p2: { lat: number; lng: number }) => {
     const R = 6371e3; // metres
     const φ1 = p1.lat * Math.PI / 180;
@@ -297,6 +480,11 @@ export function GoogleMapsPrivacyRadar({
 
               {/* Active Protection Radius Circle */}
               <MapShieldCircle center={userPos} radiusMeters={citizenState.rangeMeters} />
+
+              {/* Active Geofence Circles on Google Map */}
+              {citizenState.geofenceZones?.map((zone) => (
+                <GeofenceMapCircle key={zone.id} zone={zone} />
+              ))}
 
               {/* User Center Location Marker */}
               <AdvancedMarker position={userPos} title="BlurBubble Shield Beacon Center">
@@ -465,7 +653,319 @@ export function GoogleMapsPrivacyRadar({
         )}
       </div>
 
-      {/* Geospatial Threat Telemetry & Zone Controls */}
+      {/* Live Geofence High-Risk Alert Banner */}
+      <AnimatePresence>
+        {activeTriggeredZone && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-rose-950/80 border-2 border-rose-500/80 rounded-xl p-4 shadow-[0_0_25px_rgba(244,63,94,0.3)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-3">
+              <span className="p-2 bg-rose-500/20 border border-rose-500/50 rounded-xl text-rose-400 animate-pulse">
+                <AlertTriangle className="w-6 h-6" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-mono font-bold text-rose-200 uppercase tracking-wide">
+                    High-Risk Geofence Intercept Activated
+                  </h4>
+                  <span className="text-[9px] font-mono font-bold bg-rose-500 text-slate-950 px-2 py-0.5 rounded uppercase">
+                    STRICT BLUR ENGAGED
+                  </span>
+                </div>
+                <p className="text-xs font-mono text-rose-300 font-bold mt-0.5">
+                  Device location entered: <span className="underline">{activeTriggeredZone.name}</span>
+                </p>
+                <p className="text-[10px] font-mono text-rose-400/80">
+                  {activeTriggeredZone.description || 'High-surveillance perimeter detected. Privacy shield automatically set to strict blur.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleSimulateExitGeofence}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-rose-500/50 text-rose-300 rounded-lg text-xs font-mono font-bold transition cursor-pointer"
+              >
+                Simulate Exit Zone
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Geofence High-Risk Trigger & Radar Controller */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <span className="p-1.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400">
+              <ShieldAlert className="w-4 h-4" />
+            </span>
+            <div>
+              <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                Geofencing Privacy Shield Trigger
+                <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-bold border ${
+                  citizenState.geofencingEnabled 
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {citizenState.geofencingEnabled ? 'AUTOMATION ENABLED' : 'PAUSED'}
+                </span>
+              </h4>
+              <p className="text-[10px] font-mono text-slate-400">
+                Automatically escalates shield to <code className="text-emerald-300 bg-slate-950 px-1 py-0.5 rounded">STRICT BLUR</code> when entering high-risk geographical zones
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleToggleGeofencing}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition cursor-pointer flex items-center gap-1.5 ${
+                citizenState.geofencingEnabled
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-emerald-400" />
+              {citizenState.geofencingEnabled ? 'Geofence Guard Active' : 'Enable Geofencing'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowAddZoneModal(true)}
+              className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add High-Risk Zone
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Simulation Toolbar */}
+        <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 space-y-2">
+          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block font-bold flex items-center gap-1.5">
+            <Compass className="w-3.5 h-3.5 text-cyan-400" />
+            Instant Location Movement Simulators (Test Geofence Trigger):
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {citizenState.geofenceZones?.map((zone) => {
+              const isCurrent = activeTriggeredZone?.id === zone.id;
+              return (
+                <button
+                  key={zone.id}
+                  type="button"
+                  onClick={() => handleSimulateMoveToZone(zone)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition cursor-pointer border flex items-center gap-1.5 ${
+                    isCurrent
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 font-bold shadow'
+                      : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white'
+                  }`}
+                >
+                  <MapPin className={`w-3 h-3 ${isCurrent ? 'text-rose-400 animate-bounce' : 'text-slate-400'}`} />
+                  Move to {zone.name.split('(')[0].trim()}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={handleSimulateExitGeofence}
+              className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-mono transition cursor-pointer font-bold flex items-center gap-1"
+            >
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              Move to Safe Area
+            </button>
+          </div>
+        </div>
+
+        {/* List of Configured High-Risk Geofence Zones */}
+        <div className="space-y-2">
+          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block font-bold">
+            Configured Geofence Surveillance Boundaries ({citizenState.geofenceZones?.length || 0})
+          </span>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {citizenState.geofenceZones?.map((zone) => {
+              const dist = getHaversineDistanceMeters(userPos.lat, userPos.lng, zone.lat, zone.lng);
+              const isInside = dist <= zone.radiusMeters && zone.isActive;
+
+              return (
+                <div
+                  key={zone.id}
+                  className={`p-3 rounded-xl border transition-all space-y-2 ${
+                    isInside
+                      ? 'bg-rose-950/40 border-rose-500/60 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
+                      : zone.isActive
+                      ? 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                      : 'bg-slate-950/20 border-slate-900 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${isInside ? 'bg-rose-500 animate-ping' : zone.isActive ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                        <h5 className="text-xs font-mono font-bold text-slate-200 line-clamp-1">{zone.name}</h5>
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-400 line-clamp-1">{zone.description}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleZone(zone.id)}
+                      className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border transition cursor-pointer shrink-0 ${
+                        zone.isActive
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-slate-800 text-slate-500 border-slate-700'
+                      }`}
+                    >
+                      {zone.isActive ? 'ACTIVE' : 'OFF'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-900">
+                    <span>Radius: <strong className="text-slate-200">{zone.radiusMeters}m</strong></span>
+                    <span>Distance: <strong className={isInside ? 'text-rose-400 font-bold' : 'text-slate-300'}>{dist}m {isInside ? '(INSIDE)' : ''}</strong></span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSimulateMoveToZone(zone)}
+                        className="text-cyan-400 hover:text-cyan-300 underline cursor-pointer"
+                        title="Fly map to zone center"
+                      >
+                        Fly To
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteZone(zone.id)}
+                        className="text-slate-500 hover:text-rose-400 transition cursor-pointer ml-1"
+                        title="Delete geofence zone"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Add Custom Geofence Zone Modal */}
+      <AnimatePresence>
+        {showAddZoneModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-slate-900 border border-rose-500/50 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl font-mono"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-rose-400" />
+                  Define High-Risk Geofence Trigger Zone
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddZoneModal(false)}
+                  className="text-slate-400 hover:text-white text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleAddCustomZone} className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Zone Name / Label</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Downtown CCTV Ring Corridor"
+                    value={newZoneName}
+                    onChange={(e) => setNewZoneName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:border-rose-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Center Coordinates (Current Map Position)</label>
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-300 flex items-center justify-between">
+                    <span>GPS: {userPos.lat.toFixed(5)}, {userPos.lng.toFixed(5)}</span>
+                    <button
+                      type="button"
+                      onClick={handleCenterOnUserGPS}
+                      className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1"
+                    >
+                      <Crosshair className="w-3 h-3" /> Get Device GPS
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-300 font-bold">Trigger Radius (Meters)</label>
+                    <span className="text-rose-400 font-bold">{newZoneRadius}m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="50"
+                    max="1000"
+                    step="25"
+                    value={newZoneRadius}
+                    onChange={(e) => setNewZoneRadius(Number(e.target.value))}
+                    className="w-full accent-rose-500 cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Risk Category</label>
+                  <select
+                    value={newZoneCategory}
+                    onChange={(e: any) => setNewZoneCategory(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-rose-500"
+                  >
+                    <option value="high_surveillance">High CCTV / ALPR Density</option>
+                    <option value="government">Government / Checkpoint Facility</option>
+                    <option value="corporate">Corporate Tech Campus</option>
+                    <option value="event">Private Event / Convention</option>
+                    <option value="custom">Custom Area</option>
+                  </select>
+                </div>
+
+                <div className="bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-[10px] text-slate-400">
+                  Target Action: Automatically switches privacy shield to <strong className="text-emerald-300">STRICT BLUR</strong> upon entering radius.
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddZoneModal(false)}
+                    className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl transition cursor-pointer text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-1/2 bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold py-2 rounded-xl transition cursor-pointer text-xs"
+                  >
+                    Create Geofence
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl space-y-1">
           <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Active Geospatial Zone</span>

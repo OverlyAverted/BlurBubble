@@ -287,6 +287,59 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   ],
   biometricLockEnabled: false,
   biometricRegistered: false,
+  geofencingEnabled: true,
+  preferredMapProvider: 'google',
+  activeGeofenceTriggered: false,
+  geofenceZones: [
+    {
+      id: 'geo-sf-financial',
+      name: 'San Francisco Financial District (CCTV Dense Ring)',
+      lat: 37.7897,
+      lng: -122.4014,
+      radiusMeters: 250,
+      isActive: true,
+      targetPrivacyLevel: 'strict_blur',
+      triggerOnEnter: true,
+      category: 'high_surveillance',
+      description: 'High-density Ring & automated license plate reader (ALPR) surveillance perimeter'
+    },
+    {
+      id: 'geo-civic-center',
+      name: 'Municipal Civic Center Biometric Grid',
+      lat: 37.7793,
+      lng: -122.4192,
+      radiusMeters: 200,
+      isActive: true,
+      targetPrivacyLevel: 'strict_blur',
+      triggerOnEnter: true,
+      category: 'government',
+      description: 'Public facial recognition and smart camera scanning corridor'
+    },
+    {
+      id: 'geo-sfo-terminal',
+      name: 'International Airport Checkpoint',
+      lat: 37.6213,
+      lng: -122.3790,
+      radiusMeters: 350,
+      isActive: true,
+      targetPrivacyLevel: 'strict_blur',
+      triggerOnEnter: true,
+      category: 'government',
+      description: 'TSA/Customs facial recognition biometric validation zone'
+    },
+    {
+      id: 'geo-apple-park',
+      name: 'Cupertino Tech Campus Prototype Perimeter',
+      lat: 37.3349,
+      lng: -122.0090,
+      radiusMeters: 300,
+      isActive: true,
+      targetPrivacyLevel: 'strict_blur',
+      triggerOnEnter: true,
+      category: 'corporate',
+      description: 'Unannounced hardware prototype testing & recording zone'
+    }
+  ],
   governanceHierarchy: ['lockdown', 'strict_rules', 'perimeter_shields', 'allow_list', 'wifi_triggers', 'smart_schedules'],
   totalLockdownMode: false,
   hierarchyRulesEnabled: true,
@@ -624,10 +677,10 @@ export default function App() {
   const [isViewSelectorOpen, setIsViewSelectorOpen] = useState(false);
   const [isCustomizerExpanded, setIsCustomizerExpanded] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    beacon: true,
-    glasses: true,
-    tech: true,
-    audit: true
+    beacon: false,
+    glasses: false,
+    tech: false,
+    audit: false
   });
 
   // Real-time clock for top simulated OS Status Bar
@@ -3041,6 +3094,23 @@ export default function App() {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Geofence Active Status Indicator with Smooth CSS Transition */}
+            {citizenState.activeGeofenceTriggered && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.85, x: 8 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.85, x: 8 }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/60 shadow-[0_0_12px_rgba(244,63,94,0.35)] text-[10px] font-mono font-bold transition-all duration-500 ease-in-out backdrop-blur-md"
+                title={`Geofence Intercept Active: ${citizenState.activeGeofenceZoneName || 'High-Risk Perimeter'} (STRICT BLUR ENGAGED)`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+                <span className="truncate max-w-[130px] sm:max-w-[200px]">
+                  📍 {citizenState.activeGeofenceZoneName ? citizenState.activeGeofenceZoneName.split('(')[0].trim() : 'GEOFENCE'}: STRICT BLUR
+                </span>
+              </motion.div>
+            )}
 
             {/* Signal Strength Indicator */}
             <div className="flex items-end gap-0.5 h-3.5 pb-0.5 text-emerald-400" title="Full Signal Strength">

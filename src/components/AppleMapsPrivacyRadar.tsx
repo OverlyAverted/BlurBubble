@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   MapPin, ShieldCheck, ShieldAlert, Camera, Radio, Search, Navigation, 
   Eye, Zap, AlertTriangle, Layers, Crosshair, CheckCircle2, Lock, Info, Sparkles, RefreshCw,
-  Compass, Smartphone, Shield, Sliders, Globe, EyeOff
+  Compass, Smartphone, Shield, Sliders, Globe, EyeOff, Plus, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CitizenState } from '../types';
+import { CitizenState, GeofenceZone } from '../types';
+import { evaluateGeofences, getHaversineDistanceMeters } from '../utils/geofence';
 
 interface ThreatMarker {
   id: string;
@@ -20,10 +21,10 @@ interface ThreatMarker {
 }
 
 const APPLE_MAPS_PRESETS = [
-  { id: 'sf', name: 'San Francisco (Downtown & SoMa)', lat: 37.7749, lng: -122.4194 },
-  { id: 'apple_park', name: 'Cupertino (Apple Park & Tantau)', lat: 37.3349, lng: -122.0090 },
-  { id: 'london', name: 'London (Piccadilly Privacy Zone)', lat: 51.509865, lng: -0.118092 },
-  { id: 'tokyo', name: 'Tokyo (Shibuya Crossing Shield)', lat: 35.6595, lng: 139.7004 },
+  { id: 'sf', name: 'San Francisco (Financial CCTV Ring)', lat: 37.7897, lng: -122.4014 },
+  { id: 'civic', name: 'SF Civic Center Biometric Grid', lat: 37.7793, lng: -122.4192 },
+  { id: 'apple_park', name: 'Cupertino (Apple Park Prototype Perimeter)', lat: 37.3349, lng: -122.0090 },
+  { id: 'sfo', name: 'International Airport Checkpoint', lat: 37.6213, lng: -122.3790 },
 ];
 
 const DEFAULT_APPLE_THREATS: ThreatMarker[] = [
@@ -35,10 +36,14 @@ const DEFAULT_APPLE_THREATS: ThreatMarker[] = [
 
 export function AppleMapsPrivacyRadar({ 
   citizenState, 
-  addLog 
+  onChange,
+  addLog,
+  onTriggerAlert
 }: { 
   citizenState: CitizenState; 
+  onChange?: (newState: CitizenState) => void;
   addLog?: (log: any) => void; 
+  onTriggerAlert?: (title: string, body: string, type?: string) => void;
 }) {
   const [selectedPreset, setSelectedPreset] = useState(APPLE_MAPS_PRESETS[0]);
   const [threats, setThreats] = useState<ThreatMarker[]>(DEFAULT_APPLE_THREATS);
@@ -47,6 +52,53 @@ export function AppleMapsPrivacyRadar({
   const [isLookAroundBlurring, setIsLookAroundBlurring] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [airtagRotationSeconds, setAirtagRotationSeconds] = useState(15);
+
+  // Real-time Geofence Trigger Evaluator for Apple Maps Preset
+  const userPos = { lat: selectedPreset.lat, lng: selectedPreset.lng };
+  const geofenceResult = evaluateGeofences(userPos, citizenState.geofenceZones || []);
+  const activeTriggeredZone = geofenceResult.insideZone;
+
+  // Auto-switch shield mode when inside high-risk geofence zone
+  useEffect(() => {
+    if (!citizenState.geofencingEnabled || !citizenState.geofenceZones) return;
+
+    if (activeTriggeredZone) {
+      const targetLevel = activeTriggeredZone.targetPrivacyLevel || 'strict_blur';
+
+      if (citizenState.privacyLevel !== targetLevel || !citizenState.activeGeofenceTriggered) {
+        if (onChange) {
+          onChange({
+            ...citizenState,
+            privacyLevel: targetLevel,
+            activeGeofenceTriggered: true,
+            activeGeofenceZoneName: activeTriggeredZone.name
+          });
+        }
+
+        if (onTriggerAlert) {
+          onTriggerAlert(
+            `📍 GEOFENCE STRICT BLUR ACTIVATED`,
+            `Entered ${activeTriggeredZone.name}. Privacy shield automatically set to STRICT BLUR mode.`,
+            'child_blocking'
+          );
+        }
+
+        if (addLog) {
+          addLog({
+            deviceModel: `APPLE MAPKIT GEOFENCE: ${activeTriggeredZone.name}`,
+            action: 'censored',
+            shieldApplied: `${targetLevel.toUpperCase()} (AUTOMATIC GEOFENCE ESCALATION)`,
+            distance: geofenceResult.distanceMeters,
+            rotatedId: activeTriggeredZone.id
+          });
+        }
+
+        if ('vibrate' in navigator) {
+          navigator.vibrate([200, 100, 200, 100, 300]);
+        }
+      }
+    }
+  }, [selectedPreset, citizenState.geofencingEnabled, citizenState.geofenceZones, activeTriggeredZone]);
 
   // Auto-rotate AirTag BLE seed for Find My protection
   useEffect(() => {
