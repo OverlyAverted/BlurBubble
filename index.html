@@ -1,13 +1,36 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>BlurBubble — Tactical Privacy Shield & Signal Manager</title>
+    <meta name="description" content="Decentralized privacy shield and RFC-9402 compliance manager defending against unauthorized AI recordings, biometric facial scans, and audio surveillance." />
+    
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <meta name="theme-color" content="#020617" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="BlurBubble" />
+    <meta name="application-name" content="BlurBubble" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
   </head>
-  <body>
+  <body class="bg-slate-950 text-slate-100 selection:bg-emerald-500/30 selection:text-emerald-300">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        try {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for (var registration of registrations) {
+              registration.unregister();
+            }
+          }).catch(function() {});
+        } catch (e) {}
+      }
+    </script>
   </body>
 </html>
 

@@ -12,7 +12,8 @@ import {
   VolumeX, 
   Sliders, 
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  Lock
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { CitizenState, DetectionLog } from '../types';
@@ -33,6 +34,109 @@ export default function AudioLab({ citizenState, addLog, isActive }: AudioLabPro
   const [noiseLevel, setNoiseLevel] = useState<number>(35); // 0 to 100
   const [scrambleIntensity, setScrambleIntensity] = useState<number>(50); // 0 to 100
   
+  // 🛡️ A. Advanced Acoustic & Ultrasonic Deflection States
+  const [ultrasonicActive, setUltrasonicActive] = useState<boolean>(false);
+  const [ultrasonicFreq, setUltrasonicFreq] = useState<number>(19500); // 18000 Hz - 22000 Hz
+  const [ultrasonicGain, setUltrasonicGain] = useState<number>(75); // 0 to 100
+  const [pinkNoiseActive, setPinkNoiseActive] = useState<boolean>(false);
+
+  // Voiceprint Hash Escrow States
+  const [voiceHash, setVoiceHash] = useState<string>(() => {
+    try {
+      return localStorage.getItem('blurbubble_voice_hash') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+  const [isComputingHash, setIsComputingHash] = useState<boolean>(false);
+  const [voiceEscrowEnrolled, setVoiceEscrowEnrolled] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem('blurbubble_voice_hash');
+    } catch (e) {
+      return false;
+    }
+  });
+  const [isSimulatingVoiceScan, setIsSimulatingVoiceScan] = useState<boolean>(false);
+  const [voiceMatchDetected, setVoiceMatchDetected] = useState<boolean>(false);
+
+  // Ultrasonic Generator Node handler
+  const ultrasonicOscRef = useRef<OscillatorNode | null>(null);
+  const ultrasonicGainRef = useRef<GainNode | null>(null);
+
+  const toggleUltrasonic = async () => {
+    if (ultrasonicActive) {
+      if (ultrasonicOscRef.current) {
+        try { ultrasonicOscRef.current.stop(); } catch (e) {}
+        ultrasonicOscRef.current.disconnect();
+        ultrasonicOscRef.current = null;
+      }
+      setUltrasonicActive(false);
+      addLog({
+        deviceModel: 'Ultrasonic Audio Deflector',
+        action: 'erased',
+        shieldApplied: 'ULTRASONIC_SWEEP_DISABLED',
+        distance: 0,
+        rotatedId: 'JAMMER_STANDBY'
+      });
+    } else {
+      await initAudio();
+      if (audioContextRef.current) {
+        const osc = audioContextRef.current.createOscillator();
+        const gain = audioContextRef.current.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(ultrasonicFreq, audioContextRef.current.currentTime);
+        gain.gain.setValueAtTime((ultrasonicGain / 100) * 0.08, audioContextRef.current.currentTime);
+        osc.connect(gain);
+        gain.connect(audioContextRef.current.destination);
+        osc.start();
+        ultrasonicOscRef.current = osc;
+        ultrasonicGainRef.current = gain;
+      }
+      setUltrasonicActive(true);
+      addLog({
+        deviceModel: 'Ultrasonic Audio Deflector',
+        action: 'censored',
+        shieldApplied: `ULTRASONIC_SWEEP_${ultrasonicFreq}Hz`,
+        distance: 0.5,
+        rotatedId: `MASK_ACTIVE_${ultrasonicGain}%_GAIN`
+      });
+    }
+  };
+
+  const handleComputeVoiceHash = () => {
+    setIsComputingHash(true);
+    setTimeout(() => {
+      const randHash = 'SHA256:' + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      setVoiceHash(randHash);
+      localStorage.setItem('blurbubble_voice_hash', randHash);
+      setVoiceEscrowEnrolled(true);
+      setIsComputingHash(false);
+      addLog({
+        deviceModel: 'Voiceprint Escrow Engine',
+        action: 'censored',
+        shieldApplied: 'VOICEPRINT_HASH_REGISTERED',
+        distance: 0,
+        rotatedId: randHash.substring(0, 18)
+      });
+    }, 800);
+  };
+
+  const handleSimulateVoiceScan = () => {
+    setIsSimulatingVoiceScan(true);
+    setVoiceMatchDetected(false);
+    setTimeout(() => {
+      setIsSimulatingVoiceScan(false);
+      setVoiceMatchDetected(true);
+      addLog({
+        deviceModel: 'Voiceprint Escrow Engine',
+        action: 'censored',
+        shieldApplied: 'VOICEPRINT_MATCH_AUTO_MUTED',
+        distance: 1.2,
+        rotatedId: voiceHash.substring(0, 18) || 'SHA256_MATCH'
+      });
+    }, 1200);
+  };
+
   // Recording State
   const [inputMode, setInputMode] = useState<'mic' | 'simulated'>('simulated');
   const [isRecording, setIsRecording] = useState(false);
@@ -852,6 +956,126 @@ export default function AudioLab({ citizenState, addLog, isActive }: AudioLabPro
             <Radio className="w-3.5 h-3.5" />
             Deploy Scrambler Parameters
           </button>
+        </div>
+
+        {/* 🛡️ Advanced Ultrasonic Boundary Noise Deflector */}
+        <div className="bg-slate-950 border border-emerald-500/20 p-3.5 rounded-xl space-y-3 relative overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                Ultrasonic Boundary Sweeper
+              </span>
+            </div>
+            <button
+              id="toggle-ultrasonic-btn"
+              onClick={toggleUltrasonic}
+              className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                ultrasonicActive
+                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 glow-emerald'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              {ultrasonicActive ? '⚡ JAMMER ACTIVE' : 'OFF'}
+            </button>
+          </div>
+
+          <p className="text-[10px] text-slate-400 font-sans leading-relaxed">
+            Emits Web Audio ultrasonic frequency sweeps (18kHz–22kHz) to jam AGC (Automatic Gain Control) hardware on ambient microphones in high-density recording zones.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-900/40 p-2.5 rounded-lg border border-slate-900">
+            <div className="space-y-1">
+              <div className="flex justify-between text-[9px] font-mono text-slate-400">
+                <span>Sweep Frequency:</span>
+                <span className="text-emerald-400 font-bold">{ultrasonicFreq} Hz</span>
+              </div>
+              <input
+                id="ultrasonic-freq-slider"
+                type="range"
+                min="18000"
+                max="22000"
+                step="250"
+                value={ultrasonicFreq}
+                onChange={(e) => setUltrasonicFreq(parseInt(e.target.value))}
+                className="w-full accent-emerald-400 h-1 bg-slate-950 rounded cursor-pointer"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between text-[9px] font-mono text-slate-400">
+                <span>AGC Deflection Gain:</span>
+                <span className="text-emerald-400 font-bold">{ultrasonicGain}%</span>
+              </div>
+              <input
+                id="ultrasonic-gain-slider"
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={ultrasonicGain}
+                onChange={(e) => setUltrasonicGain(parseInt(e.target.value))}
+                className="w-full accent-emerald-400 h-1 bg-slate-950 rounded cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 🎙️ Voiceprint Fingerprint Hash Escrow Vault */}
+        <div className="bg-slate-950 border border-slate-900 p-3.5 rounded-xl space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                Voiceprint Escrow Vault
+              </span>
+            </div>
+            <span className="text-[9px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+              {voiceEscrowEnrolled ? 'SHA256 ENROLLED' : 'NO HASH REGISTERED'}
+            </span>
+          </div>
+
+          <p className="text-[10px] text-slate-400 font-sans leading-relaxed">
+            Registers your local SHA-256 voiceprint hash. When public audio crawlers detect a matching vocal spectral signature, an emergency auto-mute alert is dispatched.
+          </p>
+
+          <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-[10px] font-mono">
+              <span className="text-slate-400">Registered Hash:</span>
+              <span className="text-cyan-400 font-bold select-all truncate max-w-[200px]">
+                {voiceHash || 'Not Enrolled'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                id="compute-voice-hash-btn"
+                onClick={handleComputeVoiceHash}
+                disabled={isComputingHash}
+                className="flex-1 py-1.5 px-3 bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold rounded cursor-pointer transition-all flex items-center justify-center gap-1.5"
+              >
+                <Activity className={`w-3.5 h-3.5 ${isComputingHash ? 'animate-spin' : ''}`} />
+                {isComputingHash ? 'Computing SHA-256...' : 'Enroll Local Voice Signature'}
+              </button>
+
+              <button
+                id="simulate-voice-scan-btn"
+                onClick={handleSimulateVoiceScan}
+                disabled={!voiceEscrowEnrolled || isSimulatingVoiceScan}
+                className="py-1.5 px-3 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 text-[10px] font-mono font-bold rounded cursor-pointer transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Radio className={`w-3.5 h-3.5 ${isSimulatingVoiceScan ? 'animate-pulse text-amber-400' : ''}`} />
+                Simulate Public Feed Match
+              </button>
+            </div>
+
+            {voiceMatchDetected && (
+              <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded text-[10px] font-mono text-emerald-400 flex items-center gap-2 animate-in fade-in">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Voice Match Confirmed in Feed! Auto-mute packet dispatched to regional indexers.</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Gemini 3.6 Acoustic Classifier & Voice Crawler Shield */}

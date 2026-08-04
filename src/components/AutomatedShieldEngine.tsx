@@ -79,7 +79,7 @@ export const AutomatedShieldEngine: React.FC<AutomatedShieldEngineProps> = ({
           if (addLog) {
             addLog({
               deviceModel: 'RFC9402_AUTO_KEY_ENGINE',
-              action: 'rotated',
+              action: 'censored',
               shieldApplied: 'EPHEMERAL_KEY_AUTO_ROTATED',
               distance: citizenState.rangeMeters,
               rotatedId: nextCryptoID
@@ -110,7 +110,7 @@ export const AutomatedShieldEngine: React.FC<AutomatedShieldEngineProps> = ({
           if (addLog) {
             addLog({
               deviceModel: 'GEMINI_AI_THREAT_WATCHDOG',
-              action: 'blocked',
+              action: 'censored',
               shieldApplied: 'AUTOMATED_SURVEILLANCE_SWEEP_OK',
               distance: citizenState.rangeMeters,
               rotatedId: 'WATCHDOG_SWEEP_PASS'

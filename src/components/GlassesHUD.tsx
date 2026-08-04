@@ -340,6 +340,11 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
   const [sandboxShowBackgroundGrid, setSandboxShowBackgroundGrid] = useState(false); // Default toggles off
   const [glassClarityMode, setGlassClarityMode] = useState(true); // Default to true so all windows are clear/transparent by default
 
+  // 🕶️ C. Optical HUD & AI Model Enhancements States
+  const [opticalFilter, setOpticalFilter] = useState<'rgb' | 'ir_pinhole' | 'thermal' | 'lidar'>('rgb');
+  const [showDepthMesh, setShowDepthMesh] = useState<boolean>(false);
+  const [spatialNoiseInjector, setSpatialNoiseInjector] = useState<boolean>(false);
+
   // 3D Perspective Rotation Simulation States
   const [sandboxHeadYaw, setSandboxHeadYaw] = useState<number>(0);
   const [sandboxHeadPitch, setSandboxHeadPitch] = useState<number>(0);
@@ -2272,6 +2277,107 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
               onClick={handleViewportClick}
               className="relative w-full aspect-video flex items-center justify-center bg-slate-950 select-none cursor-crosshair overflow-hidden"
             >
+              {/* 🕶️ C. Optical HUD Filter & 3D Depth Obscuration Mode Controls Bar */}
+              {!hideAllOverlays && (
+                <div className="absolute bottom-4 left-4 z-40 flex flex-wrap items-center gap-1.5 bg-slate-950/90 p-1.5 rounded-xl border border-slate-800 shadow-2xl backdrop-blur-md">
+                  <span className="text-[9px] font-mono font-bold text-slate-400 px-1 uppercase tracking-wider">OPTICAL HUD:</span>
+                  
+                  {(['rgb', 'ir_pinhole', 'thermal', 'lidar'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setOpticalFilter(mode)}
+                      className={`px-2 py-1 rounded text-[9px] font-mono font-bold uppercase transition cursor-pointer ${
+                        opticalFilter === mode 
+                          ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-sm' 
+                          : 'bg-slate-900 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {mode === 'rgb' ? '📷 RGB' : mode === 'ir_pinhole' ? '🔴 IR Pinhole' : mode === 'thermal' ? '🔥 Thermal' : '⚡ LiDAR'}
+                    </button>
+                  ))}
+
+                  <div className="h-4 w-[1px] bg-slate-800 mx-1" />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDepthMesh(!showDepthMesh)}
+                    className={`px-2 py-1 rounded text-[9px] font-mono font-bold uppercase transition cursor-pointer flex items-center gap-1 ${
+                      showDepthMesh 
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-extrabold' 
+                        : 'bg-slate-900 text-slate-400 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    🌐 3D Depth Mesh
+                  </button>
+
+                  {showDepthMesh && (
+                    <button
+                      type="button"
+                      onClick={() => setSpatialNoiseInjector(!spatialNoiseInjector)}
+                      className={`px-2 py-1 rounded text-[9px] font-mono font-bold uppercase transition cursor-pointer flex items-center gap-1 ${
+                        spatialNoiseInjector 
+                          ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50 animate-pulse font-extrabold' 
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-transparent'
+                      }`}
+                    >
+                      ⚡ Spatial Noise Injector
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* IR Pinhole Detector Reflection Overlay */}
+              {opticalFilter === 'ir_pinhole' && (
+                <div className="absolute inset-0 z-30 pointer-events-none bg-emerald-950/20 mix-blend-screen overflow-hidden font-mono border-2 border-emerald-500/60">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(16,185,129,0.25)_0%,transparent_70%)]" />
+                  <div className="absolute top-4 right-4 bg-slate-950/90 border border-emerald-500/40 px-2.5 py-1 rounded text-emerald-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>IR PINHOLE LENS DETECTOR: ACTIVE</span>
+                  </div>
+
+                  {/* Target bracket 1 over detected pinhole camera lens */}
+                  <div className="absolute left-[42%] top-[28%] w-12 h-12 border-2 border-red-500 rounded-lg flex items-center justify-center animate-ping" style={{ animationDuration: '2s' }}>
+                    <span className="text-[7px] text-red-400 font-bold bg-slate-950/90 px-1 rounded -top-4 absolute">LENS_REFLECTION_940nm</span>
+                  </div>
+
+                  {/* Target bracket 2 */}
+                  <div className="absolute left-[68%] top-[35%] w-10 h-10 border border-yellow-400 rounded-full flex items-center justify-center">
+                    <span className="text-[7px] text-yellow-300 font-bold bg-slate-950/90 px-1 rounded -top-4 absolute">IR_ILLUMINATOR</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Thermal Heat Map Mode Filter */}
+              {opticalFilter === 'thermal' && (
+                <div className="absolute inset-0 z-30 pointer-events-none mix-blend-color-burn opacity-70 bg-gradient-to-r from-purple-900 via-rose-600 to-amber-400 filter contrast-200 saturate-200">
+                  <div className="absolute top-4 right-4 bg-slate-950/90 border border-amber-500/40 px-2.5 py-1 rounded text-amber-400 text-[10px] font-bold uppercase tracking-widest">
+                    🔥 THERMAL HEAT SIGNATURE PALETTE
+                  </div>
+                </div>
+              )}
+
+              {/* 3D Depth Map Spatial Mesh Obscuration Grid */}
+              {showDepthMesh && (
+                <div className="absolute inset-0 z-30 pointer-events-none font-mono">
+                  <svg className="w-full h-full opacity-60">
+                    <defs>
+                      <pattern id="depthGrid" width="30" height="30" patternUnits="userSpaceOnUse">
+                        <path d="M 30 0 L 0 0 0 30" fill="none" stroke={spatialNoiseInjector ? "#a855f7" : "#06b6d4"} strokeWidth="0.5" strokeDasharray={spatialNoiseInjector ? "2 2" : "none"} />
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#depthGrid)" />
+                  </svg>
+
+                  {spatialNoiseInjector && (
+                    <div className="absolute top-12 left-4 bg-purple-950/90 border border-purple-500/50 px-2.5 py-1 rounded text-purple-300 text-[9px] font-bold uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                      <span>SPATIAL MESH DISTORTION VECTOR: ACTIVE (JAMMING SPATIAL CAMERAS)</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* LiDAR Mode Scanner Overlay */}
               {lidarModeActive && (
                 <div className="absolute inset-0 z-20 pointer-events-none bg-emerald-950/20 mix-blend-screen overflow-hidden flex flex-col justify-between p-3 font-mono border-2 border-emerald-500/80 animate-pulse">

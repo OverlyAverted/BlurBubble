@@ -3,7 +3,7 @@ import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, useMap, useMapsLibra
 import { 
   MapPin, ShieldCheck, ShieldAlert, Camera, Radio, Search, Navigation, 
   Eye, Zap, AlertTriangle, Layers, Crosshair, CheckCircle2, Lock, Info, Sparkles, RefreshCw,
-  Plus, Trash2, Sliders, Shield, Compass, ChevronRight, Check
+  Plus, Trash2, Sliders, Shield, Compass, ChevronRight, Check, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CitizenState, DetectionLog, GeofenceZone } from '../types';
@@ -225,6 +225,57 @@ export function GoogleMapsPrivacyRadar({
   const [newZoneRadius, setNewZoneRadius] = useState(250);
   const [newZoneCategory, setNewZoneCategory] = useState<'high_surveillance' | 'government' | 'event' | 'custom' | 'corporate'>('high_surveillance');
   const [mapZoom, setMapZoom] = useState(15);
+
+  // 📍 B. Multi-Point Polygon Geofences & Dynamic RSSI Distance Calibration States
+  const [polygonVertices, setPolygonVertices] = useState<Array<{ lat: number; lng: number }>>([
+    { lat: 37.7755, lng: -122.4205 },
+    { lat: 37.7762, lng: -122.4182 },
+    { lat: 37.7745, lng: -122.4170 },
+    { lat: 37.7738, lng: -122.4192 }
+  ]);
+  const [polygonName, setPolygonName] = useState<string>('HQ Property Boundary Geofence');
+
+  // RSSI Attenuation Curve Calibration
+  const [selectedMaterial, setSelectedMaterial] = useState<'drywall' | 'glass' | 'concrete' | 'crowd'>('concrete');
+  const [pathLossExponent, setPathLossExponent] = useState<number>(3.2); // 1.8 to 4.5
+  const [calibrationDistance, setCalibrationDistance] = useState<number>(15); // meters
+
+  const materialLosses = {
+    drywall: 3,
+    glass: 8,
+    concrete: 15,
+    crowd: 12
+  };
+
+  const calculatedRSSI = Math.round(-59 - 10 * pathLossExponent * Math.log10(Math.max(1, calibrationDistance)) - materialLosses[selectedMaterial]);
+
+  const handleAddVertex = () => {
+    const offsetLat = (Math.random() - 0.5) * 0.003;
+    const offsetLng = (Math.random() - 0.5) * 0.003;
+    setPolygonVertices(prev => [...prev, { lat: userPos.lat + offsetLat, lng: userPos.lng + offsetLng }]);
+  };
+
+  const handleExportPolygonJSON = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [polygonVertices.map(v => [v.lng, v.lat])]
+      },
+      properties: {
+        name: polygonName,
+        created: new Date().toISOString(),
+        materialAttenuation: selectedMaterial,
+        pathLossExponent
+      }
+    }, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `geofence_polygon_${polygonName.replace(/\s+/g, '_')}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
 
   // Real-time Geofence Trigger Evaluator
   const geofenceResult = evaluateGeofences(userPos, citizenState.geofenceZones || []);
@@ -966,6 +1017,134 @@ export function GoogleMapsPrivacyRadar({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 📍 Multi-Point Polygon Geofencing & Dynamic RSSI Attenuation Calibration Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 bg-slate-900/40 p-4 rounded-xl border border-slate-800">
+        
+        {/* Multi-Point Polygon Drawer */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                Multi-Point Polygon Geofence
+              </span>
+            </div>
+            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+              {polygonVertices.length} VERTICES
+            </span>
+          </div>
+
+          <p className="text-[10px] text-slate-400 leading-relaxed font-sans">
+            Define custom property lines or complex building footprints with multi-vertex boundary coordinates.
+          </p>
+
+          <div className="space-y-2 bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-[10px] font-mono">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">Geofence Label:</span>
+              <input
+                type="text"
+                value={polygonName}
+                onChange={(e) => setPolygonName(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-slate-200 text-[10px] focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto pt-1">
+              {polygonVertices.map((v, idx) => (
+                <span key={idx} className="bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded text-[9px] text-slate-300">
+                  P{idx + 1}: {v.lat.toFixed(4)}, {v.lng.toFixed(4)}
+                </span>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-900">
+              <button
+                type="button"
+                onClick={handleAddVertex}
+                className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded cursor-pointer transition flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Add GPS Vertex
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleExportPolygonJSON}
+                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[10px] font-bold rounded cursor-pointer transition flex items-center gap-1"
+              >
+                <Download className="w-3 h-3 text-cyan-400" /> Export JSON
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic RSSI Distance & Material Attenuation Calibration */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                Dynamic RSSI Attenuation Calibration
+              </span>
+            </div>
+            <span className="text-[9px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/30 font-bold">
+              {calculatedRSSI} dBm
+            </span>
+          </div>
+
+          <p className="text-[10px] text-slate-400 leading-relaxed font-sans">
+            Simulates signal absorption through structural walls, glass, and dense crowds to dynamically calibrate BLE RSSI distance curves.
+          </p>
+
+          <div className="space-y-2 bg-slate-950 p-2.5 rounded-lg border border-slate-850 text-[10px] font-mono">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-slate-400 block mb-1">Obstacle Material:</label>
+                <select
+                  value={selectedMaterial}
+                  onChange={(e: any) => setSelectedMaterial(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 text-[10px]"
+                >
+                  <option value="drywall">Drywall Wall (-3 dB)</option>
+                  <option value="glass">Reinforced Glass (-8 dB)</option>
+                  <option value="concrete">Concrete Wall (-15 dB)</option>
+                  <option value="crowd">Dense Crowd (-12 dB)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Distance Calibration ({calibrationDistance}m):</label>
+                <input
+                  type="range"
+                  min="1"
+                  max="50"
+                  value={calibrationDistance}
+                  onChange={(e) => setCalibrationDistance(parseInt(e.target.value))}
+                  className="w-full accent-cyan-400 cursor-pointer h-1 bg-slate-900 rounded"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1 pt-1">
+              <div className="flex justify-between text-slate-400">
+                <span>Path Loss Exponent (N):</span>
+                <span className="text-cyan-400 font-bold">{pathLossExponent}</span>
+              </div>
+              <input
+                type="range"
+                min="1.8"
+                max="4.5"
+                step="0.1"
+                value={pathLossExponent}
+                onChange={(e) => setPathLossExponent(parseFloat(e.target.value))}
+                className="w-full accent-cyan-400 cursor-pointer h-1 bg-slate-900 rounded"
+              />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl space-y-1">
           <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Active Geospatial Zone</span>

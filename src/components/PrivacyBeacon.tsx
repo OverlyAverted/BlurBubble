@@ -429,7 +429,11 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
 
   // Swipe vs Continuous Scroll Widget Layout states
   const [widgetViewMode, setWidgetViewMode] = useState<'scroll' | 'swipe'>(() => {
-    return (localStorage.getItem('blurBubble_widgetViewMode') as 'scroll' | 'swipe') || 'swipe';
+    try {
+      return (localStorage.getItem('blurBubble_widgetViewMode') as 'scroll' | 'swipe') || 'swipe';
+    } catch (e) {
+      return 'swipe';
+    }
   });
   const [activeWidgetIndex, setActiveWidgetIndex] = useState(0);
 
@@ -882,7 +886,11 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
   });
   
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    try {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    } catch (e) {
+      try { window.scrollTo(0, 0); } catch (e2) {}
+    }
     const tabToCategoryMap: Record<string, 'defense' | 'rules' | 'hardware' | 'compliance'> = {
       overview: 'defense',
       settings: 'defense',
@@ -989,7 +997,18 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
   } | null>(null);
 
   // --- ALLOW WHITE-LIST (PLATFORMS & ACCOUNTS) ---
-  const [allowedList, setAllowedList] = useState([
+  const [allowedList, setAllowedList] = useState<Array<{
+    id: string;
+    name: string;
+    platform?: string;
+    identifier: string;
+    active: boolean;
+    timeConstraintEnabled?: boolean;
+    timeStart?: string;
+    timeEnd?: string;
+    identityConstraintEnabled?: boolean;
+    allowedIdentityId?: string;
+  }>>([
     { id: 'all-1', name: "Dad's YouTube Channel", platform: 'youtube', identifier: '@family_vlogs', active: true },
     { id: 'all-2', name: "Mom's Phone Camera", platform: 'device', identifier: 'UUID-F81D-41B2', active: true }
   ]);
@@ -4085,7 +4104,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                                         title="Directly rename this connected tag"
                                       />
                                       {entity.batteryPercent < 10 && (
-                                        <BatteryWarning className="w-3.5 h-3.5 text-rose-500 animate-pulse shrink-0" title="Critical Low Battery Warning (<10%)" />
+                                        <span title="Critical Low Battery Warning (<10%)"><BatteryWarning className="w-3.5 h-3.5 text-rose-500 animate-pulse shrink-0" /></span>
                                       )}
                                     </div>
                                     <div className="flex flex-wrap items-center gap-1.5">
@@ -8736,14 +8755,14 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
         )}
 
           {/* Tab: Google Maps Privacy Radar */}
-          {activeTab === 'google_maps_radar' && (
+          {(activeTab as string) === 'google_maps_radar' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               <GoogleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
             </motion.div>
           )}
 
           {/* Tab: Apple Maps Privacy Shield */}
-          {activeTab === 'apple_maps_radar' && (
+          {(activeTab as string) === 'apple_maps_radar' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               <AppleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
             </motion.div>
@@ -12822,7 +12841,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                     </span>
                     <button
                       type="button"
-                      onClick={() => setActiveTab(state.preferredMapProvider === 'apple' ? 'apple_maps_radar' : 'google_maps_radar')}
+                      onClick={() => setActiveTab('perimeter')}
                       className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 underline flex items-center gap-1 cursor-pointer"
                     >
                       Full View ↗

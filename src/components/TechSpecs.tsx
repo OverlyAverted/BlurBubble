@@ -74,7 +74,11 @@ export default function TechSpecs({
   const setSpecsTab = externalOnTabChange || setInternalSpecsTab;
   
   React.useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    try {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    } catch (e) {
+      try { window.scrollTo(0, 0); } catch (e2) {}
+    }
   }, [specsTab]);
 
   // RF Spectrum Analyzer States

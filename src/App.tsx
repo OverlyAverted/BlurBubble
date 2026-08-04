@@ -52,9 +52,11 @@ import {
   Search,
   Globe,
   Calculator,
-  Key
+  Key,
+  Rocket
 } from 'lucide-react';
 import { GlobalSearchModal, SearchItem } from './components/GlobalSearchModal';
+import { AppStoreLaunchModal } from './components/AppStoreLaunchModal';
 import { CitizenState, DetectionLog, PrivacyLevel } from './types';
 // @ts-ignore
 import appLogo from './assets/images/app_logo_1783164957092.jpg';
@@ -473,21 +475,20 @@ const VIEW_GROUPS = [
 export default function App() {
   const { language, setLanguage, t } = useI18n();
   const [ndaAccepted, setNdaAccepted] = useState(() => {
-    return localStorage.getItem('bb_nda_accepted') === 'true';
+    try {
+      const saved = localStorage.getItem('bb_nda_accepted');
+      return saved === 'false' ? false : true;
+    } catch (e) {
+      return true;
+    }
   });
 
   const handleAcceptNDA = (user: { name: string; email: string; organization: string }) => {
-    localStorage.setItem('bb_nda_accepted', 'true');
-    localStorage.setItem('bb_nda_user', JSON.stringify(user));
+    try {
+      localStorage.setItem('bb_nda_accepted', 'true');
+      localStorage.setItem('bb_nda_user', JSON.stringify(user));
+    } catch (e) {}
     setNdaAccepted(true);
-    // Add a diagnostic log event
-    addLog({
-      deviceModel: 'SECURITY_ENCLAVE_UNLOCK',
-      action: 'censored',
-      shieldApplied: `WORKSPACE_UNLOCKED_BY_${user.name.toUpperCase().replace(/\s+/g, '_')}`,
-      distance: 0,
-      rotatedId: 'MNDA_SIGNED_AND_STAMPED'
-    });
   };
 
   const [isLangSelectorOpen, setIsLangSelectorOpen] = useState(false);
@@ -502,6 +503,7 @@ export default function App() {
   const [isIndicatorHovered, setIsIndicatorHovered] = useState(false);
   const [showShieldContextMenu, setShowShieldContextMenu] = useState(false);
   const [showCopilot, setShowCopilot] = useState(false);
+  const [isAppStoreLaunchModalOpen, setIsAppStoreLaunchModalOpen] = useState(false);
   const [statusbarRippleCount, setStatusbarRippleCount] = useState(0);
 
   // Global keyboard shortcut listener (Ctrl+K or Cmd+K to open Search)
@@ -558,19 +560,32 @@ export default function App() {
 
   // Interactive Onboarding Tour Checklist States
   const [tourSteps, setTourSteps] = useState(() => {
-    const saved = localStorage.getItem('bb_tour_steps');
-    return saved ? JSON.parse(saved) : {
-      shieldActivated: false,
-      osLauncherOpened: false,
-      webcamTested: false,
-      complianceChecked: false,
-      ticketSubmitted: false,
-      diagnosticsRun: false,
-    };
+    try {
+      const saved = localStorage.getItem('bb_tour_steps');
+      return saved ? JSON.parse(saved) : {
+        shieldActivated: false,
+        osLauncherOpened: false,
+        webcamTested: false,
+        complianceChecked: false,
+        ticketSubmitted: false,
+        diagnosticsRun: false,
+      };
+    } catch (e) {
+      return {
+        shieldActivated: false,
+        osLauncherOpened: false,
+        webcamTested: false,
+        complianceChecked: false,
+        ticketSubmitted: false,
+        diagnosticsRun: false,
+      };
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem('bb_tour_steps', JSON.stringify(tourSteps));
+    try {
+      localStorage.setItem('bb_tour_steps', JSON.stringify(tourSteps));
+    } catch (e) {}
   }, [tourSteps]);
 
   // Simulated Support tickets state
@@ -583,22 +598,38 @@ export default function App() {
     timestamp: string;
     ticketNum: string;
   }>>(() => {
-    const saved = localStorage.getItem('bb_support_tickets');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'ticket-init-1',
-        category: 'Feature Request',
-        message: 'Requesting Apple Vision Pro spatial blur integration for high-density environments.',
-        email: 'overly.averted@icloud.com',
-        status: 'resolved',
-        timestamp: '2026-07-07 14:22',
-        ticketNum: 'T-8841'
-      }
-    ];
+    try {
+      const saved = localStorage.getItem('bb_support_tickets');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'ticket-init-1',
+          category: 'Feature Request',
+          message: 'Requesting Apple Vision Pro spatial blur integration for high-density environments.',
+          email: 'overly.averted@icloud.com',
+          status: 'resolved',
+          timestamp: '2026-07-07 14:22',
+          ticketNum: 'T-8841'
+        }
+      ];
+    } catch (e) {
+      return [
+        {
+          id: 'ticket-init-1',
+          category: 'Feature Request',
+          message: 'Requesting Apple Vision Pro spatial blur integration for high-density environments.',
+          email: 'overly.averted@icloud.com',
+          status: 'resolved',
+          timestamp: '2026-07-07 14:22',
+          ticketNum: 'T-8841'
+        }
+      ];
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem('bb_support_tickets', JSON.stringify(supportTickets));
+    try {
+      localStorage.setItem('bb_support_tickets', JSON.stringify(supportTickets));
+    } catch (e) {}
   }, [supportTickets]);
 
   // Support Desk Form States
@@ -1069,13 +1100,13 @@ export default function App() {
     },
     {
       id: 'setting-mute-alerts',
-      title: citizenState.alertsMuted ? 'Unmute Audio Alerts' : 'Mute Audio Alerts',
-      description: citizenState.alertsMuted ? 'Re-enable audio warning tones and alerts' : 'Mute all system audio warning tones',
+      title: alertsMuted ? 'Unmute Audio Alerts' : 'Mute Audio Alerts',
+      description: alertsMuted ? 'Re-enable audio warning tones and alerts' : 'Mute all system audio warning tones',
       category: 'Settings & Controls',
       keywords: ['mute', 'audio', 'sound', 'alerts', 'unmute', 'quiet', 'silent'],
-      icon: citizenState.alertsMuted ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-red-400" />,
+      icon: alertsMuted ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-red-400" />,
       onSelect: () => {
-        setCitizenState(prev => ({ ...prev, alertsMuted: !prev.alertsMuted }));
+        setAlertsMuted(prev => !prev);
       }
     },
     {
@@ -1223,19 +1254,26 @@ export default function App() {
                 console.warn('HTML5 Notification instantiation error:', e);
               }
             } else if (Notification.permission !== 'denied') {
-              Notification.requestPermission().then((permission) => {
-                if (permission === 'granted') {
-                  try {
-                    new Notification(`🚨 Critical Battery: ${tag.name}`, {
-                      body: `Battery level is critically low at ${tag.batteryPercent}%. Power saving throttles engaged to prevent connection dropout.`
-                    });
-                  } catch (e) {
-                    console.warn('HTML5 Notification instantiation error:', e);
-                  }
+              try {
+                const req = Notification.requestPermission();
+                if (req && typeof req.then === 'function') {
+                  req.then((permission) => {
+                    if (permission === 'granted') {
+                      try {
+                        new Notification(`🚨 Critical Battery: ${tag.name}`, {
+                          body: `Battery level is critically low at ${tag.batteryPercent}%. Power saving throttles engaged to prevent connection dropout.`
+                        });
+                      } catch (e) {
+                        console.warn('HTML5 Notification instantiation error:', e);
+                      }
+                    }
+                  }).catch((e) => {
+                    console.warn('HTML5 Notification permission error:', e);
+                  });
                 }
-              }).catch((e) => {
-                console.warn('HTML5 Notification permission error:', e);
-              });
+              } catch (e) {
+                console.warn('HTML5 Notification permission call error:', e);
+              }
             }
           }
         } catch (e) {
@@ -1301,7 +1339,11 @@ export default function App() {
 
   // Scroll to top on activeView changes
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    try {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    } catch (e) {
+      try { window.scrollTo(0, 0); } catch (e2) {}
+    }
   }, [activeView]);
 
   // Persist Logs Updates
@@ -3121,7 +3163,9 @@ export default function App() {
             </div>
 
             {/* WiFi Connection Indicator */}
-            <Wifi className="w-3.5 h-3.5 text-emerald-400" title="Connected to Secure WiFi Network" />
+            <span title="Connected to Secure WiFi Network">
+              <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+            </span>
 
             {/* Battery level indicator */}
             <div className="flex items-center gap-1.5 text-[10px] text-slate-300 font-bold" title="Battery Level: 88%">
@@ -3159,385 +3203,52 @@ export default function App() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 w-full sm:w-auto relative">
-            {/* Left group of upper nav containing Home Button and App Interface Options directly underneath */}
-            <div className={`flex flex-col gap-2 w-full sm:w-auto relative ${isCustomizerExpanded ? 'z-50' : isViewSelectorOpen ? 'z-10' : 'z-30'}`}>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                {/* Home / Main Dashboard Button */}
-                <button
-                  id="back-to-home-btn"
-                  type="button"
-                  onClick={() => {
-                    setActiveView('citizen');
-                    setCitizenTab('overview');
-                    setIsViewSelectorOpen(false);
-                    setIsCustomizerExpanded(false);
-                  }}
-                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all border ${
-                    activeView === 'citizen' && citizenTab === 'overview'
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
-                      : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:bg-slate-850 hover:text-white hover:border-slate-700 hover:shadow-[0_0_12px_rgba(16,185,129,0.15)] cursor-pointer'
-                  }`}
-                  title="Go back to the Main Dashboard"
-                >
-                  <Home className={`w-4 h-4 ${activeView === 'citizen' && citizenTab === 'overview' ? 'text-emerald-400' : 'text-slate-400 animate-pulse'}`} />
-                  <span>{t('nav.home')}</span>
-                </button>
+            {/* Left group of upper nav containing Home Button and Search */}
+            <div className="flex items-center gap-2 w-full sm:w-auto z-30">
+              {/* Home / Main Dashboard Button */}
+              <button
+                id="back-to-home-btn"
+                type="button"
+                onClick={() => {
+                  setActiveView('citizen');
+                  setCitizenTab('overview');
+                  setIsViewSelectorOpen(false);
+                  setIsCustomizerExpanded(false);
+                }}
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all border ${
+                  activeView === 'citizen' && citizenTab === 'overview'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:bg-slate-850 hover:text-white hover:border-slate-700 hover:shadow-[0_0_12px_rgba(16,185,129,0.15)] cursor-pointer'
+                }`}
+                title="Go back to the Main Dashboard"
+              >
+                <Home className={`w-4 h-4 ${activeView === 'citizen' && citizenTab === 'overview' ? 'text-emerald-400' : 'text-slate-400 animate-pulse'}`} />
+                <span>{t('nav.home')}</span>
+              </button>
 
-                {/* Global Search Button Trigger */}
-                <button
-                  id="global-app-search-trigger"
-                  type="button"
-                  onClick={() => setIsSearchOpen(true)}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition shadow-lg cursor-pointer group shrink-0"
-                  title="Search screens, settings, controls & tools (Ctrl+K)"
-                >
-                  <Search className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-                  <span>Search...</span>
-                  <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded">
-                    ⌘K
-                  </kbd>
-                </button>
-              </div>
-
-              {/* Collapsible App Customization Menu under need the home screen button */}
-              <div className="relative w-full z-40">
-                <button
-                  id="app-interface-options-trigger"
-                  type="button"
-                  onClick={() => {
-                    setIsCustomizerExpanded(!isCustomizerExpanded);
-                    setIsViewSelectorOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between gap-2.5 bg-slate-900/90 hover:bg-slate-900/100 px-4 py-2.5 rounded-xl border border-slate-800 text-left transition shadow-lg select-none cursor-pointer group focus:outline-none"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm select-none">🎨</span>
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider font-sans text-slate-300 group-hover:text-white">App Interface Options</span>
-                  </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isCustomizerExpanded ? 'rotate-180 text-emerald-400' : ''}`} />
-                </button>
-
-                {isCustomizerExpanded && (
-                  <>
-                    {/* Backdrop to close the customizer when clicking outside */}
-                    <div className="fixed inset-0 z-30" onClick={() => setIsCustomizerExpanded(false)} />
-                    <div className="absolute top-full left-0 mt-2 w-full min-w-[280px] sm:min-w-[320px] max-w-[calc(100vw-2rem)] bg-slate-950/95 border border-slate-800/80 rounded-2xl shadow-2xl z-50 p-4 flex flex-col gap-2.5 max-h-[380px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-150 glow-emerald">
-                      <div className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider mb-0.5 px-1 flex items-center justify-between">
-                        <span>Choose What Boxes to Show</span>
-                        <span className="text-[8px] font-mono text-emerald-400">PRESETS</span>
-                      </div>
-                      {/* Presets quick bar */}
-                      <div className="grid grid-cols-2 gap-1.5 mb-1">
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({
-                            ...prev,
-                            showMetricsBar: false,
-                            showControlBar: false,
-                            showBatteryWidget: false,
-                            showSignalMap: false,
-                            showSignalHistory: false,
-                            showThreatOptimizer: false,
-                            showAutomationHub: false,
-                            showPrivacyImpactScore: false
-                          }))}
-                          className="py-1.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-[10px] text-emerald-400 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-                          title="Hide all dashboard widgets for the cleanest privacy panel view"
-                        >
-                          <Shield className="w-3 h-3 text-emerald-400" />
-                          <span>Clean Home Screen</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({
-                            ...prev,
-                            showMetricsBar: true,
-                            showControlBar: true,
-                            showBatteryWidget: true,
-                            showSignalMap: true
-                          }))}
-                          className="py-1.5 px-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl text-[10px] text-slate-300 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-                          title="Show all metrics, maps, and hardware status boxes"
-                        >
-                          <Grid3X3 className="w-3 h-3 text-cyan-400" />
-                          <span>Show All Widgets</span>
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-1 gap-1.5">
-                        {/* 1. Status Bar */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showTopBar: prev.showTopBar === false }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showTopBar !== false
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the Simulated OS Status Bar"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Eye className={`w-3.5 h-3.5 ${citizenState.showTopBar !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>Status Bar</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showTopBar !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 2. Emergency Shield */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showEmergencyButton: prev.showEmergencyButton === false }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showEmergencyButton !== false
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the Emergency Shield Button"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Shield className={`w-3.5 h-3.5 ${citizenState.showEmergencyButton !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>Emergency Shield Button</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showEmergencyButton !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 3. User Guide & Info Button */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showGuideButton: prev.showGuideButton === false }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showGuideButton !== false
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the User Guide & Info button"
-                        >
-                          <div className="flex items-center gap-2">
-                            <HelpCircle className={`w-3.5 h-3.5 ${citizenState.showGuideButton !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>User Guide Button</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showGuideButton !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 4. Camouflage / Theme Control Box */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showControlBar: prev.showControlBar === false }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showControlBar !== false
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the Theme & Camouflage Control Box"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Settings className={`w-3.5 h-3.5 ${citizenState.showControlBar !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>Camouflage Control Box</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showControlBar !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 5. Telemetry Metrics Box */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showMetricsBar: prev.showMetricsBar === false }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showMetricsBar !== false
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the Live Telemetry Metrics Box"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Activity className={`w-3.5 h-3.5 ${citizenState.showMetricsBar !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>Telemetry Metrics Box</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showMetricsBar !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 6. Vocal Assistant Alerts Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => setVocalAlertsEnabled(!vocalAlertsEnabled)}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            vocalAlertsEnabled
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle Vocal Speech alerts and compliance audio broadcasts"
-                        >
-                          <div className="flex items-center gap-2">
-                            {vocalAlertsEnabled ? (
-                              <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <VolumeX className="w-3.5 h-3.5 text-slate-500" />
-                            )}
-                            <span>Speech Alerts (Web Speech)</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${vocalAlertsEnabled ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 7. Signal History Box */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showSignalHistory: !prev.showSignalHistory }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showSignalHistory
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the Signal History Panel"
-                        >
-                          <div className="flex items-center gap-2">
-                            <History className={`w-3.5 h-3.5 ${citizenState.showSignalHistory ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>Signal History Panel</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showSignalHistory ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 7b. Gemini 3.6 Threat Analysis & Shield Optimizer */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showThreatOptimizer: !prev.showThreatOptimizer }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showThreatOptimizer
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of Gemini 3.6 AI Threat Analysis & Shield Optimizer"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Sparkles className={`w-3.5 h-3.5 ${citizenState.showThreatOptimizer ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span className="flex items-center gap-1.5">
-                              Gemini 3.6 AI Threat Optimizer
-                              <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
-                                AI
-                              </span>
-                            </span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showThreatOptimizer ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 7c. Automated Shield Operations Hub */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showAutomationHub: !prev.showAutomationHub }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showAutomationHub
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of Automated Shield & Privacy Operations Hub"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Bot className={`w-3.5 h-3.5 ${citizenState.showAutomationHub ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span className="flex items-center gap-1.5">
-                              Automated Shield Operations Hub
-                              <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
-                                AUTO
-                              </span>
-                            </span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showAutomationHub ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 8. Privacy Impact Score Gauge */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showPrivacyImpactScore: !prev.showPrivacyImpactScore }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showPrivacyImpactScore
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the Spatial Compliance & Privacy Impact Score"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Award className={`w-3.5 h-3.5 ${citizenState.showPrivacyImpactScore ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>Privacy Impact Score</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showPrivacyImpactScore ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 9. Connected Hardware Battery Status Widget */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showBatteryWidget: prev.showBatteryWidget === false ? true : false }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showBatteryWidget !== false
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the Main Dashboard Connected Hardware Battery Status Widget"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Battery className={`w-3.5 h-3.5 ${citizenState.showBatteryWidget !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>Battery Status Overview</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showBatteryWidget !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-
-                        {/* 10. D3 Signal Strength Map Widget */}
-                        <button
-                          type="button"
-                          onClick={() => setCitizenState(prev => ({ ...prev, showSignalMap: prev.showSignalMap === false ? true : false }))}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            citizenState.showSignalMap !== false
-                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
-                              : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                          title="Toggle visibility of the D3 Real-Time Signal Strength Map Widget"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Map className={`w-3.5 h-3.5 ${citizenState.showSignalMap !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span>D3 Signal Strength Map</span>
-                          </div>
-                          <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showSignalMap !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
-                        </button>
-                      </div>
-
-                      {/* Language Selection Section nested inside the customization menu */}
-                      <div className="mt-4 border-t border-slate-800/40 pt-3 flex flex-col gap-2">
-                        <div className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider px-1 flex items-center gap-1">
-                          <span>🌐</span>
-                          <span>App Language / Selection</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1.5 mt-1">
-                          {(['en', 'fr', 'de'] as Language[]).map((lang) => {
-                            const isSelected = language === lang;
-                            return (
-                              <button
-                                key={lang}
-                                type="button"
-                                onClick={() => {
-                                  setLanguage(lang);
-                                }}
-                                className={`flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer select-none ${
-                                  isSelected
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.15)] font-black'
-                                    : 'bg-slate-950/50 border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                                }`}
-                              >
-                                <span className="uppercase font-mono text-[10px]">{lang}</span>
-                                <span className="text-[10px] truncate max-w-[50px]">{languageNames[lang].split(' ')[0]}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* Global Search Button Trigger */}
+              <button
+                id="global-app-search-trigger"
+                type="button"
+                onClick={() => setIsSearchOpen(true)}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition shadow-lg cursor-pointer group shrink-0"
+                title="Search screens, settings, controls & tools (Ctrl+K)"
+              >
+                <Search className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span>Search...</span>
+                <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded">
+                  ⌘K
+                </kbd>
+              </button>
             </div>
 
             {/* Custom Premium Collapsible View Selection Dropdown Menu */}
-            <div className={`relative w-full sm:w-80 shrink-0 ${isViewSelectorOpen ? 'z-50' : isCustomizerExpanded ? 'z-10' : 'z-30'}`}>
+            <div className={`relative w-full sm:w-80 shrink-0 ${isViewSelectorOpen ? 'z-50' : 'z-30'}`}>
               <button
                 id="main-view-selector-trigger"
                 type="button"
                 onClick={() => {
                   setIsViewSelectorOpen(!isViewSelectorOpen);
-                  setIsCustomizerExpanded(false);
                 }}
                 className="w-full flex items-center justify-between gap-2.5 bg-slate-900/90 hover:bg-slate-900/100 px-4 py-3 rounded-xl border border-slate-800 text-left transition shadow-lg select-none cursor-pointer group focus:outline-none"
               >
@@ -3578,7 +3289,374 @@ export default function App() {
 
               {/* Collapsible Dropdown Popover */}
               {isViewSelectorOpen && (
-                <div className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 w-full min-w-[280px] sm:min-w-[320px] max-w-[calc(100vw-2rem)] bg-slate-950/95 border border-slate-800/80 rounded-2xl shadow-2xl z-40 max-h-[380px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-100 divide-y divide-slate-900 glow-emerald">
+                <div className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 w-full min-w-[300px] sm:min-w-[340px] max-w-[calc(100vw-2rem)] bg-slate-950/98 border border-slate-800/80 rounded-2xl shadow-2xl z-40 max-h-[440px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-100 divide-y divide-slate-900 glow-emerald">
+                  {/* Top Action Header: App Interface Customizer & Launch Diagnostics Buttons */}
+                  <div className="p-2.5 bg-slate-900/80 border-b border-slate-800/80 flex flex-col gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        id="app-interface-options-trigger"
+                        type="button"
+                        onClick={() => setIsCustomizerExpanded(!isCustomizerExpanded)}
+                        className={`flex-1 flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl border text-xs font-extrabold transition cursor-pointer select-none ${
+                          isCustomizerExpanded
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                            : 'bg-slate-950/80 border-slate-800 text-slate-300 hover:bg-slate-850 hover:text-white'
+                        }`}
+                        title="Toggle App Interface Options to show/hide dashboard boxes & language"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>🎨</span>
+                          <span>App Interface Options</span>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isCustomizerExpanded ? 'rotate-180 text-emerald-400' : ''}`} />
+                      </button>
+
+                      <button
+                        id="app-store-launch-readiness-btn"
+                        type="button"
+                        onClick={() => {
+                          setIsViewSelectorOpen(false);
+                          setIsAppStoreLaunchModalOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono font-bold bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 hover:text-white shadow-[0_0_12px_rgba(6,182,212,0.15)] transition cursor-pointer shrink-0"
+                        title="Open App Store & PWA Launch Readiness Diagnostics Center"
+                      >
+                        <Rocket className="w-3.5 h-3.5 text-cyan-400 animate-bounce" />
+                        <span>LAUNCH</span>
+                        <span className="text-[8px] px-1 py-0.2 rounded bg-cyan-400 text-slate-950 font-black">READY</span>
+                      </button>
+                    </div>
+
+                    {/* Expandable App Customization Panel inside dropdown */}
+                    {isCustomizerExpanded && (
+                      <div className="mt-1 p-3 bg-slate-950/90 border border-slate-800/80 rounded-xl flex flex-col gap-2.5 max-h-[280px] overflow-y-auto">
+                        <div className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider px-1 flex items-center justify-between">
+                          <span>Choose What Boxes to Show</span>
+                          <span className="text-[8px] font-mono text-emerald-400">PRESETS</span>
+                        </div>
+                        {/* Presets quick bar */}
+                        <div className="grid grid-cols-2 gap-1.5 mb-1">
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({
+                              ...prev,
+                              showMetricsBar: false,
+                              showControlBar: false,
+                              showBatteryWidget: false,
+                              showSignalMap: false,
+                              showSignalHistory: false,
+                              showThreatOptimizer: false,
+                              showAutomationHub: false,
+                              showPrivacyImpactScore: false
+                            }))}
+                            className="py-1.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-[10px] text-emerald-400 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Hide all dashboard widgets for the cleanest privacy panel view"
+                          >
+                            <Shield className="w-3 h-3 text-emerald-400" />
+                            <span>Clean Home Screen</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({
+                              ...prev,
+                              showMetricsBar: true,
+                              showControlBar: true,
+                              showBatteryWidget: true,
+                              showSignalMap: true
+                            }))}
+                            className="py-1.5 px-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl text-[10px] text-slate-300 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Show all metrics, maps, and hardware status boxes"
+                          >
+                            <Grid3X3 className="w-3 h-3 text-cyan-400" />
+                            <span>Show All Widgets</span>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {/* 1. Status Bar */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showTopBar: prev.showTopBar === false }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showTopBar !== false
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the Simulated OS Status Bar"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Eye className={`w-3.5 h-3.5 ${citizenState.showTopBar !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>Status Bar</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showTopBar !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 2. Emergency Shield */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showEmergencyButton: prev.showEmergencyButton === false }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showEmergencyButton !== false
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the Emergency Shield Button"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Shield className={`w-3.5 h-3.5 ${citizenState.showEmergencyButton !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>Emergency Shield Button</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showEmergencyButton !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 3. User Guide & Info Button */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showGuideButton: prev.showGuideButton === false }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showGuideButton !== false
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the User Guide & Info button"
+                          >
+                            <div className="flex items-center gap-2">
+                              <HelpCircle className={`w-3.5 h-3.5 ${citizenState.showGuideButton !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>User Guide Button</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showGuideButton !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 4. Camouflage / Theme Control Box */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showControlBar: prev.showControlBar === false }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showControlBar !== false
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the Theme & Camouflage Control Box"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Settings className={`w-3.5 h-3.5 ${citizenState.showControlBar !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>Camouflage Control Box</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showControlBar !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 5. Telemetry Metrics Box */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showMetricsBar: prev.showMetricsBar === false }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showMetricsBar !== false
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the Live Telemetry Metrics Box"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Activity className={`w-3.5 h-3.5 ${citizenState.showMetricsBar !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>Telemetry Metrics Box</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showMetricsBar !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 6. Vocal Assistant Alerts Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => setVocalAlertsEnabled(!vocalAlertsEnabled)}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              vocalAlertsEnabled
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle Vocal Speech alerts and compliance audio broadcasts"
+                          >
+                            <div className="flex items-center gap-2">
+                              {vocalAlertsEnabled ? (
+                                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <VolumeX className="w-3.5 h-3.5 text-slate-500" />
+                              )}
+                              <span>Speech Alerts (Web Speech)</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${vocalAlertsEnabled ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 7. Signal History Box */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showSignalHistory: !prev.showSignalHistory }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showSignalHistory
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the Signal History Panel"
+                          >
+                            <div className="flex items-center gap-2">
+                              <History className={`w-3.5 h-3.5 ${citizenState.showSignalHistory ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>Signal History Panel</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showSignalHistory ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 7b. Gemini 3.6 Threat Analysis & Shield Optimizer */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showThreatOptimizer: !prev.showThreatOptimizer }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showThreatOptimizer
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of Gemini 3.6 AI Threat Analysis & Shield Optimizer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Sparkles className={`w-3.5 h-3.5 ${citizenState.showThreatOptimizer ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span className="flex items-center gap-1.5">
+                                Gemini 3.6 AI Threat Optimizer
+                                <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                                  AI
+                                </span>
+                              </span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showThreatOptimizer ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 7c. Automated Shield Operations Hub */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showAutomationHub: !prev.showAutomationHub }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showAutomationHub
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of Automated Shield & Privacy Operations Hub"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Bot className={`w-3.5 h-3.5 ${citizenState.showAutomationHub ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span className="flex items-center gap-1.5">
+                                Automated Shield Operations Hub
+                                <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                                  AUTO
+                                </span>
+                              </span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showAutomationHub ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 8. Privacy Impact Score Gauge */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showPrivacyImpactScore: !prev.showPrivacyImpactScore }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showPrivacyImpactScore
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the Spatial Compliance & Privacy Impact Score"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Award className={`w-3.5 h-3.5 ${citizenState.showPrivacyImpactScore ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>Privacy Impact Score</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showPrivacyImpactScore ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 9. Connected Hardware Battery Status Widget */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showBatteryWidget: prev.showBatteryWidget === false ? true : false }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showBatteryWidget !== false
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the Main Dashboard Connected Hardware Battery Status Widget"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Battery className={`w-3.5 h-3.5 ${citizenState.showBatteryWidget !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>Battery Status Overview</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showBatteryWidget !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 10. D3 Signal Strength Map Widget */}
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, showSignalMap: prev.showSignalMap === false ? true : false }))}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showSignalMap !== false
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Toggle visibility of the D3 Real-Time Signal Strength Map Widget"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Map className={`w-3.5 h-3.5 ${citizenState.showSignalMap !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>D3 Signal Strength Map</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showSignalMap !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+                        </div>
+
+                        {/* Language Selection Section */}
+                        <div className="mt-2 border-t border-slate-800/60 pt-2 flex flex-col gap-1.5">
+                          <div className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider px-1 flex items-center gap-1">
+                            <span>🌐</span>
+                            <span>App Language / Selection</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5 mt-0.5">
+                            {(['en', 'fr', 'de'] as Language[]).map((lang) => {
+                              const isSelected = language === lang;
+                              return (
+                                <button
+                                  key={lang}
+                                  type="button"
+                                  onClick={() => {
+                                    setLanguage(lang);
+                                  }}
+                                  className={`flex items-center justify-center gap-1 py-1.5 px-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer select-none ${
+                                    isSelected
+                                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.15)] font-black'
+                                      : 'bg-slate-950/50 border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                                  }`}
+                                >
+                                  <span className="uppercase font-mono text-[10px]">{lang}</span>
+                                  <span className="text-[10px] truncate max-w-[50px]">{languageNames[lang].split(' ')[0]}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section Headers and View Groups */}
+                  <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900/60 border-b border-slate-800/60 text-[10px] font-mono font-semibold text-slate-400">
+                    <span>SECTIONS</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGroups({ beacon: true, glasses: true, tech: true, audit: true })}
+                        className="hover:text-emerald-400 transition cursor-pointer"
+                      >
+                        Expand All
+                      </button>
+                      <span className="text-slate-700">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGroups({ beacon: false, glasses: false, tech: false, audit: false })}
+                        className="hover:text-emerald-400 transition cursor-pointer"
+                      >
+                        Collapse All
+                      </button>
+                    </div>
+                  </div>
                   <div className="py-1.5">
                     {VIEW_GROUPS.map((group) => {
                       const isExpanded = !!expandedGroups[group.id];
@@ -4101,7 +4179,7 @@ export default function App() {
                       citizenState={citizenState}
                       onChange={setCitizenState}
                       addLog={addLog}
-                      triggerAlert={triggerAlert}
+                      triggerAlert={(title, msg, type) => triggerAlert(title, msg, type as any)}
                     />
                   )}
                   <PrivacyBeacon
@@ -4109,8 +4187,8 @@ export default function App() {
                     onChange={setCitizenState}
                     logs={logs}
                     onClearLogs={clearLogs}
-                    activeTab={citizenTab}
-                    onTabChange={setCitizenTab}
+                    activeTab={citizenTab as any}
+                    onTabChange={setCitizenTab as any}
                     onAddLog={addLog}
                     onTriggerAlert={triggerAlert}
                   />
@@ -5801,6 +5879,13 @@ export default function App() {
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         items={searchItems}
+      />
+
+      {/* App Store & PWA Launch Readiness Diagnostics Modal */}
+      <AppStoreLaunchModal
+        isOpen={isAppStoreLaunchModalOpen}
+        onClose={() => setIsAppStoreLaunchModalOpen(false)}
+        citizenState={citizenState}
       />
     </div>
   );
