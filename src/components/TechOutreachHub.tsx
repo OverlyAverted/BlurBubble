@@ -188,7 +188,7 @@ export const TechOutreachHub: React.FC<TechOutreachHubProps> = ({ addLog }) => {
   const [customSender, setCustomSender] = useState('Lead Privacy Systems Engineer, BlurBubble');
   const [activeTab, setActiveTab] = useState<'targets' | 'pitch' | 'dispatch' | 'forums' | 'listings' | 'firmware'>('targets');
 
-  // Load latest competition & tech targets from Gemini 3.6 API
+  // Load latest competition & tech targets from Gemini 3.7 API
   const handleScanCompetitions = async () => {
     setIsScanning(true);
     try {
@@ -550,7 +550,7 @@ export const TechOutreachHub: React.FC<TechOutreachHubProps> = ({ addLog }) => {
                 <Briefcase className="w-4 h-4 text-emerald-400" />
                 Select Partner Target or Grant Competition
               </h3>
-              <span className="text-xs text-slate-500 font-mono">Gemini 3.6 Curated</span>
+              <span className="text-xs text-slate-500 font-mono">Gemini 3.7 Curated</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -654,7 +654,7 @@ export const TechOutreachHub: React.FC<TechOutreachHubProps> = ({ addLog }) => {
               className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(16,185,129,0.25)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <Sparkles className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-              {isGenerating ? 'Gemini 3.6 Drafting Pitch Package...' : 'Auto-Draft Executive Pitch Package'}
+              {isGenerating ? 'Gemini 3.7 Drafting Pitch Package...' : 'Auto-Draft Executive Pitch Package'}
             </button>
           </div>
         </div>

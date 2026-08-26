@@ -314,13 +314,19 @@ export default function AudioLab({ citizenState, addLog, isActive }: AudioLabPro
     await initAudio();
 
     if (mode === 'mic') {
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setMicStatus('denied');
+        setInputMode('simulated');
+        return;
+      }
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setMicStatus('granted');
         // Stop it immediately, just verifying access
         stream.getTracks().forEach(t => t.stop());
-      } catch (err) {
-        console.warn('Microphone permission blocked or unavailable:', err);
+      } catch (err: any) {
+        console.info('Microphone hardware unavailable or access not granted, using simulated audio input:', err?.message || err);
         setMicStatus('denied');
         setInputMode('simulated'); // Force simulated mode
       }
@@ -348,7 +354,7 @@ export default function AudioLab({ citizenState, addLog, isActive }: AudioLabPro
       });
     }, 1000);
 
-    if (inputMode === 'mic') {
+    if (inputMode === 'mic' && typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
@@ -361,25 +367,34 @@ export default function AudioLab({ citizenState, addLog, isActive }: AudioLabPro
         };
 
         mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          const arrayBuffer = await audioBlob.arrayBuffer();
-          if (audioContextRef.current) {
-            audioContextRef.current.decodeAudioData(arrayBuffer, (decodedBuffer) => {
-              recordedAudioBufferRef.current = decodedBuffer;
-              setAudioRecorded(true);
-            }, (decodeErr) => {
-              console.error('Failed to decode recording buffer:', decodeErr);
-            });
+          try {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            if (audioContextRef.current) {
+              audioContextRef.current.decodeAudioData(arrayBuffer, (decodedBuffer) => {
+                recordedAudioBufferRef.current = decodedBuffer;
+                setAudioRecorded(true);
+              }, (decodeErr) => {
+                console.warn('Failed to decode recording buffer:', decodeErr);
+              });
+            }
+          } catch (e) {
+            console.warn('Error processing recorded audio blob:', e);
           }
           // Stop stream tracks
           stream.getTracks().forEach(t => t.stop());
         };
 
         mediaRecorder.start();
-      } catch (err) {
-        console.error('Microphone recording error:', err);
-        setIsRecording(false);
-        clearInterval(timerIntervalRef.current);
+      } catch (err: any) {
+        console.info('Microphone device not accessible, falling back to simulated voice recording:', err?.message || err);
+        setInputMode('simulated');
+        // Let simulation run for 5 seconds
+        setTimeout(() => {
+          if (isRecording) {
+            stopRecording();
+          }
+        }, 5000);
       }
     } else {
       // Simulated mode - we just count down, then synthesize on playback
@@ -1078,7 +1093,7 @@ export default function AudioLab({ citizenState, addLog, isActive }: AudioLabPro
           </div>
         </div>
 
-        {/* Gemini 3.6 Acoustic Classifier & Voice Crawler Shield */}
+        {/* Gemini 3.7 Acoustic Classifier & Voice Crawler Shield */}
         <AiAcousticClassifier citizenState={citizenState} addLog={addLog} />
 
       </div>

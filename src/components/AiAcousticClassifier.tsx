@@ -87,7 +87,7 @@ export const AiAcousticClassifier: React.FC<AiAcousticClassifierProps> = ({ citi
           </div>
           <div>
             <h3 className="text-sm font-extrabold uppercase font-mono text-white tracking-wider flex items-center gap-2">
-              Gemini 3.6 Acoustic Fingerprint & Voice Crawler Classifier
+              Gemini 3.7 Acoustic Fingerprint & Voice Crawler Classifier
               <span className="text-[9px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">
                 AUDIO AI
               </span>

@@ -485,27 +485,52 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
 
   // Stop/Start camera on change of scan states
   useEffect(() => {
+    let isCancelled = false;
     if (isQrScanning && isRealCameraActive) {
-      const videoConstraints: any = {};
-      if (selectedQrCameraId) {
-        videoConstraints.deviceId = { exact: selectedQrCameraId };
-      } else {
-        videoConstraints.facingMode = qrFacingMode;
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setIsRealCameraActive(false);
+        return;
       }
 
-      navigator.mediaDevices.getUserMedia({ video: videoConstraints })
-        .then(stream => {
+      const initQrCamera = async () => {
+        try {
+          const videoConstraints: MediaTrackConstraints = {};
+          if (selectedQrCameraId) {
+            videoConstraints.deviceId = { ideal: selectedQrCameraId };
+          } else if (qrFacingMode) {
+            videoConstraints.facingMode = { ideal: qrFacingMode };
+          }
+
+          let stream: MediaStream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+          } catch {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          }
+
+          if (isCancelled) {
+            stream.getTracks().forEach(track => track.stop());
+            return;
+          }
+
           setQrStream(stream);
           if (qrVideoRef.current) {
             qrVideoRef.current.srcObject = stream;
-            // Handle browser play restrictions
-            qrVideoRef.current.play().catch(err => console.error("Video play restricted", err));
+            qrVideoRef.current.play().catch(err => {
+              if (err.name !== 'AbortError' && !err.message?.includes('interrupted')) {
+                console.warn("QR Video play safely handled", err);
+              }
+            });
           }
-        })
-        .catch(err => {
-          console.error("Camera access error, falling back to simulated high-fidelity scanner:", err);
-          setIsRealCameraActive(false);
-        });
+        } catch (err: any) {
+          if (!isCancelled) {
+            console.info("Hardware camera unavailable for QR scanner, falling back to simulated optical scanner:", err?.message || err);
+            setIsRealCameraActive(false);
+          }
+        }
+      };
+
+      initQrCamera();
     } else {
       if (qrStream) {
         qrStream.getTracks().forEach(track => track.stop());
@@ -513,6 +538,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
       }
     }
     return () => {
+      isCancelled = true;
       if (qrStream) {
         qrStream.getTracks().forEach(track => track.stop());
       }
@@ -993,27 +1019,41 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
       setWebcamError(null);
       setUseVirtualWebcam(false);
       
-      const videoConstraints: any = {
-        width: 640,
-        height: 480,
-        frameRate: { ideal: 240, max: 240 }
-      };
-
-      if (selectedWebcamId) {
-        videoConstraints.deviceId = { exact: selectedWebcamId };
-      } else {
-        videoConstraints.facingMode = webcamFacingMode;
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setWebcamError('Camera hardware API not supported in this browser environment. Switched to Virtual NPU Simulation.');
+        setWebcamActive(false);
+        setUseVirtualWebcam(true);
+        return;
       }
 
-      // Request up to 240Hz/FPS recording device stream constraints
-      const constraints: MediaStreamConstraints = {
-        video: videoConstraints
-      };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      if (session !== webcamSessionRef.current) {
-        stream.getTracks().forEach(track => track.stop());
+      let stream: MediaStream | null = null;
+
+      // 1. Try with ideal constraints first
+      try {
+        const videoConstraints: MediaTrackConstraints = {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 60, max: 240 }
+        };
+
+        if (selectedWebcamId) {
+          videoConstraints.deviceId = { ideal: selectedWebcamId };
+        } else if (webcamFacingMode) {
+          videoConstraints.facingMode = { ideal: webcamFacingMode };
+        }
+
+        stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+      } catch {
+        // If ideal constraints fail (e.g. Overconstrained or deviceId mismatch), try basic fallback
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        } catch (fallbackErr: any) {
+          throw fallbackErr;
+        }
+      }
+
+      if (!stream || session !== webcamSessionRef.current) {
+        if (stream) stream.getTracks().forEach(track => track.stop());
         return;
       }
 
@@ -1047,12 +1087,17 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
       if (session !== webcamSessionRef.current) {
         return;
       }
-      console.error(err);
-      setWebcamError(
-        err.name === 'NotAllowedError' 
-          ? 'Camera permission denied. Please allow camera access in metadata / frame options to test the webcam live-blur overlay!' 
-          : 'Could not access the web camera. Ensure no other apps are using it, or use the interactive Street Sim instead.'
-      );
+      const isNotFound = err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError' || err?.message?.includes('Requested device not found') || err?.message?.includes('device not found');
+      const isPermissionDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+
+      if (isNotFound) {
+        setWebcamError('No physical camera device detected on this system. Virtual NPU Simulation is active.');
+      } else if (isPermissionDenied) {
+        setWebcamError('Camera permission was not granted. Virtual NPU Simulation is active.');
+      } else {
+        setWebcamError('Camera unavailable. Virtual NPU Simulation is active.');
+      }
+
       setWebcamActive(false);
       setUseVirtualWebcam(true); // Failover to Virtual NPU Sandbox instead of empty/error screen
     }
@@ -1729,25 +1774,23 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
           lastFaceDetectedPosRef.current = { x: targetX, y: targetY };
         } else {
           framesSinceLastFaceRef.current += 1;
-          if (framesSinceLastFaceRef.current < 150 && lastFaceDetectedPosRef.current) {
+          if (framesSinceLastFaceRef.current < 240 && lastFaceDetectedPosRef.current) {
             targetX = lastFaceDetectedPosRef.current.x;
             targetY = lastFaceDetectedPosRef.current.y;
-            detectedRealFace = true; // treat as locked for snappy interpolation
+            detectedRealFace = true; // preserve lock firmly without drift
           }
         }
 
-        // If we completely lost tracking (cooldown elapsed), float gracefully via dynamic drift
+        // When face detection is searching or not locked, hold stable position at center/last position with zero floating drift
         if (!detectedRealFace) {
-          if (aiTrackingMode === 'face') {
-            targetX = 50 + Math.sin(tick * 0.8) * 8 + Math.cos(tick * 1.5) * 2;
-            targetY = 38 + Math.cos(tick * 0.6) * 5 + Math.sin(tick * 1.1) * 1.5;
-          } else if (aiTrackingMode === 'body') {
-            targetX = 50 + Math.sin(tick * 0.4) * 16 + Math.cos(tick * 0.9) * 4;
-            targetY = 56 + Math.cos(tick * 0.5) * 10 + Math.sin(tick * 0.8) * 2.5;
+          if (lastFaceDetectedPosRef.current) {
+            targetX = lastFaceDetectedPosRef.current.x;
+            targetY = lastFaceDetectedPosRef.current.y;
+          } else {
+            targetX = 50;
+            targetY = 40;
           }
-          
-          // Beautiful drift simulating moving closer and further (z-axis depth motion)
-          targetScale = 1.0 + Math.sin(tick * 0.4) * 0.35;
+          targetScale = 1.0;
         }
 
         let finalX = targetX;
@@ -1782,10 +1825,10 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
           kalmanYStateRef.current.y = targetY;
         }
 
-        // Apply final coordinates to target mask position state
+        // Apply final coordinates to target mask position state - responsive & snappy
         setBlurPosition((prev) => {
           const prevScale = prev.scale ?? 1.0;
-          const nextScale = parseFloat((prevScale + (targetScale - prevScale) * (detectedRealFace ? 0.12 : 0.08)).toFixed(3));
+          const nextScale = parseFloat((prevScale + (targetScale - prevScale) * (detectedRealFace ? 0.2 : 0.1)).toFixed(3));
           
           if (kalmanEnabled) {
             return {
@@ -1794,7 +1837,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
               scale: nextScale,
             };
           } else {
-            const easeFactor = (detectedRealFace || useVirtualWebcam) ? 0.95 : 0.15;
+            const easeFactor = (detectedRealFace || useVirtualWebcam) ? 0.95 : 0.85;
             return {
               x: parseFloat((prev.x + (targetX - prev.x) * easeFactor).toFixed(2)),
               y: parseFloat((prev.y + (targetY - prev.y) * easeFactor).toFixed(2)),
@@ -2278,7 +2321,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
               className="relative w-full aspect-video flex items-center justify-center bg-slate-950 select-none cursor-crosshair overflow-hidden"
             >
               {/* 🕶️ C. Optical HUD Filter & 3D Depth Obscuration Mode Controls Bar */}
-              {!hideAllOverlays && (
+              {showDiagnostics && !hideAllOverlays && (
                 <div className="absolute bottom-4 left-4 z-40 flex flex-wrap items-center gap-1.5 bg-slate-950/90 p-1.5 rounded-xl border border-slate-800 shadow-2xl backdrop-blur-md">
                   <span className="text-[9px] font-mono font-bold text-slate-400 px-1 uppercase tracking-wider">OPTICAL HUD:</span>
                   
@@ -2556,18 +2599,18 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                     className={`w-full h-full object-cover ${webcamFacingMode === 'user' && !selectedWebcamId ? 'scale-x-[-1]' : ''}`}
                   />
 
-                  {/* Floating Camera Selector */}
-                  {webcamActive && !hideAllOverlays && (
-                    <div className="absolute top-4 left-4 z-30 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-[80%] select-none">
+                  {/* Floating Camera Selector & Clean Controls */}
+                  {webcamActive && (
+                    <div className="absolute top-4 left-4 z-30 flex flex-wrap items-center gap-2 max-w-[90%] select-none">
                       {/* Facing Mode Toggle */}
-                      <div className="bg-slate-950/90 border border-slate-800 rounded-lg p-1 flex items-center gap-1 shadow-xl">
+                      <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-1 flex items-center gap-1 shadow-xl backdrop-blur-md">
                         <button
                           type="button"
                           onClick={() => {
                             setWebcamFacingMode('user');
                             setSelectedWebcamId('');
                           }}
-                          className={`px-2 py-1 rounded text-[9px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all uppercase cursor-pointer ${
                             webcamFacingMode === 'user' && !selectedWebcamId
                               ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                               : 'text-slate-400 hover:text-slate-200'
@@ -2581,7 +2624,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                             setWebcamFacingMode('environment');
                             setSelectedWebcamId('');
                           }}
-                          className={`px-2 py-1 rounded text-[9px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all uppercase cursor-pointer ${
                             webcamFacingMode === 'environment' && !selectedWebcamId
                               ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                               : 'text-slate-400 hover:text-slate-200'
@@ -2593,7 +2636,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
 
                       {/* Explicit Camera Select dropdown if multiple cameras exist */}
                       {availableCameras.length > 0 && (
-                        <div className="bg-slate-950/90 border border-slate-800 rounded-lg p-1 shadow-xl flex items-center">
+                        <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-1 shadow-xl flex items-center backdrop-blur-md">
                           <select
                             id="webcam-device-select"
                             value={selectedWebcamId}
@@ -2616,25 +2659,45 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                     </div>
                   )}
 
-                  {/* Floating Clean View Toggle Button */}
-                  <button
-                    type="button"
-                    onClick={() => setHideAllOverlays(!hideAllOverlays)}
-                    className="absolute bottom-4 right-4 z-30 px-3 py-1.5 bg-slate-950/90 hover:bg-slate-900 border border-slate-800 rounded-lg text-[9px] font-mono font-bold text-cyan-400 hover:text-cyan-300 transition flex items-center gap-1.5 shadow-xl select-none cursor-pointer"
-                    title={hideAllOverlays ? "Show all HUD and Censor overlays" : "Hide all overlays for a clean video feed"}
-                  >
-                    {hideAllOverlays ? (
-                      <>
-                        <Eye className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>SHOW ALL OVERLAYS</span>
-                      </>
-                    ) : (
-                      <>
-                        <EyeOff className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>CLEAN VIEW (PURE STREAM)</span>
-                      </>
-                    )}
-                  </button>
+                  {/* Floating Clean View / Diagnostics HUD Toggle Button */}
+                  <div className="absolute top-4 right-4 z-30 flex items-center gap-2 select-none">
+                    <button
+                      type="button"
+                      onClick={() => setShowDiagnostics(!showDiagnostics)}
+                      className={`px-2.5 py-1.5 rounded-xl text-[10px] font-mono font-bold transition flex items-center gap-1.5 shadow-xl border cursor-pointer backdrop-blur-md ${
+                        showDiagnostics
+                          ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                          : 'bg-slate-950/90 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                      title={showDiagnostics ? "Hide diagnostic HUD and mesh" : "Show diagnostic HUD telemetry"}
+                    >
+                      <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>{showDiagnostics ? 'HUD: ON' : 'HUD: OFF'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setHideAllOverlays(!hideAllOverlays)}
+                      className={`px-2.5 py-1.5 rounded-xl text-[10px] font-mono font-bold transition flex items-center gap-1.5 shadow-xl border cursor-pointer backdrop-blur-md ${
+                        hideAllOverlays
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                          : 'bg-slate-950/90 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                      title={hideAllOverlays ? "Show interface overlays" : "Hide controls for ultra clean view"}
+                    >
+                      {hideAllOverlays ? (
+                        <>
+                          <Eye className="w-3.5 h-3.5 text-amber-400" />
+                          <span>SHOW UI</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                          <span>CLEAN SCREEN</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                   
                   {/* Floating Calibration Handshake Guide */}
                   {!citizenState.isBroadcasting && showGuidanceOverlay && !hideAllOverlays && (
@@ -2649,10 +2712,10 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                     </div>
                   )}
 
-                  {(citizenState.emergencyPrivacyActive || (citizenState.isBroadcasting && !citizenState.overrideActive)) && !hideAllOverlays && (
+                  {(citizenState.emergencyPrivacyActive || (citizenState.isBroadcasting && !citizenState.overrideActive)) && (
                     <>
-                      {/* Interactive Holographic AI Grid HUD Overlay (Moves with the blur target) */}
-                      {showDiagnostics && aiTrackingActive && (
+                      {/* Interactive Holographic AI Grid HUD Overlay (Only when diagnostics HUD enabled and not hidden) */}
+                      {showDiagnostics && !hideAllOverlays && aiTrackingActive && (
                         <div
                           style={{
                             position: 'absolute',
@@ -2943,19 +3006,19 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                           scaleFactor = scaleFactor * (1.0 + Math.sin(renderTick * 5) * accelModifier);
                         }
                         const isBody = aiTrackingMode === 'body';
-                        const baseWidth = isBody ? 140 : 110;
-                        const baseHeight = isBody ? 240 : 135;
+                        const baseWidth = isBody ? 180 : 140;
+                        const baseHeight = isBody ? 280 : 175;
 
                         const dynamicWidth = baseWidth * scaleFactor;
                         const dynamicHeight = baseHeight * scaleFactor;
 
                         const dynamicClipPath = isBody 
                           ? 'none' 
-                          : 'ellipse(46% 48% at 50% 50%)';
+                          : 'ellipse(50% 50% at 50% 50%)';
 
-                        let rotX = (blurPosition.y - 40) * 0.45 + Math.sin(renderTick * 0.6) * 3;
-                        let rotY = -(blurPosition.x - 50) * 0.45 + Math.cos(renderTick * 0.6) * 3;
-                        let rotZ = (blurPosition.x - 50) * 0.12;
+                        let rotX = (blurPosition.y - 40) * 0.3;
+                        let rotY = -(blurPosition.x - 50) * 0.3;
+                        let rotZ = (blurPosition.x - 50) * 0.08;
 
                         if (citizenState.autoCalibrate) {
                           const pitchOffset = gyroData.beta ? (gyroData.beta - 45) * 0.35 : simulatedTilt.pitch * 0.35;
@@ -3794,16 +3857,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
                           <button
                             type="button"
                             onClick={() => {
-                              setIsRealCameraActive(!isRealCameraActive);
-                              if (!isRealCameraActive) {
-                                const videoConstraints: any = {};
-                                if (selectedQrCameraId) {
-                                  videoConstraints.deviceId = { exact: selectedQrCameraId };
-                                } else {
-                                  videoConstraints.facingMode = qrFacingMode;
-                                }
-                                navigator.mediaDevices.getUserMedia({ video: videoConstraints }).catch(() => {});
-                              }
+                              setIsRealCameraActive(prev => !prev);
                             }}
                             className={`w-full py-1 border rounded-lg text-[8px] font-mono font-bold uppercase transition flex items-center justify-center gap-1.5 ${
                               isRealCameraActive
@@ -5899,7 +5953,7 @@ export default function GlassesHUD({ citizenState, onChange, addLog, logs = [], 
       </div>
       )}
 
-      {/* Gemini 3.6 Vision AI Optical Censorship Assistant */}
+      {/* Gemini 3.7 Vision AI Optical Censorship Assistant */}
       <AiVisionCensorship citizenState={citizenState} onChange={onChange || (() => {})} addLog={addLog} />
     </div>
   );

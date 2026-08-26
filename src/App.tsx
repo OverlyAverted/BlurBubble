@@ -345,11 +345,12 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   governanceHierarchy: ['lockdown', 'strict_rules', 'perimeter_shields', 'allow_list', 'wifi_triggers', 'smart_schedules'],
   totalLockdownMode: false,
   hierarchyRulesEnabled: true,
-  showMetricsBar: true,
+  showMetricsBar: false,
   showControlBar: false,
-  showAuditLogs: true,
-  showEmergencyButton: true,
-  showGuideButton: true,
+  showAuditLogs: false,
+  showEmergencyButton: false,
+  showGuideButton: false,
+  showCopilotButton: false,
   showTopBar: true,
   showSignalHistory: false,
   showThreatOptimizer: false,
@@ -358,7 +359,7 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   autoThreatScanInterval: 0,
   autoAcousticTakedowns: true,
   autoPowerSaverThrottling: true,
-  showPrivacyImpactScore: true,
+  showPrivacyImpactScore: false,
   showBatteryWidget: false,
   showSignalMap: false,
   intelligentBatteryOptimization: true,
@@ -1137,7 +1138,7 @@ export default function App() {
     {
       id: 'action-master-autopilot',
       title: '🚀 Execute Master Autopilot Suite',
-      description: 'Runs parallel Gemini 3.6 Flash pitching, forum scouting, ProductHunt listing generation & ESP32 C++ firmware compilation',
+      description: 'Runs parallel Gemini 3.7 Flash pitching, forum scouting, ProductHunt listing generation & ESP32 C++ firmware compilation',
       category: 'Automations & Tools',
       keywords: ['autopilot', 'automation', 'run', 'execute', 'pitch', 'forum', 'scout', 'listing', 'firmware', 'c++'],
       icon: <Zap className="w-4 h-4 text-emerald-400" />,
@@ -3202,7 +3203,77 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 w-full sm:w-auto relative">
+          {/* Streamlined Desktop Navigation Center */}
+          <nav className="hidden lg:flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800/80">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveView('citizen');
+                setCitizenTab('overview');
+                setIsViewSelectorOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'citizen' && citizenTab === 'overview'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Shield</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveView('glasses');
+                setGlassesTab('street');
+                setIsViewSelectorOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'glasses'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+              <span>Glasses HUD</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveView('tech');
+                setTechTab('timeline');
+                setIsViewSelectorOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'tech'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <FileCode className="w-3.5 h-3.5" />
+              <span>Tech &amp; Pitch</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveView('audit');
+                setIsViewSelectorOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'audit'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Audit</span>
+            </button>
+          </nav>
+
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2.5 w-full sm:w-auto relative">
             {/* Left group of upper nav containing Home Button and Search */}
             <div className="flex items-center gap-2 w-full sm:w-auto z-30">
               {/* Home / Main Dashboard Button */}
@@ -3215,15 +3286,15 @@ export default function App() {
                   setIsViewSelectorOpen(false);
                   setIsCustomizerExpanded(false);
                 }}
-                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all border ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
                   activeView === 'citizen' && citizenTab === 'overview'
                     ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
                     : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:bg-slate-850 hover:text-white hover:border-slate-700 hover:shadow-[0_0_12px_rgba(16,185,129,0.15)] cursor-pointer'
                 }`}
                 title="Go back to the Main Dashboard"
               >
-                <Home className={`w-4 h-4 ${activeView === 'citizen' && citizenTab === 'overview' ? 'text-emerald-400' : 'text-slate-400 animate-pulse'}`} />
-                <span>{t('nav.home')}</span>
+                <Home className={`w-3.5 h-3.5 ${activeView === 'citizen' && citizenTab === 'overview' ? 'text-emerald-400' : 'text-slate-400'}`} />
+                <span className="hidden sm:inline">{t('nav.home')}</span>
               </button>
 
               {/* Global Search Button Trigger */}
@@ -3231,11 +3302,11 @@ export default function App() {
                 id="global-app-search-trigger"
                 type="button"
                 onClick={() => setIsSearchOpen(true)}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition shadow-lg cursor-pointer group shrink-0"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition shadow-lg cursor-pointer group shrink-0"
                 title="Search screens, settings, controls & tools (Ctrl+K)"
               >
-                <Search className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-                <span>Search...</span>
+                <Search className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <span className="hidden md:inline">Search...</span>
                 <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-mono text-slate-400 bg-slate-950 border border-slate-800 rounded">
                   ⌘K
                 </kbd>
@@ -3243,16 +3314,16 @@ export default function App() {
             </div>
 
             {/* Custom Premium Collapsible View Selection Dropdown Menu */}
-            <div className={`relative w-full sm:w-80 shrink-0 ${isViewSelectorOpen ? 'z-50' : 'z-30'}`}>
+            <div className={`relative w-full sm:w-64 lg:w-72 shrink-0 ${isViewSelectorOpen ? 'z-50' : 'z-30'}`}>
               <button
                 id="main-view-selector-trigger"
                 type="button"
                 onClick={() => {
                   setIsViewSelectorOpen(!isViewSelectorOpen);
                 }}
-                className="w-full flex items-center justify-between gap-2.5 bg-slate-900/90 hover:bg-slate-900/100 px-4 py-3 rounded-xl border border-slate-800 text-left transition shadow-lg select-none cursor-pointer group focus:outline-none"
+                className="w-full flex items-center justify-between gap-2 bg-slate-900/90 hover:bg-slate-900/100 px-3.5 py-2.5 rounded-xl border border-slate-800 text-left transition shadow-lg select-none cursor-pointer group focus:outline-none"
               >
-                <div className="flex items-center gap-2.5 overflow-hidden">
+                <div className="flex items-center gap-2 overflow-hidden">
                   <span className="text-slate-500 text-[10px] font-extrabold uppercase tracking-widest shrink-0">{t('nav.screen')}</span>
                   <div className="w-[1px] h-3.5 bg-slate-800 shrink-0"></div>
                   {(() => {
@@ -3274,8 +3345,8 @@ export default function App() {
                     );
                   })()}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0 text-slate-400 group-hover:text-slate-300">
-                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isViewSelectorOpen ? 'rotate-180 text-emerald-400' : ''}`} />
+                <div className="flex items-center gap-1 shrink-0 text-slate-400 group-hover:text-slate-300">
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isViewSelectorOpen ? 'rotate-180 text-emerald-400' : ''}`} />
                 </div>
               </button>
 
@@ -3289,53 +3360,148 @@ export default function App() {
 
               {/* Collapsible Dropdown Popover */}
               {isViewSelectorOpen && (
-                <div className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 w-full min-w-[300px] sm:min-w-[340px] max-w-[calc(100vw-2rem)] bg-slate-950/98 border border-slate-800/80 rounded-2xl shadow-2xl z-40 max-h-[440px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-100 divide-y divide-slate-900 glow-emerald">
-                  {/* Top Action Header: App Interface Customizer & Launch Diagnostics Buttons */}
-                  <div className="p-2.5 bg-slate-900/80 border-b border-slate-800/80 flex flex-col gap-2">
-                    <div className="flex items-center gap-1.5">
+                <div className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 w-full min-w-[310px] sm:min-w-[360px] max-w-[calc(100vw-2rem)] bg-slate-950/98 border border-slate-800/90 rounded-2xl shadow-2xl z-40 max-h-[460px] overflow-y-auto backdrop-blur-xl animate-in fade-in duration-150 divide-y divide-slate-900 glow-emerald">
+                  {/* Top Header inside Dropdown Popover: Clean Tabs for Screens vs Interface Options */}
+                  <div className="p-2 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between gap-2 sticky top-0 z-10 backdrop-blur-md">
+                    <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/80 flex-1">
                       <button
-                        id="app-interface-options-trigger"
+                        id="dropdown-tab-screens-btn"
                         type="button"
-                        onClick={() => setIsCustomizerExpanded(!isCustomizerExpanded)}
-                        className={`flex-1 flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl border text-xs font-extrabold transition cursor-pointer select-none ${
-                          isCustomizerExpanded
-                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
-                            : 'bg-slate-950/80 border-slate-800 text-slate-300 hover:bg-slate-850 hover:text-white'
+                        onClick={() => setIsCustomizerExpanded(false)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer select-none ${
+                          !isCustomizerExpanded
+                            ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.15)] font-black'
+                            : 'text-slate-400 hover:text-white'
                         }`}
-                        title="Toggle App Interface Options to show/hide dashboard boxes & language"
+                        title="View all application screens and feature sections"
                       >
-                        <div className="flex items-center gap-1.5">
-                          <span>🎨</span>
-                          <span>App Interface Options</span>
-                        </div>
-                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isCustomizerExpanded ? 'rotate-180 text-emerald-400' : ''}`} />
+                        <span>📺</span>
+                        <span>Screens</span>
                       </button>
-
                       <button
-                        id="app-store-launch-readiness-btn"
+                        id="dropdown-tab-options-btn"
                         type="button"
-                        onClick={() => {
-                          setIsViewSelectorOpen(false);
-                          setIsAppStoreLaunchModalOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono font-bold bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 hover:text-white shadow-[0_0_12px_rgba(6,182,212,0.15)] transition cursor-pointer shrink-0"
-                        title="Open App Store & PWA Launch Readiness Diagnostics Center"
+                        onClick={() => setIsCustomizerExpanded(true)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer select-none ${
+                          isCustomizerExpanded
+                            ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.15)] font-black'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                        title="Customize dashboard boxes, widget presets, and language"
                       >
-                        <Rocket className="w-3.5 h-3.5 text-cyan-400 animate-bounce" />
-                        <span>LAUNCH</span>
-                        <span className="text-[8px] px-1 py-0.2 rounded bg-cyan-400 text-slate-950 font-black">READY</span>
+                        <span>⚙️</span>
+                        <span>Interface Options</span>
                       </button>
                     </div>
+                  </div>
 
-                    {/* Expandable App Customization Panel inside dropdown */}
-                    {isCustomizerExpanded && (
-                      <div className="mt-1 p-3 bg-slate-950/90 border border-slate-800/80 rounded-xl flex flex-col gap-2.5 max-h-[280px] overflow-y-auto">
-                        <div className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider px-1 flex items-center justify-between">
-                          <span>Choose What Boxes to Show</span>
+                  {/* TAB 1: NAVIGATION SCREENS */}
+                  {!isCustomizerExpanded && (
+                    <div>
+                      <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900/50 border-b border-slate-850/60 text-[10px] font-mono font-semibold text-slate-400">
+                        <span>SECTIONS</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedGroups({ beacon: true, glasses: true, tech: true, audit: true })}
+                            className="hover:text-emerald-400 transition cursor-pointer"
+                          >
+                            Expand All
+                          </button>
+                          <span className="text-slate-700">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedGroups({ beacon: false, glasses: false, tech: false, audit: false })}
+                            className="hover:text-emerald-400 transition cursor-pointer"
+                          >
+                            Collapse All
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="py-1">
+                        {VIEW_GROUPS.map((group) => {
+                          const isExpanded = !!expandedGroups[group.id];
+                          return (
+                            <div key={group.id} className="flex flex-col">
+                              {/* Group header row */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpandedGroups(prev => ({
+                                    ...prev,
+                                    [group.id]: !prev[group.id]
+                                  }));
+                                }}
+                                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-950 hover:bg-slate-900/40 text-slate-400 hover:text-slate-200 transition cursor-pointer select-none text-left"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm select-none">{group.icon}</span>
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider font-sans">{t(`cat.${group.id}`)}</span>
+                                </div>
+                                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-emerald-400' : ''}`} />
+                              </button>
+
+                              {/* Options container */}
+                              {isExpanded && (
+                                <div className="bg-slate-950/60 py-1 border-t border-slate-900/30">
+                                  {group.options.map((opt) => {
+                                    const activeFullValue = `${activeView}:${activeView === 'citizen' ? citizenTab : activeView === 'glasses' ? glassesTab : activeView === 'tech' ? techTab : 'main'}`;
+                                    const isSelected = opt.value === activeFullValue;
+                                    return (
+                                      <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => {
+                                          const [view, tab] = opt.value.split(':');
+                                          setActiveView(view as any);
+                                          if (view === 'citizen') {
+                                            setCitizenTab(tab as any);
+                                          } else if (view === 'glasses') {
+                                            setGlassesTab(tab as any);
+                                          } else if (view === 'tech') {
+                                            setTechTab(tab as any);
+                                          }
+                                          setIsViewSelectorOpen(false);
+                                        }}
+                                        className={`w-full flex flex-col items-start gap-0.5 px-6 py-2 hover:bg-emerald-950/10 text-left transition border-l-2 ${
+                                          isSelected
+                                            ? 'bg-slate-900/50 border-emerald-500 text-white font-bold'
+                                            : 'border-transparent text-slate-400 hover:text-white'
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs select-none">{opt.icon}</span>
+                                          <span className="text-xs font-bold leading-tight">{t(`view.${opt.value.replace(':', '.')}`)}</span>
+                                          {isSelected && (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></span>
+                                          )}
+                                        </div>
+                                        <span className="text-[9px] text-slate-500 pl-5 leading-normal truncate w-full block font-medium">
+                                          {t(`desc.${opt.value.replace(':', '.')}`)}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: INTERFACE OPTIONS & DASHBOARD CUSTOMIZER */}
+                  {isCustomizerExpanded && (
+                    <div className="p-3 bg-slate-950/90 flex flex-col gap-3 max-h-[380px] overflow-y-auto">
+                      {/* Presets Bar */}
+                      <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
+                        <div className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider px-0.5 mb-1.5 flex items-center justify-between">
+                          <span>Choose Dashboard Layout Preset</span>
                           <span className="text-[8px] font-mono text-emerald-400">PRESETS</span>
                         </div>
-                        {/* Presets quick bar */}
-                        <div className="grid grid-cols-2 gap-1.5 mb-1">
+                        <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => setCitizenState(prev => ({
@@ -3349,10 +3515,10 @@ export default function App() {
                               showAutomationHub: false,
                               showPrivacyImpactScore: false
                             }))}
-                            className="py-1.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-[10px] text-emerald-400 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="py-2 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
                             title="Hide all dashboard widgets for the cleanest privacy panel view"
                           >
-                            <Shield className="w-3 h-3 text-emerald-400" />
+                            <Shield className="w-3.5 h-3.5 text-emerald-400" />
                             <span>Clean Home Screen</span>
                           </button>
                           <button
@@ -3364,12 +3530,19 @@ export default function App() {
                               showBatteryWidget: true,
                               showSignalMap: true
                             }))}
-                            className="py-1.5 px-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl text-[10px] text-slate-300 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="py-2 px-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-xl text-xs text-slate-300 font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
                             title="Show all metrics, maps, and hardware status boxes"
                           >
-                            <Grid3X3 className="w-3 h-3 text-cyan-400" />
+                            <Grid3X3 className="w-3.5 h-3.5 text-cyan-400" />
                             <span>Show All Widgets</span>
                           </button>
+                        </div>
+                      </div>
+
+                      {/* Widget Toggles */}
+                      <div>
+                        <div className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider px-0.5 mb-1.5">
+                          Toggle Dashboard Boxes
                         </div>
                         <div className="grid grid-cols-1 gap-1.5">
                           {/* 1. Status Bar */}
@@ -3502,7 +3675,7 @@ export default function App() {
                             <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showSignalHistory ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
                           </button>
 
-                          {/* 7b. Gemini 3.6 Threat Analysis & Shield Optimizer */}
+                          {/* 7b. Gemini 3.7 Threat Analysis & Shield Optimizer */}
                           <button
                             type="button"
                             onClick={() => setCitizenState(prev => ({ ...prev, showThreatOptimizer: !prev.showThreatOptimizer }))}
@@ -3511,12 +3684,12 @@ export default function App() {
                                 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
                                 : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
                             }`}
-                            title="Toggle visibility of Gemini 3.6 AI Threat Analysis & Shield Optimizer"
+                            title="Toggle visibility of Gemini 3.7 AI Threat Analysis & Shield Optimizer"
                           >
                             <div className="flex items-center gap-2">
                               <Sparkles className={`w-3.5 h-3.5 ${citizenState.showThreatOptimizer ? 'text-emerald-400' : 'text-slate-500'}`} />
                               <span className="flex items-center gap-1.5">
-                                Gemini 3.6 AI Threat Optimizer
+                                Gemini 3.7 AI Threat Optimizer
                                 <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
                                   AI
                                 </span>
@@ -3602,131 +3775,59 @@ export default function App() {
                             <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showSignalMap !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
                           </button>
                         </div>
+                      </div>
 
-                        {/* Language Selection Section */}
-                        <div className="mt-2 border-t border-slate-800/60 pt-2 flex flex-col gap-1.5">
-                          <div className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wider px-1 flex items-center gap-1">
-                            <span>🌐</span>
-                            <span>App Language / Selection</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5 mt-0.5">
-                            {(['en', 'fr', 'de'] as Language[]).map((lang) => {
-                              const isSelected = language === lang;
-                              return (
-                                <button
-                                  key={lang}
-                                  type="button"
-                                  onClick={() => {
-                                    setLanguage(lang);
-                                  }}
-                                  className={`flex items-center justify-center gap-1 py-1.5 px-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer select-none ${
-                                    isSelected
-                                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.15)] font-black'
-                                      : 'bg-slate-950/50 border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                                  }`}
-                                >
-                                  <span className="uppercase font-mono text-[10px]">{lang}</span>
-                                  <span className="text-[10px] truncate max-w-[50px]">{languageNames[lang].split(' ')[0]}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
+                      {/* Language Selection Section */}
+                      <div className="border-t border-slate-800/80 pt-2 flex flex-col gap-1.5">
+                        <div className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider px-0.5 flex items-center gap-1">
+                          <span>🌐</span>
+                          <span>App Language</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {(['en', 'fr', 'de'] as Language[]).map((lang) => {
+                            const isSelected = language === lang;
+                            return (
+                              <button
+                                key={lang}
+                                type="button"
+                                onClick={() => {
+                                  setLanguage(lang);
+                                }}
+                                className={`flex items-center justify-center gap-1 py-1.5 px-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer select-none ${
+                                  isSelected
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.15)] font-black'
+                                    : 'bg-slate-950/50 border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                                }`}
+                              >
+                                <span className="uppercase font-mono text-[10px]">{lang}</span>
+                                <span className="text-[10px] truncate max-w-[50px]">{languageNames[lang].split(' ')[0]}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Section Headers and View Groups */}
-                  <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900/60 border-b border-slate-800/60 text-[10px] font-mono font-semibold text-slate-400">
-                    <span>SECTIONS</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedGroups({ beacon: true, glasses: true, tech: true, audit: true })}
-                        className="hover:text-emerald-400 transition cursor-pointer"
-                      >
-                        Expand All
-                      </button>
-                      <span className="text-slate-700">•</span>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedGroups({ beacon: false, glasses: false, tech: false, audit: false })}
-                        className="hover:text-emerald-400 transition cursor-pointer"
-                      >
-                        Collapse All
-                      </button>
+                      {/* App Store & PWA Launch Diagnostics Center */}
+                      <div className="border-t border-slate-800/80 pt-2.5">
+                        <button
+                          id="app-store-launch-readiness-btn"
+                          type="button"
+                          onClick={() => {
+                            setIsViewSelectorOpen(false);
+                            setIsAppStoreLaunchModalOpen(true);
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold font-mono bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 hover:text-white transition cursor-pointer"
+                          title="Open App Store & PWA Launch Readiness Diagnostics Center"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Rocket className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>App Store &amp; PWA Launch Center</span>
+                          </div>
+                          <span className="text-[10px] text-cyan-400 font-bold">OPEN ➔</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="py-1.5">
-                    {VIEW_GROUPS.map((group) => {
-                      const isExpanded = !!expandedGroups[group.id];
-                      return (
-                        <div key={group.id} className="flex flex-col">
-                          {/* Group header row - Clickable to Collapse/Expand options */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedGroups(prev => ({
-                                ...prev,
-                                [group.id]: !prev[group.id]
-                              }));
-                            }}
-                            className="w-full flex items-center justify-between px-4 py-3 bg-slate-950 hover:bg-slate-900/40 text-slate-400 hover:text-slate-200 transition cursor-pointer select-none text-left"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm select-none">{group.icon}</span>
-                              <span className="text-[10px] font-extrabold uppercase tracking-wider font-sans">{t(`cat.${group.id}`)}</span>
-                            </div>
-                            <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-emerald-400' : ''}`} />
-                          </button>
-
-                          {/* Options container with simple native height transitions or clean lists */}
-                          {isExpanded && (
-                            <div className="bg-slate-950/60 py-1 border-t border-slate-900/30">
-                              {group.options.map((opt) => {
-                                const activeFullValue = `${activeView}:${activeView === 'citizen' ? citizenTab : activeView === 'glasses' ? glassesTab : activeView === 'tech' ? techTab : 'main'}`;
-                                const isSelected = opt.value === activeFullValue;
-                                return (
-                                  <button
-                                    key={opt.value}
-                                    type="button"
-                                    onClick={() => {
-                                      const [view, tab] = opt.value.split(':');
-                                      setActiveView(view as any);
-                                      if (view === 'citizen') {
-                                        setCitizenTab(tab as any);
-                                      } else if (view === 'glasses') {
-                                        setGlassesTab(tab as any);
-                                      } else if (view === 'tech') {
-                                        setTechTab(tab as any);
-                                      }
-                                      setIsViewSelectorOpen(false);
-                                    }}
-                                    className={`w-full flex flex-col items-start gap-0.5 px-6 py-2 hover:bg-emerald-950/10 text-left transition border-l-2 ${
-                                      isSelected
-                                        ? 'bg-slate-900/50 border-emerald-500 text-white font-bold'
-                                        : 'border-transparent text-slate-400 hover:text-white'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs select-none">{opt.icon}</span>
-                                      <span className="text-xs font-bold leading-tight">{t(`view.${opt.value.replace(':', '.')}`)}</span>
-                                      {isSelected && (
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></span>
-                                      )}
-                                    </div>
-                                    <span className="text-[9px] text-slate-500 pl-5 leading-normal truncate w-full block font-medium">
-                                      {t(`desc.${opt.value.replace(':', '.')}`)}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -3786,18 +3887,20 @@ export default function App() {
               </div>
             )}
 
-            {/* AI Tactical Copilot Quick Launch Button */}
-            <button
-              id="ai-copilot-trigger-btn"
-              type="button"
-              onClick={() => setShowCopilot(!showCopilot)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono font-bold bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 hover:text-white shadow-[0_0_15px_rgba(16,185,129,0.2)] transition cursor-pointer shrink-0"
-              title="Open Gemini 3.6 AI Tactical Privacy Copilot Chat"
-            >
-              <Bot className="w-4 h-4 text-emerald-400 animate-pulse" />
-              <span>AI COPILOT</span>
-              <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-400 text-slate-950 font-black">3.6</span>
-            </button>
+            {/* AI Tactical Copilot Quick Launch Button (Hidden for ultra-minimalist UI) */}
+            {citizenState.showCopilotButton && (
+              <button
+                id="ai-copilot-trigger-btn"
+                type="button"
+                onClick={() => setShowCopilot(!showCopilot)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono font-bold bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 hover:text-white shadow-[0_0_15px_rgba(16,185,129,0.2)] transition cursor-pointer shrink-0"
+                title="Open Gemini 3.7 AI Tactical Privacy Copilot Chat"
+              >
+                <Bot className="w-4 h-4 text-emerald-400 animate-pulse" />
+                <span>AI COPILOT</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-400 text-slate-950 font-black">3.7</span>
+              </button>
+            )}
           </div>
         </div>
       </header>

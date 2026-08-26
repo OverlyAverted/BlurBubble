@@ -168,7 +168,7 @@ export const AiThreatOptimizer: React.FC<AiThreatOptimizerProps> = ({ citizenSta
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xs sm:text-sm font-extrabold uppercase font-mono text-white tracking-wider">
-                Gemini 3.6 Threat Optimizer
+                Gemini 3.7 Threat Optimizer
               </h3>
               <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                 AI CORE
@@ -226,7 +226,7 @@ export const AiThreatOptimizer: React.FC<AiThreatOptimizerProps> = ({ citizenSta
           <div>
             <span className="font-extrabold uppercase block text-[11px]">🚨 AUTOMATIC LOCKDOWN ENGAGED</span>
             <span className="text-[10px] text-rose-200">
-              High-threat scan detected. Gemini 3.6 deployed maximum 50m Strict Blur shield.
+              High-threat scan detected. Gemini 3.7 deployed maximum 50m Strict Blur shield.
             </span>
           </div>
         </motion.div>

@@ -1,4 +1,4 @@
-export type PrivacyLevel = 'strict_blur' | 'pixelate' | 'emoji' | 'black_bar' | 'magic_removal' | 'none';
+export type PrivacyLevel = 'strict_blur' | 'pixelate' | 'emoji' | 'black_bar' | 'magic_removal' | 'custom_avatar' | 'none';
 
 export interface RegisteredEntity {
   id: string;
@@ -69,6 +69,7 @@ export interface CitizenState {
   showAuditLogs?: boolean;
   showEmergencyButton?: boolean;
   showGuideButton?: boolean;
+  showCopilotButton?: boolean;
   showTopBar?: boolean;
   showSignalHistory?: boolean;
   showThreatOptimizer?: boolean;

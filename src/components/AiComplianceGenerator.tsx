@@ -93,7 +93,7 @@ export const AiComplianceGenerator: React.FC<AiComplianceGeneratorProps> = ({ ad
           </div>
           <div>
             <h3 className="text-sm font-extrabold uppercase font-mono text-white tracking-wider flex items-center gap-2">
-              Gemini 3.6 AI Legal Opt-Out & Cease-and-Desist Generator
+              Gemini 3.7 AI Legal Opt-Out & Cease-and-Desist Generator
               <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
                 LEGAL COUNSEL AI
               </span>
@@ -149,7 +149,7 @@ export const AiComplianceGenerator: React.FC<AiComplianceGeneratorProps> = ({ ad
         ) : (
           <>
             <Gavel className="w-4 h-4 text-amber-400" />
-            Draft Legal Cease-and-Desist Notice (Gemini 3.6 Legal AI)
+            Draft Legal Cease-and-Desist Notice (Gemini 3.7 Legal AI)
           </>
         )}
       </button>

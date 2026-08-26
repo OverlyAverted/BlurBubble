@@ -1080,7 +1080,7 @@ export default function ComplianceAudit({ citizenState, logs, onAddLog, onClearL
               </p>
             </div>
 
-            {/* Gemini 3.6 AI Cease-and-Desist Legal Generator */}
+            {/* Gemini 3.7 AI Cease-and-Desist Legal Generator */}
             <AiComplianceGenerator addLog={onAddLog} />
 
           </div>

@@ -20,12 +20,12 @@ async function startServer() {
   });
 
   // ----------------------------------------------------
-  // 1. Gemini 3.6 Threat Analysis & Shield Optimizer
+  // 1. Gemini 3.7 Threat Analysis & Shield Optimizer
   // ----------------------------------------------------
   app.post("/api/gemini/threat-analysis", async (req, res) => {
     try {
       const { rfEnvironment, detectedDevices, noiseLevel, currentShieldPower } = req.body;
-      const prompt = `You are the BlurBubble AI Tactical Defense Core powered by Gemini 3.6. Analyze this privacy threat telemetry:
+      const prompt = `You are the BlurBubble AI Tactical Defense Core powered by Gemini 3.7. Analyze this privacy threat telemetry:
 - RF Environment: ${JSON.stringify(rfEnvironment || {})}
 - Detected Smart Cameras / Scanners: ${JSON.stringify(detectedDevices || [])}
 - Ambient RF Noise: ${noiseLevel || 45} dBm
@@ -42,7 +42,7 @@ Evaluate threat vectors and output JSON with:
 8. suggestedCountermeasures (array of strings with recommended defense steps)`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -71,7 +71,7 @@ Evaluate threat vectors and output JSON with:
   });
 
   // ----------------------------------------------------
-  // 2. Gemini 3.6 Vision AI Optical Frame Analysis
+  // 2. Gemini 3.7 Vision AI Optical Frame Analysis
   // ----------------------------------------------------
   app.post("/api/gemini/analyze-frame", async (req, res) => {
     try {
@@ -99,7 +99,7 @@ Provide a structured JSON output with:
       };
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: { parts: [imagePart, textPart] },
         config: {
           responseMimeType: "application/json",
@@ -137,12 +137,12 @@ Provide a structured JSON output with:
   });
 
   // ----------------------------------------------------
-  // 3. Gemini 3.6 Acoustic Crawler & Voice Classifier
+  // 3. Gemini 3.7 Acoustic Crawler & Voice Classifier
   // ----------------------------------------------------
   app.post("/api/gemini/analyze-audio", async (req, res) => {
     try {
       const { decibelLevel, frequencyPeaks, sampleContext, platformTarget } = req.body;
-      const prompt = `You are BlurBubble Acoustic Defense AI powered by Gemini 3.6. Analyze the following telemetry:
+      const prompt = `You are BlurBubble Acoustic Defense AI powered by Gemini 3.7. Analyze the following telemetry:
 - Ambient Audio Level: ${decibelLevel || 55} dB
 - Frequency Peaks (Hz): ${JSON.stringify(frequencyPeaks || [1200, 2400, 4800, 18500])}
 - Target Indexing Platform: ${platformTarget || "Public Streaming / Audio DB"}
@@ -157,7 +157,7 @@ Return JSON with:
 6. rfc9402ComplianceStatus ('COMPLIANT' | 'OPT_OUT_IGNORED' | 'VIOLATION_DETECTED')`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -184,12 +184,12 @@ Return JSON with:
   });
 
   // ----------------------------------------------------
-  // 4. Gemini 3.6 Legal Opt-Out & Cease-and-Desist Generator
+  // 4. Gemini 3.7 Legal Opt-Out & Cease-and-Desist Generator
   // ----------------------------------------------------
   app.post("/api/gemini/compliance-generator", async (req, res) => {
     try {
       const { offenderName, violationType, beaconId, jurisdiction, timestamp } = req.body;
-      const prompt = `You are BlurBubble Privacy Legal AI Counsel. Draft a formal Legal Cease-and-Desist Notice & Opt-Out demand letter under RFC-9402, CCPA, BIPA, GDPR, and EU AI Act for:
+      const prompt = `You are BlurBubble Privacy Legal AI Counsel powered by Gemini 3.7. Draft a formal Legal Cease-and-Desist Notice & Opt-Out demand letter under RFC-9402, CCPA, BIPA, GDPR, and EU AI Act for:
 - Offending System/Entity: ${offenderName || "Unconsented Smart Camera System"}
 - Violation Type: ${violationType || "Unauthorized Biometric Facial Scan"}
 - Broadcast Beacon Hash: ${beaconId || "BLURBUBBLE-RFC9402-BEACON-ALPHA"}
@@ -205,7 +205,7 @@ Return structured JSON with:
 6. complianceHash (a cryptographic-styled verification string)`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -232,22 +232,22 @@ Return structured JSON with:
   });
 
   // ----------------------------------------------------
-  // 5. Gemini 3.6 AI Tactical Privacy Copilot Chat
+  // 5. Gemini 3.7 AI Tactical Privacy Copilot Chat
   // ----------------------------------------------------
   app.post("/api/gemini/assistant", async (req, res) => {
     try {
       const { message, systemContext } = req.body;
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: message,
         config: {
-          systemInstruction: `You are BlurBubble's AI Tactical Privacy Copilot powered by Gemini 3.6. You are an expert in RFC-9402 privacy broadcast protocols, RF shielding, optical face obfuscation, acoustic anti-recording countermeasures, and digital sovereignty.
+          systemInstruction: `You are BlurBubble's AI Tactical Privacy Copilot powered by Gemini 3.7. You are an expert in RFC-9402 privacy broadcast protocols, RF shielding, optical face obfuscation, acoustic anti-recording countermeasures, and digital sovereignty.
 Current system state: ${JSON.stringify(systemContext || {})}
 Provide concise, authoritative, tactical responses with bullet points, threat mitigations, and exact shield commands.`
         }
       });
 
-      res.json({ reply: response.text || "No response received from Gemini 3.6." });
+      res.json({ reply: response.text || "No response received from Gemini 3.7." });
     } catch (error: any) {
       console.error("Tactical Copilot API error:", error);
       res.status(500).json({ error: error.message || "Failed to query Tactical Copilot" });
@@ -255,11 +255,11 @@ Provide concise, authoritative, tactical responses with bullet points, threat mi
   });
 
   // ----------------------------------------------------
-  // 6. Gemini 3.6 Automated Tech Pitch & Competition Finder
+  // 6. Gemini 3.7 Automated Tech Pitch & Competition Finder
   // ----------------------------------------------------
   app.get("/api/outreach/find-competitions", async (req, res) => {
     try {
-      const prompt = `You are BlurBubble's Executive Business Development AI. Provide a JSON list of top major tech companies (smart glasses / AR / AI wearables developers) and prestigious hardware/privacy competitions, grants, and standards bodies actively seeking privacy compliance standards like RFC-9402.
+      const prompt = `You are BlurBubble's Executive Business Development AI powered by Gemini 3.7. Provide a JSON list of top major tech companies (smart glasses / AR / AI wearables developers) and prestigious hardware/privacy competitions, grants, and standards bodies actively seeking privacy compliance standards like RFC-9402.
 
 Return JSON with an array "competitionsAndTechTargets" where each element has:
 - id: string
@@ -274,7 +274,7 @@ Return JSON with an array "competitionsAndTechTargets" where each element has:
 - pitchAngle: string (suggested pitch headline)`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -314,7 +314,7 @@ Return JSON with an array "competitionsAndTechTargets" where each element has:
   });
 
   // ----------------------------------------------------
-  // 7. Gemini 3.6 Pitch & Presentation Generator API
+  // 7. Gemini 3.7 Pitch & Presentation Generator API
   // ----------------------------------------------------
   app.post("/api/outreach/generate-pitch", async (req, res) => {
     try {
@@ -335,7 +335,7 @@ Generate structured JSON with:
 5. targetEmailAddress: string`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -440,7 +440,7 @@ Return JSON with an array "forumDiscussions" where each element has:
 - postingStatus: 'QUEUED' | 'AUTO_DRAFTED'`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -496,7 +496,7 @@ Return JSON with:
 - autoSubmissionPayload: object with formatted fields for REST API submission`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -549,7 +549,7 @@ Return JSON with:
 - binaryHeaderHash: string`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -581,10 +581,10 @@ Return JSON with:
     try {
       console.log("[AUTOPILOT ENGINE] Executing full-spectrum automated creation, research, pitching, forum scouting, directory listing & firmware compilation...");
 
-      // Execute all core tasks in parallel using Gemini 3.6 Flash
+      // Execute all core tasks in parallel using Gemini 3.7 Flash
       const [competitionsRes, forumRes, directoryRes, firmwareRes] = await Promise.all([
         ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-3.7-flash",
           contents: "Provide top 4 smart wearable companies and privacy grants seeking RFC-9402 BLE beacons.",
           config: {
             responseMimeType: "application/json",
@@ -616,7 +616,7 @@ Return JSON with:
           }
         }),
         ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-3.7-flash",
           contents: "Scout recent HackerNews and Reddit threads on wearable cameras and auto-draft RFC-9402 responses.",
           config: {
             responseMimeType: "application/json",
@@ -646,7 +646,7 @@ Return JSON with:
           }
         }),
         ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-3.7-flash",
           contents: "Draft submission listing package for ProductHunt for BlurBubble RFC-9402 beacon system.",
           config: {
             responseMimeType: "application/json",
@@ -676,7 +676,7 @@ Return JSON with:
           }
         }),
         ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-3.7-flash",
           contents: "Compile production ESP32 C++ BLE peripheral code for RFC-9402 beacon broadcasting.",
           config: {
             responseMimeType: "application/json",
@@ -703,7 +703,7 @@ Return JSON with:
       // Auto-generate pitch for first target
       const firstTarget = parsedTargets[0] || { name: "Meta Reality Labs" };
       const pitchRes = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: `Draft executive pitch presentation for ${firstTarget.name}.`,
         config: {
           responseMimeType: "application/json",

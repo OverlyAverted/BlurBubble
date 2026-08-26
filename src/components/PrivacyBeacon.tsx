@@ -22,6 +22,7 @@ import {
   Hash,
   Sparkles,
   Layers,
+  LayoutGrid,
   Sparkle,
   Plus,
   Trash2,
@@ -62,6 +63,8 @@ import {
   Key,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
+  ChevronRight,
   Edit2,
   Check,
   Mic,
@@ -425,7 +428,14 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
   const [showContextHelp, setShowContextHelp] = useState(false);
   const showSignalHistory = !!state.showSignalHistory;
   const showPrivacyImpactScore = !!state.showPrivacyImpactScore;
-  const showSignalMap = state.showSignalMap !== false;
+  const showSignalMap = !!state.showSignalMap;
+  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
+  const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const [menuActiveCategory, setMenuActiveCategory] = useState<"all" | "defense" | "acoustic" | "rules" | "hardware">("all");
+  const [showWidgetCustomizer, setShowWidgetCustomizer] = useState(false);
+  const [activeShieldDropdown, setActiveShieldDropdown] = useState<"none" | "obfuscation" | "range" | "toggles" | "presets">("none");
+  
+
 
   // Swipe vs Continuous Scroll Widget Layout states
   const [widgetViewMode, setWidgetViewMode] = useState<'scroll' | 'swipe'>(() => {
@@ -441,7 +451,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
   const enabledWidgetIds: string[] = [];
   if (showPrivacyImpactScore) enabledWidgetIds.push('privacy-score');
   if (showSignalHistory) enabledWidgetIds.push('signal-history');
-  if (state.showBatteryWidget !== false) enabledWidgetIds.push('battery-status');
+  if (!!state.showBatteryWidget) enabledWidgetIds.push('battery-status');
   if (showSignalMap) enabledWidgetIds.push('signal-map');
 
   // Sync index to keep bounds correct on widget toggle
@@ -1120,8 +1130,9 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
       setIsBleScanning(false);
       setDiscoveredBleDevices([realDevice]);
     } catch (err: any) {
-      console.error("Web Bluetooth scan error:", err);
-      setRealBleError(err.message || "User cancelled scan or Bluetooth permission was denied.");
+      console.info("Web Bluetooth scan outcome:", err?.message || err);
+      const isCancelled = err?.name === "NotFoundError" || err?.message?.includes("User cancelled") || err?.message?.includes("device not found");
+      setRealBleError(isCancelled ? "Device selection cancelled or no hardware chosen. You can also use one-click Simulated Hardware Emulation." : (err?.message || "Bluetooth scan cancelled."));
       setIsBleScanning(false);
     }
   };
@@ -2296,31 +2307,39 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
     });
   };
 
+  const nextCryptoIDRef = useRef(nextCryptoID);
+  nextCryptoIDRef.current = nextCryptoID;
+
   // --- CRYPTO TIMER ROTATION EFFECT ---
   useEffect(() => {
     const timer = setInterval(() => {
       setCryptoTimer((prev) => {
         if (prev <= 1) {
-          const hex = '0123456789ABCDEF';
-          let newNextId = '0xFD23-';
-          for (let i = 0; i < 3; i++) {
-            let part = '';
-            for (let j = 0; j < 4; j++) {
-              part += hex[Math.floor(Math.random() * 16)];
+          setTimeout(() => {
+            const hex = '0123456789ABCDEF';
+            let newNextId = '0xFD23-';
+            for (let i = 0; i < 3; i++) {
+              let part = '';
+              for (let j = 0; j < 4; j++) {
+                part += hex[Math.floor(Math.random() * 16)];
+              }
+              newNextId += part + (i < 2 ? '-' : '');
             }
-            newNextId += part + (i < 2 ? '-' : '');
-          }
-          
-          setCurrentCryptoID(nextCryptoID);
-          setNextCryptoID(newNextId);
-          
-          onAddLog({
-            deviceModel: "CHILD_SHIELD_CONTROLLER",
-            action: 'rotated',
-            shieldApplied: "ROTATE_CRYPTOGRAPHIC_ID_ROTATION_SUCCESS",
-            distance: 0,
-            rotatedId: nextCryptoID
-          });
+            
+            const current = nextCryptoIDRef.current;
+            setCurrentCryptoID(current);
+            setNextCryptoID(newNextId);
+            
+            if (onAddLog) {
+              onAddLog({
+                deviceModel: "CHILD_SHIELD_CONTROLLER",
+                action: 'rotated',
+                shieldApplied: "ROTATE_CRYPTOGRAPHIC_ID_ROTATION_SUCCESS",
+                distance: 0,
+                rotatedId: current
+              });
+            }
+          }, 0);
           
           return 90;
         }
@@ -2329,7 +2348,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [nextCryptoID, onAddLog]);
+  }, [onAddLog]);
 
   // --- INTERACTIVE EVENT HANDLERS FOR NEW PROMPTS ---
   const handleTriggerTrackingSweep = () => {
@@ -2963,6 +2982,38 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
     }
   ];
 
+const ALL_PRIVACY_MODULES = [
+    // Visual Defense
+    { id: "overview", label: "Main Privacy Shield", icon: "üõ°Ô∏è", category: "defense", subCategory: "signal", desc: "Central interactive privacy beacon and instant protection status", status: state.isBroadcasting ? "ACTIVE" : "STANDBY" },
+    { id: "signal", label: "Shield Broadcast Range", icon: "üì°", category: "defense", subCategory: "signal", desc: "Adjust Bluetooth/RF opt-out signal propagation distance (1-50m)", status: (state.rangeMeters || 12) + "m" },
+    { id: "faces", label: "My Blurred Faces", icon: "üë§", category: "defense", subCategory: "identity", desc: "Register face profiles for AI camera recognition opt-out", count: state.registeredFaces?.length || 0 },
+    { id: "tags", label: "Protected Bags & Devices", icon: "üéí", category: "defense", subCategory: "identity", desc: "Attach privacy tags to backpacks, phones, and wearables", count: state.registeredEntities?.length || 0 },
+    { id: "google_maps_radar", label: "Google Maps Privacy Radar", icon: "üó∫Ô∏è", category: "defense", subCategory: "signal", desc: "Spatial Google Maps view with camera threat markers & safe perimeters", status: "RADAR" },
+    { id: "apple_maps_radar", label: "Apple Maps Privacy Shield", icon: "üçè", category: "defense", subCategory: "signal", desc: "Vector Apple Maps radar with Look Around 360¬∞ street view blur", status: "MAPKIT" },
+    { id: "experimental", label: "Experimental Countermeasures", icon: "üß™", category: "defense", subCategory: "identity", desc: "FLIR thermal pulse, retroreflective optical scramblers & LiDAR flood", status: (state.thermalPulseEnabled || state.antiLipReadingEnabled) ? "ACTIVE" : "STANDBY" },
+
+    // Acoustic & Audio Defense
+    { id: "targeted", label: "Targeted Audio Defenses", icon: "üîä", category: "acoustic", subCategory: "acoustic", desc: "Directional acoustic shielding to protect yourself without disrupting others", status: state.targetedShieldingEnabled ? "TARGETED" : "BLANKET" },
+    { id: "audio_shield", label: "Acoustic Shield Settings", icon: "üéôÔ∏è", category: "acoustic", subCategory: "acoustic", desc: "Vocal Scrambler, inaudible watermarking & ultrasonic mic saturation", status: state.vocalScramblerEnabled ? "SCRAMBLING" : "OFF" },
+    { id: "audio_map", label: "Audio Blind Spot Map", icon: "üó∫Ô∏è", category: "acoustic", subCategory: "acoustic", desc: "Map acoustic coverage shadows and microphone interference spheres", status: "SCANNER" },
+    { id: "audio_scrub", label: "Podcast Voice Scrubber", icon: "üìª", category: "acoustic", subCategory: "acoustic", desc: "Automated takedown requests for voice recordings on audio streams", count: audioTakedowns?.length || 0 },
+
+    // Rules & Spatial Policies
+    { id: "perimeter", label: "Safe School Zones & Geofence", icon: "üìç", category: "rules", subCategory: "signal", desc: "Automated privacy shields when entering custom map coordinates", count: perimeterSensors?.length || 0 },
+    { id: "hierarchy", label: "Rule Priority Hierarchy", icon: "‚öñÔ∏è", category: "rules", subCategory: "signal", desc: "Conflict resolution engine: define which safety rules take priority" },
+    { id: "wifi", label: "Home & Work WiFi Triggers", icon: "üì∂", category: "rules", subCategory: "signal", desc: "Switch shield modes automatically upon connecting to trusted networks", status: state.wifiRulesEnabled ? "AUTO" : "OFF" },
+    { id: "biometric", label: "Lock My App (Passkey)", icon: "üîí", category: "rules", subCategory: "identity", desc: "Biometric fingerprint or FaceID lock to prevent unauthorized tampering", status: state.biometricLockEnabled ? "LOCKED" : "OPEN" },
+    { id: "settings", label: "Alerts, Sound & Haptics", icon: "‚öôÔ∏è", category: "rules", subCategory: "system", desc: "Customize tactile vibrations, audible alerts, and notifications" },
+
+    // Hardware, Legal & Compliance
+    { id: "licensing", label: "Safety Lab Certificates", icon: "üìã", category: "hardware", subCategory: "licensing", desc: "Official FCC/CE RF safety certificates and radiation test reports", count: state.hardwareLicenses?.length || 0 },
+    { id: "retention", label: "Zero Data Retention", icon: "üíæ", category: "hardware", subCategory: "retention", desc: "Configure automatic cryptographic purging of past logs and tokens" },
+    { id: "escrow", label: "Warrant Escrow Keys", icon: "üîë", category: "hardware", subCategory: "escrow", desc: "Review emergency split-key cryptographic escrow under legal warrant", count: escrowHolders?.length || 0 },
+    { id: "pairing", label: "Hardware Key Pairing", icon: "üîå", category: "hardware", subCategory: "pairing", desc: "Pair physical Bluetooth fobs, buttons, or badges to trigger sweeps", count: state.registeredEntities?.filter((e: any) => e.type === "smart_tag" || e.type === "key_fob" || e.type === "airtag" || e.type === "galaxy_tag").length || 0 },
+    { id: "scrub", label: "Video Database Takedowns", icon: "üé¨", category: "hardware", subCategory: "scrub", desc: "Automated RFC-9402 face removal requests on public video databases", count: takedowns?.length || 0 },
+    { id: "legal", label: "Privacy Rights Quiz", icon: "üìñ", category: "hardware", subCategory: "legal", desc: "Interactive educational quiz on camera surveillance laws and legal rights" }
+  ];
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
       {/* Coercion Defense System Wipe Overlay */}
@@ -3105,36 +3156,112 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
       <div className={`${(state.showAuditLogs || (state.privacyLevel === 'none' && state.isBroadcasting)) ? 'lg:col-span-7' : 'lg:col-span-12'} space-y-6`}>
         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-md relative overflow-hidden">
           
-          {/* Section Header with Inline Help Trigger */}
-          <div className="flex items-center justify-between gap-4 mb-5 border-b border-slate-800/40 pb-3">
-            <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-black uppercase tracking-widest text-slate-300 font-sans">Privacy Control Panel</span>
-            </div>
-            
-            {/* Show Tips Button Inline */}
-            {!showContextHelp && (
-              <button
-                type="button"
-                onClick={() => setShowContextHelp(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs text-emerald-400 hover:text-emerald-300 font-semibold transition shadow-sm cursor-pointer"
-                title="Show helper tips"
-              >
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span>Show Tips</span>
-              </button>
-            )}
-          </div>
 
-          {/* Desktop Premium Interactive Hub (Hidden on mobile as the header dropdown handles views) */}
-          <div className="mb-6 space-y-4 hidden md:block">
+
+          
+
+          {/* Top Header & Navigation Switcher */}
+          {activeTab === "overview" ? (
+            /* Streamlined Privacy Shield Bar on Landing Page */
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 mb-6 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl border ${state.isBroadcasting ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)]" : "bg-slate-900 text-slate-500 border-slate-800"}`}>
+                  <Radio className={`w-4 h-4 ${state.isBroadcasting ? "animate-pulse" : ""}`} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-white">
+                      Privacy Shield Controller
+                    </span>
+                    <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full border ${state.isBroadcasting ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-slate-850 text-slate-400 border-slate-750"}`}>
+                      {state.isBroadcasting ? "TRANSMITTING" : "STANDBY"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                    <span>ID: <span className="text-slate-300">{state.anonymousId?.slice(0, 8) || "0xA8F9"}...</span></span>
+                    <span>‚Ä¢</span>
+                    <span>Range: <span className="text-emerald-400 font-bold">{state.rangeMeters || 12}m</span></span>
+                    <span>‚Ä¢</span>
+                    <span className="capitalize text-slate-300">{state.privacyLevel?.replace("_", " ") || "Strict Blur"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                {/* Customize Dashboard Widgets Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowWidgetCustomizer(!showWidgetCustomizer)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                    showWidgetCustomizer || enabledWidgetIds.length > 0
+                      ? "bg-slate-850 text-slate-200 border-slate-700"
+                      : "bg-slate-950/60 text-slate-400 border-slate-850 hover:text-slate-200 hover:border-slate-750"
+                  }`}
+                  title="Toggle optional dashboard widgets (Score, History, Battery, Map)"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="hidden md:inline">Dashboard Widgets</span>
+                  {enabledWidgetIds.length > 0 && (
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-mono font-bold border border-emerald-500/30">
+                      {enabledWidgetIds.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Primary Tools & Features Menu Trigger */}
+                <button
+                  id="open-privacy-tools-menu-btn"
+                  type="button"
+                  onClick={() => setIsToolsMenuOpen(true)}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition font-mono uppercase tracking-wider cursor-pointer"
+                  title="Open full menu with all 20+ Privacy Tools & Features"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Tools &amp; Menus</span>
+                  <span className="text-[9px] bg-slate-950 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-black">20+</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Secondary Tab Navigation Bar with Quick Return to Shield */
+            <div className="mb-6 space-y-4">
+              {/* Back to Privacy Shield Return Bar */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  id="back-to-shield-widget-btn"
+                  onClick={() => {
+                    setActiveTab("overview");
+                    if (externalOnTabChange) externalOnTabChange("overview");
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.15)] transition cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>‚Üê Back to Privacy Shield</span>
+                </button>
+
+                <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold">Active Module:</span>
+                  <span className="text-white font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800 flex items-center gap-1.5">
+                    {ALL_PRIVACY_MODULES.find(m => m.id === activeTab)?.icon} {ALL_PRIVACY_MODULES.find(m => m.id === activeTab)?.label || activeTab}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsToolsMenuOpen(true)}
+                    className="text-[10px] font-bold text-emerald-400 hover:underline cursor-pointer ml-1"
+                  >
+                    (All Menus)
+                  </button>
+                </div>
+              </div>
+
               {/* Category Selection Tabs */}
               <div className="grid grid-cols-4 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 {[
-                  { id: 'compliance', label: 'Safe & Legal Rules', icon: 'üé¨' },
-                  { id: 'rules', label: 'When to Block', icon: '‚öñÔ∏è' },
-                  { id: 'defense', label: 'My Personal Shield', icon: 'üõ°Ô∏è' },
-                  { id: 'hardware', label: 'My Connected Gear', icon: 'üîå' }
+                  { id: "compliance", label: "Safe & Legal Rules", icon: "üé¨" },
+                  { id: "rules", label: "When to Block", icon: "‚öñÔ∏è" },
+                  { id: "defense", label: "My Personal Shield", icon: "üõ°Ô∏è" },
+                  { id: "hardware", label: "My Connected Gear", icon: "üîå" }
                 ].map((cat) => {
                   const isActive = selectedCategory === cat.id;
                   return (
@@ -3143,31 +3270,30 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                       type="button"
                       onClick={() => {
                         setSelectedCategory(cat.id as any);
-                        setDefenseSubCategory('all');
-                        // Auto-select the first tab in this category (alphabetically)
+                        setDefenseSubCategory("all");
                         const firstTabMap: Record<string, string> = {
-                          compliance: 'legal',
-                          rules: 'perimeter',
-                          defense: 'overview',
-                          hardware: 'licensing'
+                          compliance: "legal",
+                          rules: "perimeter",
+                          defense: "overview",
+                          hardware: "licensing"
                         };
                         setActiveTab(firstTabMap[cat.id] as any);
                       }}
-                      className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all border ${
+                      className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
                         isActive
-                          ? 'bg-slate-900 border-slate-700 text-white shadow-sm'
-                          : 'bg-transparent border-transparent text-slate-400 hover:text-white hover:bg-slate-900/50'
+                          ? "bg-slate-900 border-slate-700 text-white shadow-sm"
+                          : "bg-transparent border-transparent text-slate-400 hover:text-white hover:bg-slate-900/50"
                       }`}
                     >
                       <span className="text-sm select-none">{cat.icon}</span>
-                      <span>{cat.label}</span>
+                      <span className="hidden sm:inline">{cat.label}</span>
                     </button>
                   );
                 })}
               </div>
 
               {/* Defense Category Sub-Navigation Switcher */}
-              {selectedCategory === 'defense' && (
+              {selectedCategory === "defense" && (
                 <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-850 space-y-2 animate-fadeIn">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono text-slate-500 uppercase font-extrabold tracking-wider flex items-center gap-1.5">
@@ -3178,14 +3304,13 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                       QUICK CATEGORIES
                     </span>
                   </div>
-                  
                   <div className="grid grid-cols-5 gap-1.5">
                     {[
-                      { id: 'all', label: 'All Controls', icon: <Layers className="w-3.5 h-3.5" />, desc: '9 items' },
-                      { id: 'signal', label: 'Signal & WiFi', icon: <Radio className="w-3.5 h-3.5" />, desc: '3 items' },
-                      { id: 'acoustic', label: 'Sound & Audio', icon: <Volume2 className="w-3.5 h-3.5" />, desc: '3 items' },
-                      { id: 'identity', label: 'Identity', icon: <User className="w-3.5 h-3.5" />, desc: '2 items' },
-                      { id: 'system', label: 'Settings', icon: <Settings2 className="w-3.5 h-3.5" />, desc: '1 item' }
+                      { id: "all", label: "All Controls", icon: <Layers className="w-3.5 h-3.5" />, desc: "9 items" },
+                      { id: "signal", label: "Signal & WiFi", icon: <Radio className="w-3.5 h-3.5" />, desc: "3 items" },
+                      { id: "acoustic", label: "Sound & Audio", icon: <Volume2 className="w-3.5 h-3.5" />, desc: "3 items" },
+                      { id: "identity", label: "Identity", icon: <User className="w-3.5 h-3.5" />, desc: "2 items" },
+                      { id: "system", label: "Settings", icon: <Settings2 className="w-3.5 h-3.5" />, desc: "1 item" }
                     ].map((sub) => {
                       const isActive = defenseSubCategory === sub.id;
                       return (
@@ -3195,12 +3320,12 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                           type="button"
                           onClick={() => {
                             setDefenseSubCategory(sub.id as any);
-                            playLocalSoundTest('tactical_click', 50);
+                            playLocalSoundTest("tactical_click", 50);
                           }}
                           className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
                             isActive
-                              ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
-                              : 'bg-slate-900/30 border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 hover:border-slate-800'
+                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]"
+                              : "bg-slate-900/30 border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 hover:border-slate-800"
                           }`}
                         >
                           <div className="flex items-center gap-1">
@@ -3215,62 +3340,16 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                 </div>
               )}
 
-              {/* Category Sub-Header */}
-              <div className="flex items-center justify-between mt-4 mb-2 px-1">
-                <span className="text-[10px] font-mono text-slate-400 uppercase font-extrabold tracking-wider">
-                  {selectedCategory === 'compliance' && "üìñ Safe & Legal Rules"}
-                  {selectedCategory === 'rules' && "‚öñÔ∏è When to Block Rules"}
-                  {selectedCategory === 'hardware' && "üîå Connected Badges & Keys"}
-                  {selectedCategory === 'defense' && (
-                    defenseSubCategory === 'all' ? "üõ°Ô∏è All Personal Shield Controls" :
-                    defenseSubCategory === 'signal' ? "üì° Signal & WiFi Range Controls" :
-                    defenseSubCategory === 'acoustic' ? "üîä Acoustic & Audio Shield Controls" :
-                    defenseSubCategory === 'identity' ? "üë§ Identity Blurring Controls" :
-                    "‚öôÔ∏è System Alerts Controls"
-                  )}
-                </span>
-                <span className="text-[9px] text-slate-500 font-mono font-bold">
-                  ACTIVE VIEW FILTER
-                </span>
-              </div>
-
-              {/* Sub-Feature Pills with Real-Time Counters/Status badges */}
-              <div className="grid grid-cols-3 xl:grid-cols-4 gap-2">
-                {[
-                  // Legal Rights (compliance)
-                  { id: 'legal', label: 'Safety Quiz', icon: 'üìñ', category: 'compliance', desc: 'A fun quick test to learn how privacy laws protect you' },
-                  { id: 'scrub', label: 'Request Blur Online', icon: 'üé¨', category: 'compliance', desc: 'Request to blur your face on public video databases', count: takedowns?.length || 0 },
-                  { id: 'audio_scrub', label: 'Request Voice Scrub', icon: 'üéôÔ∏è', category: 'compliance', desc: 'Request to scrub your voice prints from public podcasts & audio archives', count: audioTakedowns?.length || 0 },
-                  
-                  // Safety Policies (rules)
-                  { id: 'perimeter', label: 'Safe School Zones', icon: 'üìç', category: 'rules', desc: 'Pick safe places on a map where recording is blocked', count: perimeterSensors?.length || 0 },
-                  { id: 'hierarchy', label: 'What Rule Wins?', icon: '‚öñÔ∏è', category: 'rules', desc: 'Sort your safety rules so the app knows which to follow first' },
-                  { id: 'biometric', label: 'Lock My App', icon: 'üîí', category: 'rules', desc: 'Use your finger scan or code to keep others out', status: state.biometricLockEnabled ? 'LOCKED' : 'OPEN' },
-                  
-                  // Shield & Signals (defense)
-                  { id: 'settings', label: 'Alerts & Sound Settings', icon: '‚öôÔ∏è', category: 'defense', subCategory: 'system', desc: 'Change sounds, pocket buzz alerts, and notifications' },
-                  { id: 'overview', label: 'Main Dashboard', icon: 'üìä', category: 'defense', subCategory: 'signal', desc: 'Your general status, signal charts, and widget layout' },
-                  { id: 'targeted', label: 'Targeted Sound & Peripheral', icon: 'üîä', category: 'defense', subCategory: 'acoustic', desc: 'Manage targeted directional audio shields and companion peripherals', status: state.targetedShieldingEnabled ? 'TARGETED' : 'BLANKET' },
-                  { id: 'audio_shield', label: 'Audio Shield Settings', icon: 'üéôÔ∏è', category: 'defense', subCategory: 'acoustic', desc: 'Toggle Acoustic Watermarks, Vocal Scrambler & Ultrasonic Mic Saturation per-device or per-profile', status: state.vocalScramblerEnabled ? 'SCRAMBLING' : 'OFF' },
-                  { id: 'audio_map', label: 'Audio Map & Heat', icon: 'üó∫Ô∏è', category: 'defense', subCategory: 'acoustic', desc: "Visualize acoustic 'blind spots' and saturation coverage areas", status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
-                  { id: 'tags', label: 'Protected Toys & Bags', icon: 'üéí', category: 'defense', subCategory: 'identity', desc: 'Add virtual tags to blur items like backpacks', count: state.registeredEntities?.length || 0 },
-                  { id: 'faces', label: 'My Blurred Faces', icon: 'üë§', category: 'defense', subCategory: 'identity', desc: 'Add photos of your face so smart cameras blur them', count: state.registeredFaces?.length || 0 },
-                  { id: 'signal', label: 'Shield Broadcast Range', icon: 'üì°', category: 'defense', subCategory: 'signal', desc: 'Pick how far your Stop Recording signal can reach', status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
-                  { id: 'google_maps_radar', label: 'Google Maps Privacy Radar', icon: 'üó∫Ô∏è', category: 'defense', subCategory: 'signal', desc: 'Real-time Google Maps search with live spatial privacy perimeters & camera threat markers', status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
-                  { id: 'apple_maps_radar', label: 'Apple Maps Privacy Shield', icon: 'üçè', category: 'defense', subCategory: 'signal', desc: 'Apple Maps MapKit JS vector radar, 360¬∞ Look Around street view obfuscation & Find My BLE scrambler', status: state.isBroadcasting ? 'ACTIVE' : 'STANDBY' },
-                  { id: 'wifi', label: 'Home WiFi Rules', icon: 'üì∂', category: 'defense', subCategory: 'signal', desc: 'Turn shield on/off automatically when you join home WiFi', status: state.wifiRulesEnabled ? 'AUTO' : 'OFF' },
-                  { id: 'experimental', label: 'Experimental Tech', icon: 'üß™', category: 'defense', subCategory: 'identity', desc: 'Activate and test speculative, state-of-the-art privacy shields', status: (state.thermalPulseEnabled || state.retroScramblerEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled) ? 'ACTIVE' : 'STANDBY' },
-                  
-                  // Wearables & Keys (hardware)
-                  { id: 'licensing', label: 'Safety Badges & Checks', icon: 'üìã', category: 'hardware', desc: 'Official certificates showing our safety lab tests', count: state.hardwareLicenses?.length || 0 },
-                  { id: 'retention', label: 'Clean Out My History', icon: 'üíæ', category: 'hardware', desc: 'Decide when the app automatically wipes old records' },
-                  { id: 'escrow', label: 'Warrant Overrides', icon: 'üîë', category: 'hardware', desc: 'See keys that can turn off the shield in emergency cases', count: escrowHolders?.length || 0 },
-                  { id: 'pairing', label: 'Pair My Badge', icon: 'üîå', category: 'hardware', desc: 'Link physical keychains or pocket buttons', count: state.registeredEntities?.filter(e => e.type === 'smart_tag' || e.type === 'key_fob' || e.type === 'airtag' || e.type === 'galaxy_tag').length || 0 }
-                ]
+              {/* Sub-Feature Pills */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+                {ALL_PRIVACY_MODULES
                   .filter((item) => {
-                    if (item.category !== selectedCategory) return false;
-                    if (selectedCategory === 'defense' && defenseSubCategory !== 'all') {
-                      return (item as any).subCategory === defenseSubCategory;
+                    if (selectedCategory === "compliance") return item.id === "legal" || item.id === "scrub" || item.id === "audio_scrub";
+                    if (selectedCategory === "rules") return item.id === "perimeter" || item.id === "hierarchy" || item.id === "biometric";
+                    if (selectedCategory === "hardware") return item.id === "licensing" || item.id === "retention" || item.id === "escrow" || item.id === "pairing";
+                    if (selectedCategory === "defense") {
+                      if (defenseSubCategory === "all") return true;
+                      return item.subCategory === defenseSubCategory;
                     }
                     return true;
                   })
@@ -3281,42 +3360,39 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                         key={item.id}
                         type="button"
                         onClick={() => setActiveTab(item.id as any)}
-                        className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                        className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all cursor-pointer ${
                           isActive
-                            ? 'bg-emerald-950/20 border-emerald-500/50 text-white shadow-md shadow-emerald-950/10'
-                            : 'bg-slate-950/40 border-slate-850 hover:border-slate-800 text-slate-300 hover:text-white hover:bg-slate-950/80'
+                            ? "bg-emerald-950/20 border-emerald-500/50 text-white shadow-md shadow-emerald-950/10"
+                            : "bg-slate-950/40 border-slate-850 hover:border-slate-800 text-slate-300 hover:text-white hover:bg-slate-950/80"
                         }`}
                       >
                         <div className="flex items-center justify-between w-full mb-1">
                           <span className="text-base select-none">{item.icon}</span>
-                          
-                          {/* Micro-Badges / Count Indicators */}
                           {item.count !== undefined && (
                             <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
-                              isActive ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'
+                              isActive ? "bg-emerald-500 text-slate-950" : "bg-slate-800 text-slate-300"
                             }`}>
                               {item.count}
                             </span>
                           )}
-
                           {item.status !== undefined && (
                             <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold font-mono tracking-wider ${
-                              item.status === 'ACTIVE' || item.status === 'AUTO'
-                                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-                                : 'bg-slate-800 text-slate-400'
+                              item.status === "ACTIVE" || item.status === "AUTO" || item.status === "RADAR"
+                                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                                : "bg-slate-800 text-slate-400"
                             }`}>
                               {item.status}
                             </span>
                           )}
                         </div>
-                        <span className="text-xs font-bold leading-tight block">{t(`view.citizen.${item.id}`)}</span>
-                        <span className="text-[9px] text-slate-500 leading-normal block mt-0.5 truncate w-full">{t(`desc.citizen.${item.id}`)}</span>
+                        <span className="text-xs font-bold leading-tight block">{item.label}</span>
+                        <span className="text-[9px] text-slate-500 leading-normal block mt-0.5 truncate w-full">{item.desc}</span>
                       </button>
                     );
                   })}
               </div>
             </div>
-          
+          )}
           {/* Quick Context-Aware Helper Tip */}
           {showContextHelp && (
             <div className="flex items-start justify-between gap-3.5 p-4 bg-emerald-950/10 border border-emerald-500/20 rounded-xl relative shadow-md shadow-emerald-950/5">
@@ -3327,8 +3403,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 font-sans block">Smart Assistant Tip</span>
                   <p className="text-xs text-slate-300 leading-relaxed pr-6">
-                    {activeTab === 'overview' && "This is your main dashboard. It displays your active shield status and allows you to toggle custom widgets."}
-                    {activeTab === 'targeted' && "Configure targeted sound cancellation, biometric audio watermarking, and next-gen companion wearables."}
+                                        {activeTab === 'targeted' && "Configure targeted sound cancellation, biometric audio watermarking, and next-gen companion wearables."}
                     {activeTab === 'audio_shield' && "Replicate visual shield rules in the acoustic domain: toggle watermarking, mic saturation, and vocal scrambling per profile or device."}
                     {activeTab === 'settings' && "Configure haptic pocket pulses, audible alarm chirps, and dynamic push notifications."}
                     {activeTab === 'signal' && "Set your custom localized privacy boundary radius. Controls how far your refusing signal propagates."}
@@ -3434,204 +3509,811 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                 )}
               </AnimatePresence>
 
-              {/* Minimalist Status Display */}
-              <div className="p-6 rounded-2xl bg-slate-950/40 border border-slate-800/80 flex flex-col items-center text-center space-y-4">
-                <div className="relative">
+              
+              {/* Comprehensive Central Privacy Shield Widget */}
+              <div className="p-6 rounded-2xl bg-slate-950/70 border border-slate-800/80 shadow-2xl backdrop-blur-sm space-y-6">
+                
+                {/* Top Status & Telemetry Strip */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-900 pb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-full border border-slate-850 text-[10px] font-mono">
+                      <span className={`w-2 h-2 rounded-full ${state.isBroadcasting ? "bg-emerald-400 animate-ping" : "bg-slate-600"}`}></span>
+                      <span className="text-slate-400 font-bold uppercase">Shield Status:</span>
+                      <span className={state.isBroadcasting ? "text-emerald-400 font-bold" : "text-slate-500 font-semibold"}>
+                        {state.isBroadcasting ? "TRANSMITTING ‚Ä¢ ENCRYPTED" : "STANDBY ‚Ä¢ SILENT"}
+                      </span>
+                    </div>
+
+                    <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/60 px-3 py-1.5 rounded-full border border-slate-850 text-[10px] font-mono text-slate-400">
+                      <span className="text-slate-500">BEACON ID:</span>
+                      <span className="text-slate-200 font-bold">{state.anonymousId || "0xA8F9E13C"}</span>
+                    </div>
+                  </div>
+
+                  {/* Quick Power Toggle Button */}
                   <button
                     type="button"
-                    id="central-privacy-shield-beacon"
-                    onPointerDown={handleLogoPointerDown}
-                    onPointerUp={handleLogoPointerUpOrLeave}
-                    onPointerLeave={handleLogoPointerUpOrLeave}
-                    className="relative block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 cursor-pointer group"
-                    title={
-                      state.isBroadcasting 
-                        ? "Privacy Shield is ACTIVE ‚Ä¢ Press and Hold to Deactivate" 
-                        : "Privacy Shield is SILENT ‚Ä¢ Quick Tap to Activate"
-                    }
+                    onClick={() => {
+                      const next = !state.isBroadcasting;
+                      onChange({ ...state, isBroadcasting: next });
+                      playLocalSoundTest("tactical_click", 50);
+                      if (onAddLog) {
+                        onAddLog({
+                          deviceModel: "Privacy Beacon",
+                          action: next ? "deflected" : "detected",
+                          shieldApplied: next ? "SHIELD_ACTIVATED" : "SHIELD_SILENCED",
+                          distance: state.rangeMeters || 12,
+                          rotatedId: state.anonymousId || "0xA8F9"
+                        });
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition border cursor-pointer ${
+                      state.isBroadcasting
+                        ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30"
+                        : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                    }`}
                   >
-                    {/* Glowing Shield Ring & Radiating Radar Ripples when broadcasting */}
-                    {state.isBroadcasting ? (
-                      <>
-                        <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse"></div>
-                        <div className="absolute -inset-4 rounded-full border border-emerald-500/35 animate-ping opacity-75" style={{ animationDuration: '3s' }}></div>
-                        <div className="absolute -inset-8 rounded-full border border-emerald-400/20 animate-ping opacity-50" style={{ animationDuration: '3s', animationDelay: '1.2s' }}></div>
-                      </>
-                    ) : (
-                      <div className="absolute inset-0 rounded-full bg-slate-800/10 blur-xl"></div>
-                    )}
-
-                    {/* Circular Hold Progress Ring Overlay */}
-                    {isHoldingLogo && (
-                      <svg className="absolute inset-0 w-24 h-24 z-20 -rotate-90 pointer-events-none scale-105">
-                        <circle
-                          cx="48"
-                          cy="48"
-                          r="45"
-                          fill="transparent"
-                          stroke="rgba(244, 63, 94, 0.2)"
-                          strokeWidth="3"
-                        />
-                        <circle
-                          cx="48"
-                          cy="48"
-                          r="45"
-                          fill="transparent"
-                          stroke="#f43f5e"
-                          strokeWidth="3"
-                          strokeDasharray={2 * Math.PI * 45}
-                          strokeDashoffset={2 * Math.PI * 45 * (1 - logoHoldProgress)}
-                          className="transition-all duration-75"
-                        />
-                      </svg>
-                    )}
-
-                    <div className={`w-24 h-24 rounded-full border p-1 overflow-hidden relative z-10 transition-all duration-300 ${
-                      state.isBroadcasting 
-                        ? isHoldingLogo
-                          ? 'border-rose-500 bg-rose-950/20 shadow-[0_0_20px_rgba(244,63,94,0.4)] scale-95'
-                          : 'border-emerald-500 bg-emerald-950/20 shadow-[0_0_20px_rgba(16,185,129,0.3)] scale-105 group-hover:scale-110' 
-                        : 'border-slate-800 bg-slate-900 scale-100 group-hover:scale-105 group-hover:border-emerald-500/50 group-hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                    }`}>
-                      <img
-                        src={appLogo}
-                        alt="Privacy Beacon Logo"
-                        className={`w-full h-full rounded-full object-cover transition-transform duration-500 ${
-                          state.isBroadcasting && !isHoldingLogo ? 'scale-105 animate-pulse' : 'scale-100'
-                        }`}
-                        referrerPolicy="no-referrer"
-                      />
-                    </div>
-
-                    {/* Overlapping Broadcasting Radio Badge / "little ball" at bottom-right */}
-                    <div className={`absolute -bottom-1 -right-1 z-20 p-1.5 rounded-full border-2 border-slate-950 transition-all duration-300 ${
-                      state.isBroadcasting 
-                        ? 'bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.8)] animate-bounce' 
-                        : 'bg-slate-800 text-slate-500 shadow-none'
-                    }`}>
-                      <Radio className={`w-3.5 h-3.5 ${state.isBroadcasting && !isHoldingLogo ? 'animate-pulse' : ''}`} />
-                    </div>
+                    <Radio className="w-3.5 h-3.5" />
+                    <span>{state.isBroadcasting ? "Silence Beacon" : "Activate Shield"}</span>
                   </button>
                 </div>
 
-                <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-white tracking-tight">
-                    {state.isBroadcasting ? 'Privacy Shield Active' : 'Privacy Shield Inactive'}
-                  </h3>
-                  <p className="text-xs text-slate-400 max-w-sm">
-                    {state.isBroadcasting 
-                      ? 'Broadcasting dynamic, encrypted opt-out packets. Nearby smart devices and cameras are restricted from registering your presence.' 
-                      : 'Broadcast beacon is currently silent. Re-enable broadcasting inside the Signal Broadcast Range tab to resume localized protection.'}
-                  </p>
-                  
-                  {/* Dynamic Help Gesture Hint */}
-                  <div className="pt-1.5 h-5 flex items-center justify-center">
-                    {isHoldingLogo ? (
-                      <span className="text-[10px] font-bold text-rose-400 tracking-wider animate-pulse font-mono uppercase">
-                        Silencing Shield... {Math.round(logoHoldProgress * 100)}%
-                      </span>
-                    ) : state.isBroadcasting ? (
-                      <span className="text-[9px] font-medium text-slate-500 tracking-wider font-mono uppercase">
-                        Press & Hold to Deactivate
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-bold text-emerald-400/90 tracking-wider font-mono uppercase animate-pulse">
-                        Tap to Activate Shield
-                      </span>
-                    )}
+                {/* Central Interactive Shield Emblem */}
+                <div className="flex flex-col items-center text-center space-y-4 py-2">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      id="central-privacy-shield-beacon"
+                      onPointerDown={handleLogoPointerDown}
+                      onPointerUp={handleLogoPointerUpOrLeave}
+                      onPointerLeave={handleLogoPointerUpOrLeave}
+                      className="relative block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 cursor-pointer group"
+                      title={
+                        state.isBroadcasting 
+                          ? "Privacy Shield is ACTIVE ‚Ä¢ Press and Hold to Deactivate" 
+                          : "Privacy Shield is SILENT ‚Ä¢ Quick Tap to Activate"
+                      }
+                    >
+                      {/* Glowing Shield Ring & Radiating Radar Ripples when broadcasting */}
+                      {state.isBroadcasting ? (
+                        <>
+                          <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse"></div>
+                          <div className="absolute -inset-4 rounded-full border border-emerald-500/35 animate-ping opacity-75" style={{ animationDuration: "3s" }}></div>
+                          <div className="absolute -inset-8 rounded-full border border-emerald-400/20 animate-ping opacity-50" style={{ animationDuration: "3s", animationDelay: "1.2s" }}></div>
+                        </>
+                      ) : (
+                        <div className="absolute inset-0 rounded-full bg-slate-800/10 blur-xl"></div>
+                      )}
+
+                      {/* Circular Hold Progress Ring Overlay */}
+                      {isHoldingLogo && (
+                        <svg className="absolute inset-0 w-28 h-28 z-20 -rotate-90 pointer-events-none scale-105">
+                          <circle
+                            cx="56"
+                            cy="56"
+                            r="52"
+                            fill="transparent"
+                            stroke="rgba(244, 63, 94, 0.2)"
+                            strokeWidth="4"
+                          />
+                          <circle
+                            cx="56"
+                            cy="56"
+                            r="52"
+                            fill="transparent"
+                            stroke="#f43f5e"
+                            strokeWidth="4"
+                            strokeDasharray={2 * Math.PI * 52}
+                            strokeDashoffset={2 * Math.PI * 52 * (1 - logoHoldProgress)}
+                            className="transition-all duration-75"
+                          />
+                        </svg>
+                      )}
+
+                      <div className={`w-28 h-28 rounded-full border-2 p-1.5 overflow-hidden relative z-10 transition-all duration-300 ${
+                        state.isBroadcasting 
+                          ? isHoldingLogo
+                            ? "border-rose-500 bg-rose-950/20 shadow-[0_0_25px_rgba(244,63,94,0.5)] scale-95"
+                            : "border-emerald-500 bg-emerald-950/20 shadow-[0_0_25px_rgba(16,185,129,0.4)] scale-105 group-hover:scale-110"
+                          : "border-slate-800 bg-slate-900 scale-100 group-hover:scale-105 group-hover:border-emerald-500/50 group-hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                      }`}>
+                        <img
+                          src={appLogo}
+                          alt="Privacy Beacon Logo"
+                          className={`w-full h-full rounded-full object-cover transition-transform duration-500 ${
+                            state.isBroadcasting && !isHoldingLogo ? "scale-105 animate-pulse" : "scale-100"
+                          }`}
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+
+                      {/* Overlapping Broadcasting Radio Badge */}
+                      <div className={`absolute -bottom-1 -right-1 z-20 p-2 rounded-full border-2 border-slate-950 transition-all duration-300 ${
+                        state.isBroadcasting 
+                          ? "bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.8)] animate-bounce"
+                          : "bg-slate-800 text-slate-500 shadow-none"
+                      }`}>
+                        <Radio className={`w-4 h-4 ${state.isBroadcasting && !isHoldingLogo ? "animate-pulse" : ""}`} />
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-black text-white tracking-tight">
+                      {state.isBroadcasting ? "Privacy Shield Active" : "Privacy Shield Standby"}
+                    </h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                      {state.isBroadcasting 
+                        ? "Broadcasting encrypted opt-out telemetry (RFC-9402). Nearby smart glasses, AI cameras, and acoustic pods are forbidden from capturing or storing your identity."
+                        : "Beacon is in low-power standby mode. Tap the emblem or click Activate to broadcast localized privacy protection."}
+                    </p>
+                    
+                    {/* Dynamic Gesture Hint */}
+                    <div className="pt-1 h-5 flex items-center justify-center">
+                      {isHoldingLogo ? (
+                        <span className="text-[10px] font-bold text-rose-400 tracking-wider animate-pulse font-mono uppercase">
+                          Silencing Shield... {Math.round(logoHoldProgress * 100)}%
+                        </span>
+                      ) : state.isBroadcasting ? (
+                        <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">
+                          Press &amp; Hold Emblem to Deactivate
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-mono font-bold text-emerald-400/90 tracking-wider uppercase animate-pulse">
+                          Tap Emblem to Activate Shield
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Signal Status Controls */}
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  {/* Signal Status Pill */}
-                  <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800 text-[10px] font-mono">
-                    <span className={`w-1.5 h-1.5 rounded-full ${state.isBroadcasting ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`}></span>
-                    <span className="text-slate-400 font-bold uppercase">Beacon Status:</span>
-                    <span className={state.isBroadcasting ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
-                      {state.isBroadcasting ? 'TRANSMITTING' : 'STANDBY'}
-                    </span>
+                {/* Tactical Dropdown Controls Bar & Toggles Menu */}
+                <div className="pt-2 border-t border-slate-900/90 space-y-3">
+                  {/* Dropdown Action Buttons Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    
+                    {/* 1. Visual Obfuscation Dropdown Trigger */}
+                    <button
+                      type="button"
+                      id="dropdown-trigger-obfuscation"
+                      onClick={() => {
+                        setActiveShieldDropdown(activeShieldDropdown === "obfuscation" ? "none" : "obfuscation");
+                        playLocalSoundTest("tactical_click", 50);
+                      }}
+                      className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                        activeShieldDropdown === "obfuscation"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-white shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                          : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                          <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-bold">Visual Mode</span>
+                          <span className="text-xs font-bold text-white truncate block capitalize">
+                            {state.privacyLevel === "strict_blur" && "üõ°Ô∏è Strict Blur"}
+                            {state.privacyLevel === "magic_removal" && "ü™Ñ Magic Removal"}
+                            {state.privacyLevel === "pixelate" && "üî≤ Pixelate"}
+                            {state.privacyLevel === "black_bar" && "‚¨õ Black Bar"}
+                            {state.privacyLevel === "emoji" && "üòä Emoji Mask"}
+                            {state.privacyLevel === "custom_avatar" && "üé≠ Custom Avatar"}
+                            {(!state.privacyLevel || state.privacyLevel === "none") && "üõ°Ô∏è Strict Blur"}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${activeShieldDropdown === "obfuscation" ? "rotate-180 text-emerald-400" : ""}`} />
+                    </button>
+
+                    {/* 2. Broadcast Range Dropdown Trigger */}
+                    <button
+                      type="button"
+                      id="dropdown-trigger-range"
+                      onClick={() => {
+                        setActiveShieldDropdown(activeShieldDropdown === "range" ? "none" : "range");
+                        playLocalSoundTest("tactical_click", 50);
+                      }}
+                      className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                        activeShieldDropdown === "range"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-white shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                          : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                          <Radio className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-bold">Shield Radius</span>
+                          <span className="text-xs font-bold text-white truncate block font-mono">
+                            {state.rangeMeters || 12}m (~{Math.round((state.rangeMeters || 12) * 3.28)} ft)
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${activeShieldDropdown === "range" ? "rotate-180 text-emerald-400" : ""}`} />
+                    </button>
+
+                    {/* 3. Defenses & Toggles Dropdown Trigger */}
+                    <button
+                      type="button"
+                      id="dropdown-trigger-toggles"
+                      onClick={() => {
+                        setActiveShieldDropdown(activeShieldDropdown === "toggles" ? "none" : "toggles");
+                        playLocalSoundTest("tactical_click", 50);
+                      }}
+                      className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                        activeShieldDropdown === "toggles"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-white shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                          : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                          <Sliders className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-bold">Defenses &amp; Toggles</span>
+                          <span className="text-xs font-bold text-white truncate block">
+                            {[
+                              state.vocalScramblerEnabled,
+                              state.facialRecognitionOptOut,
+                              state.acousticWatermarkingEnabled,
+                              state.targetedShieldingEnabled
+                            ].filter(Boolean).length} Active Modules
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${activeShieldDropdown === "toggles" ? "rotate-180 text-emerald-400" : ""}`} />
+                    </button>
+
+                    {/* 4. Quick Defense Presets Trigger */}
+                    <button
+                      type="button"
+                      id="dropdown-trigger-presets"
+                      onClick={() => {
+                        setActiveShieldDropdown(activeShieldDropdown === "presets" ? "none" : "presets");
+                        playLocalSoundTest("tactical_click", 50);
+                      }}
+                      className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                        activeShieldDropdown === "presets"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-white shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                          : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                          <Zap className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-bold">Defense Presets</span>
+                          <span className="text-xs font-bold text-white truncate block">
+                            Max Cloak, Transit, Office
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${activeShieldDropdown === "presets" ? "rotate-180 text-emerald-400" : ""}`} />
+                    </button>
+
                   </div>
+
+                  {/* Active Dropdown Popover Menus */}
+                  <AnimatePresence>
+                    {activeShieldDropdown !== "none" && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.18 }}
+                        className="p-4 rounded-2xl bg-slate-950/95 border border-slate-800 shadow-2xl backdrop-blur-xl space-y-3"
+                      >
+                        {/* Visual Obfuscation Menu */}
+                        {activeShieldDropdown === "obfuscation" && (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                              <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                                Visual Obfuscation &amp; Camera Masking Mode
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setActiveShieldDropdown("none")}
+                                className="text-[11px] font-mono text-slate-500 hover:text-slate-300 cursor-pointer"
+                              >
+                                Close ‚úï
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                              {[
+                                { id: "strict_blur", label: "Strict Blur", icon: "üõ°Ô∏è", desc: "Gaussian facial & biometric blur" },
+                                { id: "magic_removal", label: "Magic Removal", icon: "ü™Ñ", desc: "AI content-aware inpainting erase" },
+                                { id: "pixelate", label: "Pixelate", icon: "üî≤", desc: "Digital 8-bit mosaic censorship" },
+                                { id: "black_bar", label: "Black Bar", icon: "‚¨õ", desc: "High-contrast eye censorship strip" },
+                                { id: "emoji", label: "Emoji Mask", icon: "üòä", desc: "Dynamic friendly emoji replacement" },
+                                { id: "custom_avatar", label: "Synthetic Avatar", icon: "üé≠", desc: "Procedural 3D avatar disguise" }
+                              ].map((lvl) => {
+                                const isActive = (state.privacyLevel || "strict_blur") === lvl.id;
+                                return (
+                                  <button
+                                    key={lvl.id}
+                                    type="button"
+                                    onClick={() => {
+                                      onChange({ ...state, privacyLevel: lvl.id as any });
+                                      playLocalSoundTest("tactical_click", 50);
+                                      setActiveShieldDropdown("none");
+                                    }}
+                                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-start justify-between gap-2.5 ${
+                                      isActive
+                                        ? "bg-emerald-500/15 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.25)] font-bold"
+                                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 hover:bg-slate-900"
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-2.5">
+                                      <span className="text-xl shrink-0 select-none">{lvl.icon}</span>
+                                      <div>
+                                        <span className="text-xs font-bold block text-white">{lvl.label}</span>
+                                        <span className="text-[10px] text-slate-400 block mt-0.5 leading-snug">{lvl.desc}</span>
+                                      </div>
+                                    </div>
+                                    {isActive && (
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Shield Broadcast Range Menu */}
+                        {activeShieldDropdown === "range" && (
+                          <div className="space-y-3.5">
+                            <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                              <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                                Shield Broadcast Range &amp; Transmission Radius
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setActiveShieldDropdown("none")}
+                                className="text-[11px] font-mono text-slate-500 hover:text-slate-300 cursor-pointer"
+                              >
+                                Close ‚úï
+                              </button>
+                            </div>
+
+                            {/* Range Presets */}
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                              {[
+                                { meters: 5, label: "5m Pocket", desc: "Personal Bluetooth aura" },
+                                { meters: 10, label: "10m Bubble", desc: "Walking perimeter" },
+                                { meters: 12, label: "12m Room", desc: "Standard indoor zone" },
+                                { meters: 25, label: "25m Perimeter", desc: "Crowded conference" },
+                                { meters: 50, label: "50m Max", desc: "High-power long range" }
+                              ].map((preset) => {
+                                const isActive = (state.rangeMeters || 12) === preset.meters;
+                                return (
+                                  <button
+                                    key={preset.meters}
+                                    type="button"
+                                    onClick={() => {
+                                      onChange({ ...state, rangeMeters: preset.meters });
+                                      playLocalSoundTest("tactical_click", 50);
+                                    }}
+                                    className={`p-2.5 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center ${
+                                      isActive
+                                        ? "bg-emerald-500/20 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.2)] font-bold"
+                                        : "bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                                    }`}
+                                  >
+                                    <span className="text-xs font-mono font-bold">{preset.label}</span>
+                                    <span className="text-[9px] text-slate-500 block truncate mt-0.5">{preset.desc}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Continuous Precision Slider */}
+                            <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 space-y-2">
+                              <div className="flex items-center justify-between text-xs font-mono">
+                                <span className="text-slate-400">Continuous Precision Slider:</span>
+                                <span className="text-emerald-400 font-bold bg-slate-950 px-2.5 py-0.5 rounded border border-slate-800">
+                                  {state.rangeMeters || 12} Meters ({Math.round((state.rangeMeters || 12) * 3.28)} feet)
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min="1"
+                                max="50"
+                                step="1"
+                                value={state.rangeMeters || 12}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  onChange({ ...state, rangeMeters: val });
+                                }}
+                                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                              />
+                              <div className="flex justify-between text-[10px] font-mono text-slate-500">
+                                <span>1m (Pocket)</span>
+                                <span>25m (Medium)</span>
+                                <span>50m (Max Range)</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Defenses & Toggles Menu */}
+                        {activeShieldDropdown === "toggles" && (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                              <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                                Active Privacy Defenses &amp; Signal Toggles
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setActiveShieldDropdown("none")}
+                                className="text-[11px] font-mono text-slate-500 hover:text-slate-300 cursor-pointer"
+                              >
+                                Done ‚úì
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {/* Vocal Scrambler */}
+                              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                  <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                    <Mic className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>Vocal Scrambler</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 block mt-0.5">Micro-shift harmonics against voice biometrics</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onChange({ ...state, vocalScramblerEnabled: !state.vocalScramblerEnabled });
+                                    playLocalSoundTest("tactical_click", 50);
+                                  }}
+                                  className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer border ${
+                                    state.vocalScramblerEnabled ? "bg-emerald-500 border-emerald-400" : "bg-slate-800 border-slate-700"
+                                  }`}
+                                >
+                                  <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                                    state.vocalScramblerEnabled ? "translate-x-5" : "translate-x-0"
+                                  }`} />
+                                </button>
+                              </div>
+
+                              {/* Face Opt-Out */}
+                              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                  <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                    <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>Facial Opt-Out (RFC-9402)</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 block mt-0.5">Opt out of AI facial vision &amp; smart glasses</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onChange({ ...state, facialRecognitionOptOut: !state.facialRecognitionOptOut });
+                                    playLocalSoundTest("tactical_click", 50);
+                                  }}
+                                  className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer border ${
+                                    state.facialRecognitionOptOut ? "bg-emerald-500 border-emerald-400" : "bg-slate-800 border-slate-700"
+                                  }`}
+                                >
+                                  <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                                    state.facialRecognitionOptOut ? "translate-x-5" : "translate-x-0"
+                                  }`} />
+                                </button>
+                              </div>
+
+                              {/* Acoustic Watermark */}
+                              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 flex items-center justify-between">
+                                <div>
+                                  <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                    <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>Acoustic Watermark</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 block mt-0.5">Embed ultrasonic non-consent token</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onChange({ ...state, acousticWatermarkingEnabled: !state.acousticWatermarkingEnabled });
+                                    playLocalSoundTest("tactical_click", 50);
+                                  }}
+                                  className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer border ${
+                                    state.acousticWatermarkingEnabled ? "bg-emerald-500 border-emerald-400" : "bg-slate-800 border-slate-700"
+                                  }`}
+                                >
+                                  <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                                    state.acousticWatermarkingEnabled ? "translate-x-5" : "translate-x-0"
+                                  }`} />
+                                </button>
+                              </div>
+
+                              {/* Targeted Audio Shielding */}
+                              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 flex items-center justify-between">
+                                <div>
+                                  <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                    <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>Targeted Vocal Shield</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 block mt-0.5">Shields purely your personal vocal tract</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onChange({ ...state, targetedShieldingEnabled: !state.targetedShieldingEnabled });
+                                    playLocalSoundTest("tactical_click", 50);
+                                  }}
+                                  className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer border ${
+                                    state.targetedShieldingEnabled ? "bg-emerald-500 border-emerald-400" : "bg-slate-800 border-slate-700"
+                                  }`}
+                                >
+                                  <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                                    state.targetedShieldingEnabled ? "translate-x-5" : "translate-x-0"
+                                  }`} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Defense Presets Menu */}
+                        {activeShieldDropdown === "presets" && (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                              <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                                1-Click Defense Profiles &amp; Tactical Presets
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setActiveShieldDropdown("none")}
+                                className="text-[11px] font-mono text-slate-500 hover:text-slate-300 cursor-pointer"
+                              >
+                                Close ‚úï
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                              {[
+                                {
+                                  id: "max_cloak",
+                                  title: "‚ö° Max Cloak",
+                                  badge: "50m Range",
+                                  desc: "Strict Blur + Vocal Scrambler + Acoustic Tone + 50m power",
+                                  apply: () => onChange({
+                                    ...state,
+                                    isBroadcasting: true,
+                                    privacyLevel: "strict_blur",
+                                    rangeMeters: 50,
+                                    vocalScramblerEnabled: true,
+                                    facialRecognitionOptOut: true,
+                                    acousticWatermarkingEnabled: true,
+                                    ultrasonicMicSaturationEnabled: true
+                                  })
+                                },
+                                {
+                                  id: "transit",
+                                  title: "üöå Public Transit",
+                                  badge: "15m Range",
+                                  desc: "Magic Removal + Face Opt-Out + Vocal Scrambler",
+                                  apply: () => onChange({
+                                    ...state,
+                                    isBroadcasting: true,
+                                    privacyLevel: "magic_removal",
+                                    rangeMeters: 15,
+                                    vocalScramblerEnabled: true,
+                                    facialRecognitionOptOut: true
+                                  })
+                                },
+                                {
+                                  id: "office",
+                                  title: "üè¢ Office Meeting",
+                                  badge: "8m Range",
+                                  desc: "Pixelate + Targeted Vocal Shield + Silent beacon",
+                                  apply: () => onChange({
+                                    ...state,
+                                    isBroadcasting: true,
+                                    privacyLevel: "pixelate",
+                                    rangeMeters: 8,
+                                    targetedShieldingEnabled: true
+                                  })
+                                },
+                                {
+                                  id: "cafe",
+                                  title: "‚òï Quiet Caf√©",
+                                  badge: "5m Range",
+                                  desc: "Emoji Mask + Low-power 5m pocket aura",
+                                  apply: () => onChange({
+                                    ...state,
+                                    isBroadcasting: true,
+                                    privacyLevel: "emoji",
+                                    rangeMeters: 5,
+                                    facialRecognitionOptOut: true
+                                  })
+                                }
+                              ].map((p) => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => {
+                                    p.apply();
+                                    playLocalSoundTest("tactical_click", 50);
+                                    setActiveShieldDropdown("none");
+                                  }}
+                                  className="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/50 text-left transition cursor-pointer space-y-1 group"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">{p.title}</span>
+                                    <span className="text-[9px] font-mono bg-slate-950 text-emerald-400 px-1.5 py-0.5 rounded border border-slate-800">{p.badge}</span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 leading-snug">{p.desc}</p>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
+
+                {/* Dashboard Widgets Customizer Panel (Collapsible) */}
+                {showWidgetCustomizer && (
+                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3 animate-fadeIn">
+                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Sliders className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs font-mono font-bold text-white uppercase">
+                          Choose Optional Dashboard Widgets
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {enabledWidgetIds.length} widgets enabled
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                      {[
+                        {
+                          id: "score",
+                          label: "Privacy Impact Score",
+                          desc: "Live numerical defense rating gauge",
+                          checked: !!state.showPrivacyImpactScore,
+                          toggle: () => onChange({ ...state, showPrivacyImpactScore: !state.showPrivacyImpactScore })
+                        },
+                        {
+                          id: "history",
+                          label: "Signal Broadcast History",
+                          desc: "Telemetry trend chart",
+                          checked: !!state.showSignalHistory,
+                          toggle: () => onChange({ ...state, showSignalHistory: !state.showSignalHistory })
+                        },
+                        {
+                          id: "battery",
+                          label: "Hardware Battery & Health",
+                          desc: "Beacon power meter & battery saver",
+                          checked: !!state.showBatteryWidget,
+                          toggle: () => onChange({ ...state, showBatteryWidget: !state.showBatteryWidget })
+                        },
+                        {
+                          id: "map",
+                          label: "Spatial D3 Signal Map",
+                          desc: "Interactive canvas radar radius",
+                          checked: !!state.showSignalMap,
+                          toggle: () => onChange({ ...state, showSignalMap: !state.showSignalMap })
+                        }
+                      ].map((w) => (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={w.toggle}
+                          className={`p-3 rounded-lg border text-left transition flex items-start justify-between gap-2 cursor-pointer ${
+                            w.checked
+                              ? "bg-emerald-500/10 border-emerald-500/40 text-white"
+                              : "bg-slate-950/60 border-slate-850 text-slate-400 hover:border-slate-800"
+                          }`}
+                        >
+                          <div>
+                            <span className="text-xs font-bold block">{w.label}</span>
+                            <span className="text-[9px] text-slate-500 block mt-0.5">{w.desc}</span>
+                          </div>
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] shrink-0 mt-0.5 ${
+                            w.checked ? "bg-emerald-500 border-emerald-400 text-slate-950 font-black" : "border-slate-700 bg-slate-900"
+                          }`}>
+                            {w.checked ? "‚úì" : ""}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               </div>
 
-              {/* Widget Layout & Swipe Deck Controller */}
-              <div className="bg-slate-950 border border-slate-900 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                    {widgetViewMode === 'swipe' ? (
-                      <span className="text-sm">üé¥</span>
-                    ) : (
-                      <span className="text-sm">üìú</span>
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <span className="text-[10px] font-extrabold text-slate-400 font-mono tracking-wider uppercase block">
-                      Dashboard Widget Display Mode
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      {widgetViewMode === 'swipe' 
-                        ? `Swipable Deck active: swipe horizontally or click arrows to switch (Card ${enabledWidgetIds.length ? activeWidgetIndex + 1 : 0} of ${enabledWidgetIds.length})`
-                        : `Continuous Scroll active: all selected widgets are displayed in a continuous list`
-                      }
-                    </span>
-                  </div>
-                </div>
-
-                {/* Switcher & Swipe Controls */}
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                  {widgetViewMode === 'swipe' && enabledWidgetIds.length > 1 && (
-                    <div className="flex items-center gap-1.5 mr-2">
-                      <button
-                        type="button"
-                        onClick={() => setActiveWidgetIndex(prev => (prev - 1 + enabledWidgetIds.length) % enabledWidgetIds.length)}
-                        className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 flex items-center justify-center transition text-xs font-bold cursor-pointer"
-                        title="Previous Card"
-                      >
-                        ‚ü®
-                      </button>
-                      <span className="text-[10px] font-mono font-bold text-slate-400 min-w-[2.5rem] text-center bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800">
-                        {activeWidgetIndex + 1} / {enabledWidgetIds.length}
+              {/* Widget Layout & Swipe Deck Controller (Only rendered when at least 1 secondary widget is enabled) */}
+              {enabledWidgetIds.length > 0 && (
+                <div className="bg-slate-950 border border-slate-900 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                      {widgetViewMode === "swipe" ? (
+                        <span className="text-sm">üé¥</span>
+                      ) : (
+                        <span className="text-sm">üìú</span>
+                      )}
+                    </div>
+                    <div className="text-left">
+                      <span className="text-[10px] font-extrabold text-slate-400 font-mono tracking-wider uppercase block">
+                        Dashboard Widget Display Mode
                       </span>
+                      <span className="text-[11px] text-slate-500">
+                        {widgetViewMode === "swipe" 
+                          ? `Swipable Deck active: swipe horizontally or click arrows to switch (Card ${enabledWidgetIds.length ? activeWidgetIndex + 1 : 0} of ${enabledWidgetIds.length})`
+                          : "Continuous Scroll active: all selected widgets are displayed in a continuous list"
+                        }
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Switcher & Swipe Controls */}
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    {widgetViewMode === "swipe" && enabledWidgetIds.length > 1 && (
+                      <div className="flex items-center gap-1.5 mr-2">
+                        <button
+                          type="button"
+                          onClick={() => setActiveWidgetIndex(prev => (prev - 1 + enabledWidgetIds.length) % enabledWidgetIds.length)}
+                          className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 flex items-center justify-center transition text-xs font-bold cursor-pointer"
+                          title="Previous Card"
+                        >
+                          ‚ü®
+                        </button>
+                        <span className="text-[10px] font-mono font-bold text-slate-400 min-w-[2.5rem] text-center bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800">
+                          {activeWidgetIndex + 1} / {enabledWidgetIds.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveWidgetIndex(prev => (prev + 1) % enabledWidgetIds.length)}
+                          className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 flex items-center justify-center transition text-xs font-bold cursor-pointer"
+                          title="Next Card"
+                        >
+                          ‚ü©
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-850">
                       <button
                         type="button"
-                        onClick={() => setActiveWidgetIndex(prev => (prev + 1) % enabledWidgetIds.length)}
-                        className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/30 flex items-center justify-center transition text-xs font-bold cursor-pointer"
-                        title="Next Card"
+                        onClick={() => setWidgetViewMode("swipe")}
+                        className={`px-3 py-1 rounded text-[9px] font-mono font-extrabold tracking-wider uppercase transition cursor-pointer ${
+                          widgetViewMode === "swipe"
+                            ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                            : "text-slate-500 hover:text-slate-300"
+                        }`}
                       >
-                        ‚ü©
+                        üé¥ Swipe Deck
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWidgetViewMode("scroll")}
+                        className={`px-3 py-1 rounded text-[9px] font-mono font-extrabold tracking-wider uppercase transition cursor-pointer ${
+                          widgetViewMode === "scroll"
+                            ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                            : "text-slate-500 hover:text-slate-300"
+                        }`}
+                      >
+                        üìú Scroll
                       </button>
                     </div>
-                  )}
-
-                  <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-850">
-                    <button
-                      type="button"
-                      onClick={() => setWidgetViewMode('swipe')}
-                      className={`px-3 py-1 rounded text-[9px] font-mono font-extrabold tracking-wider uppercase transition cursor-pointer ${
-                        widgetViewMode === 'swipe'
-                          ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                          : 'text-slate-500 hover:text-slate-300'
-                      }`}
-                    >
-                      üé¥ Swipe Deck
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWidgetViewMode('scroll')}
-                      className={`px-3 py-1 rounded text-[9px] font-mono font-extrabold tracking-wider uppercase transition cursor-pointer ${
-                        widgetViewMode === 'scroll'
-                          ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                          : 'text-slate-500 hover:text-slate-300'
-                      }`}
-                    >
-                      üìú Scroll
-                    </button>
                   </div>
                 </div>
-              </div>
-
-              {/* Privacy Impact Score Gauge Panel */}
+              )}
+{/* Privacy Impact Score Gauge Panel */}
               <AnimatePresence>
                 {showPrivacyImpactScore && (widgetViewMode === 'scroll' || enabledWidgetIds[activeWidgetIndex] === 'privacy-score') && (
                   <motion.div
@@ -4335,17 +5017,7 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                 </div>
               )}
 
-              {enabledWidgetIds.length === 0 && (
-                <div className="p-8 rounded-2xl bg-slate-950/40 border border-slate-900 border-dashed text-center space-y-2">
-                  <div className="text-2xl">üé¥</div>
-                  <h4 className="text-xs font-bold text-slate-400 font-mono uppercase tracking-wider">
-                    All Widget Windows Deactivated
-                  </h4>
-                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto leading-relaxed">
-                    Activate the Privacy Score, Signal History, Battery Monitor, or Spatial Signal Map in the "Collapsible App Interface Options" below to populate your dashboard views.
-                  </p>
-                </div>
-              )}
+
             </motion.div>
           )}
 
@@ -8414,9176 +9086,385 @@ export default function PrivacyBeacon({ state, onChange, logs, onClearLogs, acti
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
                             <Volume2 className={`w-4.5 h-4.5 ${state.acousticWatermarkingEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span className="text-xs font-bold block text-slate-200">Acoustic Beacon</span>
-                          </div>
-
-                          {/* Toggle Switch */}
-                          <button
-                            id="btn-beacon-toggle-acoustic"
-                            type="button"
-                            role="switch"
-                            aria-checked={state.acousticWatermarkingEnabled}
-                            onClick={() => {
-                              onChange({ ...state, acousticWatermarkingEnabled: !state.acousticWatermarkingEnabled });
-                              if (onAddLog) {
-                                onAddLog({
-                                  deviceModel: 'ULTRASONIC_ACOUSTIC_BEACON',
-                                  action: state.acousticWatermarkingEnabled ? 'muted' : 'broadcast_changed',
-                                  shieldApplied: state.acousticWatermarkingEnabled ? 'ACOUSTIC_WATERMARK_SUSPENDED' : 'ACOUSTIC_WATERMARK_BROADCASTING',
-                                  distance: 0,
-                                  rotatedId: 'ACOUSTIC-9402_ACTIVE'
-                                });
-                              }
-                            }}
-                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                              state.acousticWatermarkingEnabled ? 'bg-emerald-500' : 'bg-slate-800'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
-                                state.acousticWatermarkingEnabled ? 'translate-x-4' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-normal">
-                          Emits inaudible high-frequency (19.2kHz) audio watermark keys.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
-                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
-                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                          state.acousticWatermarkingEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
-                        }`}>
-                          {state.acousticWatermarkingEnabled ? 'ULTRASONIC ON' : 'OFF'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Channel 4: Commercial Tags (COMPAT-TAGS) */}
-                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
-                      state.registeredEntities.filter(e => e.isActive).length > 0 
-                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
-                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
-                    }`}>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <Tag className={`w-4.5 h-4.5 ${state.registeredEntities.filter(e => e.isActive).length > 0 ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span className="text-xs font-bold block text-slate-200">Commercial Mappings</span>
-                          </div>
-
-                          {/* Toggle Switch */}
-                          <button
-                            id="btn-beacon-toggle-commercial"
-                            type="button"
-                            role="switch"
-                            aria-checked={state.registeredEntities.length > 0 && state.registeredEntities.every(e => e.isActive)}
-                            onClick={() => {
-                              const allActive = state.registeredEntities.every(e => e.isActive);
-                              const updated = state.registeredEntities.map(e => ({ ...e, isActive: !allActive }));
-                              onChange({ ...state, registeredEntities: updated });
-                              if (onAddLog) {
-                                onAddLog({
-                                  deviceModel: 'COMMERCIAL_BEACON_MAPPER',
-                                  action: allActive ? 'muted' : 'broadcast_changed',
-                                  shieldApplied: allActive ? 'COMMERCIAL_TRACKER_OPT_OUT_UNMAPPED' : 'COMMERCIAL_TRACKER_OPT_OUT_MAPPED_ACTIVE',
-                                  distance: 0,
-                                  rotatedId: 'COMPAT-TAGS_CYCLE'
-                                });
-                              }
-                            }}
-                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                              (state.registeredEntities.length > 0 && state.registeredEntities.every(e => e.isActive)) ? 'bg-emerald-500' : 'bg-slate-800'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
-                                (state.registeredEntities.length > 0 && state.registeredEntities.every(e => e.isActive)) ? 'translate-x-4' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-normal">
-                          Maps existing Apple AirTags and Tile signals as opt-out anchors.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
-                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
-                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                          state.registeredEntities.filter(e => e.isActive).length > 0 ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
-                        }`}>
-                          {state.registeredEntities.filter(e => e.isActive).length > 0 ? `${state.registeredEntities.filter(e => e.isActive).length} ACTIVE` : 'OFF'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Channel 5: Optical IR Pulse (LED-PULSE) */}
-                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
-                      state.irDisruptionEnabled 
-                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
-                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
-                    }`}>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <Zap className={`w-4.5 h-4.5 ${state.irDisruptionEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span className="text-xs font-bold block text-slate-200">Optical IR Pulse</span>
-                          </div>
-
-                          {/* Toggle Switch */}
-                          <button
-                            id="btn-beacon-toggle-ir"
-                            type="button"
-                            role="switch"
-                            aria-checked={state.irDisruptionEnabled}
-                            onClick={() => {
-                              onChange({ ...state, irDisruptionEnabled: !state.irDisruptionEnabled });
-                              if (onAddLog) {
-                                onAddLog({
-                                  deviceModel: 'OPTICAL_IR_EMITTER',
-                                  action: state.irDisruptionEnabled ? 'muted' : 'broadcast_changed',
-                                  shieldApplied: state.irDisruptionEnabled ? '940nm_IR_LED_PULSER_DEACTIVATED' : '940nm_IR_LED_PULSER_ACTIVE',
-                                  distance: 0,
-                                  rotatedId: 'LED-PULSE_ACTIVE'
-                                });
-                              }
-                            }}
-                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                              state.irDisruptionEnabled ? 'bg-emerald-500' : 'bg-slate-800'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
-                                state.irDisruptionEnabled ? 'translate-x-4' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-normal">
-                          Emits 940nm pulsed IR light to block or saturate sensors physically.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
-                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
-                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                          state.irDisruptionEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
-                        }`}>
-                          {state.irDisruptionEnabled ? 'IR PULSING ON' : 'OFF'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Channel 6: Wi-Fi 7 MAC Opt-Out (MAC-OPT-OUT) */}
-                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
-                      state.wifi7MacOptOutEnabled 
-                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
-                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
-                    }`}>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <Fingerprint className={`w-4.5 h-4.5 ${state.wifi7MacOptOutEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span className="text-xs font-bold block text-slate-200">Wi-Fi 7 MAC</span>
-                          </div>
-
-                          {/* Toggle Switch */}
-                          <button
-                            id="btn-beacon-toggle-wifi7"
-                            type="button"
-                            role="switch"
-                            aria-checked={state.wifi7MacOptOutEnabled}
-                            onClick={() => {
-                              onChange({ ...state, wifi7MacOptOutEnabled: !state.wifi7MacOptOutEnabled });
-                              if (onAddLog) {
-                                onAddLog({
-                                  deviceModel: 'WIFI7_MAC_RANDOMIZER',
-                                  action: state.wifi7MacOptOutEnabled ? 'muted' : 'broadcast_changed',
-                                  shieldApplied: state.wifi7MacOptOutEnabled ? 'WIFI7_MAC_RAND_DISABLED' : 'WIFI7_MAC_RANDOMIZATION_ACTIVE_WITH_OPTOUT',
-                                  distance: 0,
-                                  rotatedId: 'WIFI7_MAC_RAND_ON'
-                                });
-                              }
-                            }}
-                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                              state.wifi7MacOptOutEnabled ? 'bg-emerald-500' : 'bg-slate-800'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
-                                state.wifi7MacOptOutEnabled ? 'translate-x-4' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-normal">
-                          Broadcasts randomized MAC headers with explicit opt-out tagging over Wi-Fi 7 bands.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
-                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
-                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                          state.wifi7MacOptOutEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
-                        }`}>
-                          {state.wifi7MacOptOutEnabled ? 'RANDOM MAC ON' : 'OFF'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Channel 7: BLE Auracast Squelch (AURACAST-SQUELCH) */}
-                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
-                      state.auracastSquelchEnabled 
-                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
-                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
-                    }`}>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <Radio className={`w-4.5 h-4.5 ${state.auracastSquelchEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span className="text-xs font-bold block text-slate-200">Auracast Squelch</span>
-                          </div>
-
-                          {/* Toggle Switch */}
-                          <button
-                            id="btn-beacon-toggle-auracast"
-                            type="button"
-                            role="switch"
-                            aria-checked={state.auracastSquelchEnabled}
-                            onClick={() => {
-                              onChange({ ...state, auracastSquelchEnabled: !state.auracastSquelchEnabled });
-                              if (onAddLog) {
-                                onAddLog({
-                                  deviceModel: 'AURACAST_SQUELCH_BEACON',
-                                  action: state.auracastSquelchEnabled ? 'muted' : 'broadcast_changed',
-                                  shieldApplied: state.auracastSquelchEnabled ? 'AURACAST_SQUELCH_DISABLED' : 'AURACAST_SQUELCH_ACTIVE_WHITE_NOISE',
-                                  distance: 0,
-                                  rotatedId: 'AURACAST_SQUELCH_ACTIVE'
-                                });
-                              }
-                            }}
-                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                              state.auracastSquelchEnabled ? 'bg-emerald-500' : 'bg-slate-800'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
-                                state.auracastSquelchEnabled ? 'translate-x-4' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-normal">
-                          Injects encrypted white-noise audio blocks into nearby broadcast channels.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
-                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
-                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                          state.auracastSquelchEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
-                        }`}>
-                          {state.auracastSquelchEnabled ? 'SQUELCH ACTIVE' : 'OFF'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Channel 8: UWB Distance Scrambler (UWB-SCRAMBLER) */}
-                    <div className={`p-4 rounded-xl border text-left transition flex flex-col justify-between gap-4 ${
-                      state.uwbDistanceScramblerEnabled 
-                        ? 'bg-emerald-950/10 border-emerald-500/30 text-white' 
-                        : 'bg-slate-900/10 border-slate-850 text-slate-500'
-                    }`}>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <Lock className={`w-4.5 h-4.5 ${state.uwbDistanceScramblerEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
-                            <span className="text-xs font-bold block text-slate-200">UWB Scrambler</span>
-                          </div>
-
-                          {/* Toggle Switch */}
-                          <button
-                            id="btn-beacon-toggle-uwb"
-                            type="button"
-                            role="switch"
-                            aria-checked={state.uwbDistanceScramblerEnabled}
-                            onClick={() => {
-                              onChange({ ...state, uwbDistanceScramblerEnabled: !state.uwbDistanceScramblerEnabled });
-                              if (onAddLog) {
-                                onAddLog({
-                                  deviceModel: 'UWB_DISTANCE_SCRAMBLER',
-                                  action: state.uwbDistanceScramblerEnabled ? 'muted' : 'broadcast_changed',
-                                  shieldApplied: state.uwbDistanceScramblerEnabled ? 'UWB_SCRAMBLER_DISABLED' : 'UWB_TIME_OF_FLIGHT_PERTURBED',
-                                  distance: 0,
-                                  rotatedId: 'UWB_SCRAMBLER_ACTIVE'
-                                });
-                              }
-                            }}
-                            className={`relative inline-flex h-4.5 w-8.5 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                              state.uwbDistanceScramblerEnabled ? 'bg-emerald-500' : 'bg-slate-800'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${
-                                state.uwbDistanceScramblerEnabled ? 'translate-x-4' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-normal">
-                          Perturbs ultra-wideband time-of-flight ranges to block micro-location triangulation.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between border-t border-slate-900/80 pt-2.5 mt-1">
-                        <span className="text-[9px] font-mono text-slate-500 uppercase">Status</span>
-                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                          state.uwbDistanceScramblerEnabled ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' : 'bg-slate-900 text-slate-600'
-                        }`}>
-                          {state.uwbDistanceScramblerEnabled ? 'SCRAMBLING' : 'OFF'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-            </div>
-          </motion.div>
-        )}
-
-          {/* Tab: Google Maps Privacy Radar */}
-          {(activeTab as string) === 'google_maps_radar' && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <GoogleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
-            </motion.div>
-          )}
-
-          {/* Tab: Apple Maps Privacy Shield */}
-          {(activeTab as string) === 'apple_maps_radar' && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <AppleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
-            </motion.div>
-          )}
-
-          {/* Tab: Experimental Tech Lab */}
-          {activeTab === 'experimental' && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              {/* Header Panel */}
-              <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-5 space-y-3 relative overflow-hidden">
-                <div className="absolute right-0 top-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3">
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5 font-sans">
-                      <FlaskConical className="w-4 h-4 text-emerald-400 animate-pulse" />
-                      Speculative &amp; Experimental Countermeasures Lab
-                    </h3>
-                    <p className="text-[11px] text-slate-400 font-sans leading-relaxed">
-                      Sandbox for next-generation privacy shielding. Simulate biothermal masking, retroreflective lens disruption, and adversarial AI countermeasures.
-                    </p>
-                  </div>
-                  <span className="text-[10px] bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 px-2.5 py-0.5 rounded-full font-mono uppercase font-semibold">
-                    Speculative Tech Area
-                  </span>
-                </div>
-                
-                {/* Warning Card */}
-                <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-lg p-3 flex items-start gap-2.5 text-[10px] text-yellow-400/90 leading-relaxed font-sans">
-                  <span className="text-sm shrink-0">‚ö†Ô∏è</span>
-                  <div>
-                    <strong className="block text-white mb-0.5">Physical Device Limitations</strong>
-                    These defenses are highly advanced simulations of prototype concepts. Standard smartphones do not possess near-IR or active-laser arrays natively. Refer to the diagnostic panel on the right to verify which shields can run directly on your current browser.
-                  </div>
-                </div>
-              </div>
-
-              {/* Two Column Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* Left Column: Experimental Controls */}
-                <div className="space-y-4">
-                  <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 space-y-4">
-                    <h4 className="text-xs font-bold text-slate-300 font-mono tracking-wider uppercase border-b border-slate-900 pb-2">
-                      Active Shields Configuration
-                    </h4>
-
-                    <div className="space-y-3">
-                      {/* Thermal Infrared (FLIR) */}
-                      <div className={`p-3.5 rounded-xl border transition-all ${
-                        state.thermalPulseEnabled 
-                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                              <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                              Thermal Infrared (FLIR) Pulse Masker
-                            </span>
-                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
-                              Emits rapid, micro-calibrated biothermal pulses. Simulates heat signature masking to prevent biometric FLIR face-mapping.
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            id="toggle-thermal-masker"
-                            onClick={() => onChange({ ...state, thermalPulseEnabled: !state.thermalPulseEnabled })}
-                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
-                              state.thermalPulseEnabled
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
-                            }`}
-                          >
-                            {state.thermalPulseEnabled ? 'ACTIVE' : 'OFF'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Retroreflective Lens Scrambler */}
-                      <div className={`p-3.5 rounded-xl border transition-all ${
-                        state.retroScramblerEnabled 
-                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                              <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
-                              Retroreflective Lens Scrambler
-                            </span>
-                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
-                              Detects optical feedback from smartphone or CCTV camera lenses. Triggers targeted safe anti-reflection flares to overexpose captures.
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            id="toggle-retro-scrambler"
-                            onClick={() => onChange({ ...state, retroScramblerEnabled: !state.retroScramblerEnabled })}
-                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
-                              state.retroScramblerEnabled
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
-                            }`}
-                          >
-                            {state.retroScramblerEnabled ? 'ACTIVE' : 'OFF'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Anti-Lip Reading Spatial Deflector */}
-                      <div className={`p-3.5 rounded-xl border transition-all ${
-                        state.antiLipReadingEnabled 
-                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                              <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                              Anti-Lip Reading Coordinate Deflector
-                            </span>
-                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
-                              Feeds micro-oscillations into real-time facial feature bounding boxes to prevent AI lip-reconstruction.
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            id="toggle-lip-reading"
-                            onClick={() => onChange({ ...state, antiLipReadingEnabled: !state.antiLipReadingEnabled })}
-                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
-                              state.antiLipReadingEnabled
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
-                            }`}
-                          >
-                            {state.antiLipReadingEnabled ? 'ACTIVE' : 'OFF'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* LiDAR 3D Mesh Deflection Projector */}
-                      <div className={`p-3.5 rounded-xl border transition-all ${
-                        state.lidarMeshFloodEnabled 
-                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                              <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                              LiDAR 3D Mesh Deflection Projector
-                            </span>
-                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
-                              Emits spatial depth laser deflection pulses to scramble point-cloud 3D mapping scans of nearby devices.
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            id="toggle-lidar-mesh"
-                            onClick={() => onChange({ ...state, lidarMeshFloodEnabled: !state.lidarMeshFloodEnabled })}
-                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
-                              state.lidarMeshFloodEnabled
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
-                            }`}
-                          >
-                            {state.lidarMeshFloodEnabled ? 'ACTIVE' : 'OFF'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Adversarial Pixel Poisoning */}
-                      <div className={`p-3.5 rounded-xl border transition-all ${
-                        state.adversarialPoisoning 
-                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                              <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                              Adversarial Pixel Poisoning
-                            </span>
-                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
-                              Injects specialized high-contrast color noise patterns into smart video feeds to corrupt convolutional neural networks.
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            id="toggle-adversarial"
-                            onClick={() => onChange({ ...state, adversarialPoisoning: !state.adversarialPoisoning })}
-                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
-                              state.adversarialPoisoning
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
-                            }`}
-                          >
-                            {state.adversarialPoisoning ? 'ACTIVE' : 'OFF'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Decoy Metadata Spoofing */}
-                      <div className={`p-3.5 rounded-xl border transition-all ${
-                        state.decoyPersonaBroadcast 
-                          ? 'bg-emerald-950/10 border-emerald-500/20 text-slate-200' 
-                          : 'bg-slate-950/20 border-slate-900/60 text-slate-400'
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold block text-white flex items-center gap-1.5">
-                              <Users className="w-3.5 h-3.5 text-emerald-400" />
-                              Decoy Metadata &amp; BLE Spoofing
-                            </span>
-                            <span className="text-[10px] text-slate-400 block leading-relaxed pr-2">
-                              Broadcasting randomized device MAC payloads to generate multiple mock metadata targets, confusing localization tracking.
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            id="toggle-decoy"
-                            onClick={() => onChange({ ...state, decoyPersonaBroadcast: !state.decoyPersonaBroadcast })}
-                            className={`px-2.5 py-1 rounded text-[9px] font-bold font-mono uppercase border transition shrink-0 ${
-                              state.decoyPersonaBroadcast
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
-                            }`}
-                          >
-                            {state.decoyPersonaBroadcast ? 'ACTIVE' : 'OFF'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: Diagnostics & Live Intrusion Simulator */}
-                <div className="space-y-6">
-                  
-                  {/* Real-World Compatibility diagnostics */}
-                  <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                      <h4 className="text-xs font-bold text-slate-300 font-mono tracking-wider uppercase flex items-center gap-1.5">
-                        <Compass className="w-4 h-4 text-emerald-400" />
-                        Real-World Compatibility Diagnostics
-                      </h4>
-                      <span className="text-[9px] font-mono text-slate-500">USER DEVICE CHECK</span>
-                    </div>
-
-                    <p className="text-[10px] text-slate-400 leading-normal font-sans">
-                      Will this app work on your phone in real life? Standard browsers restrict direct hardware radio controls. Let's inspect your current device capabilities:
-                    </p>
-
-                    <div className="space-y-2.5">
-                      {/* geoloc */}
-                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
-                        <span className="text-slate-300 font-sans">GPS Geofencing / Zone Protection</span>
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <span className="text-emerald-400">‚óè</span>
-                          <span className="text-slate-300">NATIVELY SUPPORTED</span>
-                        </div>
-                      </div>
-
-                      {/* vibration */}
-                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
-                        <div className="space-y-0.5">
-                          <span className="text-slate-300 block font-sans">Haptic Pocket Buzzers (Alerts)</span>
-                          <span className="text-[9px] text-slate-500 block font-sans">Tested via browser Vibration API</span>
-                        </div>
-                        <button
-                          type="button"
-                          id="test-phone-buzz-btn"
-                          onClick={() => {
-                            if (navigator.vibrate) {
-                              navigator.vibrate([100, 50, 100]);
-                              if (onAddLog) {
-                                onAddLog({
-                                  title: 'Diagnostic Test',
-                                  text: 'Triggered pocket vibration buzzer pattern [100ms, 50ms, 100ms] natively.',
-                                  type: 'info'
-                                });
-                              }
-                            } else {
-                              if (onAddLog) {
-                                onAddLog({
-                                  title: 'Diagnostic Fail',
-                                  text: 'Vibration API is not supported on this browser/platform.',
-                                  type: 'warning'
-                                });
-                              }
-                            }
-                          }}
-                          className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded font-mono font-bold uppercase text-[9px] transition shrink-0"
-                        >
-                          TEST PHONE BUZZ
-                        </button>
-                      </div>
-
-                      {/* audio contexts */}
-                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
-                        <span className="text-slate-300 font-sans">Acoustic Mic Saturation / Scrambling</span>
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <span className="text-emerald-400">‚óè</span>
-                          <span className="text-slate-300">NATIVELY SUPPORTED (via AudioContext)</span>
-                        </div>
-                      </div>
-
-                      {/* web ble */}
-                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
-                        <div className="space-y-0.5">
-                          <span className="text-slate-300 block font-sans">WebBluetooth API (Device Interfacing)</span>
-                          <span className="text-[9px] text-slate-500 block font-sans">Requires Chrome, Edge, or Opera</span>
-                        </div>
-                        <span className={`font-mono px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                          'bluetooth' in navigator ? 'bg-emerald-500/10 text-emerald-400' : 'bg-yellow-500/10 text-yellow-500'
-                        }`}>
-                          {'bluetooth' in navigator ? 'AVAILABLE' : 'RESTRICTED / EMULATED'}
-                        </span>
-                      </div>
-
-                      {/* Companion badg */}
-                      <div className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-900 text-[10px]">
-                        <div className="space-y-0.5">
-                          <span className="text-slate-300 block font-sans">Physical Optical/IR Lasers</span>
-                          <span className="text-[9px] text-slate-500 block font-sans">Requires BlurBubble Companion Badge</span>
-                        </div>
-                        <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 font-mono px-1.5 py-0.5 rounded text-[8px] font-bold">
-                          COMPANION GEAR ONLY
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Simulated Recording Intrusion Live Test Sandbox */}
-                  <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                      <h4 className="text-xs font-bold text-slate-300 font-mono tracking-wider uppercase flex items-center gap-1.5">
-                        <Gamepad2 className="w-4 h-4 text-emerald-400" />
-                        Intrusion Simulation Feed
-                      </h4>
-                      <span className="text-[9px] bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-mono font-bold animate-pulse">
-                        LIVE ATTACK
-                      </span>
-                    </div>
-
-                    <div className="relative aspect-video bg-slate-950 border border-slate-900 rounded-lg overflow-hidden flex flex-col justify-between p-3">
-                      {/* Grid overlay */}
-                      <div className="absolute inset-0 bg-[linear-gradient(to_right,#020617_1px,transparent_1px),linear-gradient(to_bottom,#020617_1px,transparent_1px)] bg-[size:16px_16px] opacity-20 pointer-events-none" />
-                      
-                      {/* Top status bar */}
-                      <div className="relative z-10 flex items-center justify-between text-[9px] font-mono text-slate-500">
-                        <span>RECON_CAM_ID: SW-770</span>
-                        <span>RES: 1080P // fps: 30</span>
-                      </div>
-
-                      {/* Center wireframe face */}
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="relative w-40 h-40">
-                          {/* Face boundary shape */}
-                          <div className={`absolute inset-0 border rounded-[50%_40%] transition-all duration-300 ${
-                            state.adversarialPoisoning 
-                              ? 'border-red-500/10 bg-red-500/5 animate-pulse' 
-                              : state.thermalPulseEnabled 
-                                ? 'border-yellow-500/20 bg-yellow-500/5 animate-ping'
-                                : 'border-emerald-500/40 bg-emerald-500/5'
-                          }`} />
-
-                          {/* Face features (eyes, nose, mouth) */}
-                          <div className="absolute inset-x-0 top-1/3 flex justify-around px-8">
-                            <div className={`w-3.5 h-2 rounded-full border border-emerald-500/60 relative ${state.retroScramblerEnabled ? 'bg-white shadow-[0_0_15px_#fff]' : ''}`} />
-                            <div className={`w-3.5 h-2 rounded-full border border-emerald-500/60 relative ${state.retroScramblerEnabled ? 'bg-white shadow-[0_0_15px_#fff]' : ''}`} />
-                          </div>
-                          
-                          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 w-1 h-6 border-l border-emerald-500/60" />
-
-                          {/* Lip line */}
-                          <div className={`absolute bottom-1/4 left-1/2 -translate-x-1/2 w-10 h-3 rounded-[50%] border-b transition-all ${
-                            state.antiLipReadingEnabled 
-                              ? 'border-red-400 border-t scale-y-125 animate-bounce' 
-                              : 'border-emerald-500/60'
-                          }`} />
-
-                          {/* Scrambling Waves Overlay */}
-                          {state.thermalPulseEnabled && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle,rgba(234,179,8,0.15)_0%,transparent_70%)] animate-pulse" />
-                          )}
-
-                          {state.retroScramblerEnabled && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="w-16 h-16 rounded-full bg-white opacity-90 animate-ping" />
-                              <div className="absolute w-20 h-20 rounded-full bg-emerald-400 opacity-60 animate-pulse" />
-                            </div>
-                          )}
-
-                          {state.lidarMeshFloodEnabled && (
-                            <div className="absolute inset-0 grid grid-cols-4 gap-2 opacity-30">
-                              {Array.from({ length: 16 }).map((_, i) => (
-                                <div key={i} className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" style={{ animationDelay: `${i * 100}ms` }} />
-                              ))}
-                            </div>
-                          )}
-
-                          {state.adversarialPoisoning && (
-                            <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center opacity-90 border border-red-500/40 rounded-xl">
-                              <span className="text-[10px] font-mono font-bold text-red-500 animate-pulse">CATASTROPHIC MATRIX POISONING</span>
-                              <span className="text-[8px] font-mono text-slate-500">FACIAL IDENTIFIER CORRUPTED</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Bottom HUD info */}
-                      <div className="relative z-10 flex flex-col gap-1 text-[9px] font-mono">
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">TRACKING TARGET STATUS</span>
-                          <span className={`font-bold uppercase ${
-                            state.adversarialPoisoning 
-                              ? 'text-red-500' 
-                              : (state.thermalPulseEnabled || state.retroScramblerEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled)
-                                ? 'text-yellow-400 animate-pulse'
-                                : 'text-emerald-400'
-                          }`}>
-                            {state.adversarialPoisoning 
-                              ? 'LOST_TARGET' 
-                              : (state.thermalPulseEnabled || state.retroScramblerEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled)
-                                ? 'DEFLECTING / COMPROMISED' 
-                                : 'LOCKED_ON // NORMAL'}
-                          </span>
-                        </div>
-
-                        {/* Status bar */}
-                        <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full transition-all duration-300 ${
-                              state.adversarialPoisoning 
-                                ? 'bg-red-500 w-5%' 
-                                : state.retroScramblerEnabled 
-                                  ? 'bg-yellow-400 w-25%' 
-                                  : (state.thermalPulseEnabled || state.antiLipReadingEnabled || state.lidarMeshFloodEnabled)
-                                    ? 'bg-yellow-400 w-45%'
-                                    : 'bg-emerald-500 w-100%'
-                            }`} 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab 2: Smart Tags & Objects (Child & Asset Protection) */}
-          {activeTab === 'tags' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
-                    <Tag className="w-4 h-4 text-emerald-400" />
-                    Universal Tagging &amp; Object Protection
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('pairing')}
-                    className="self-start sm:self-auto px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-bold rounded-lg flex items-center gap-1.5 transition"
-                  >
-                    <Bluetooth className="w-3.5 h-3.5" />
-                    Go to BLE Pairing Console
-                  </button>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Attach compact BLE beacons, smart tags, or anchor points to children's apparel, valuable business prototypes, proprietary products, private artwork, film sets, or secret recipes. Open-source AI scanning models and BlurBubble-compatible smart cameras read these broadcast handshakes, instantly blurring or erasing the designated items to protect intellectual property and personal privacy alike.
-                </p>
-              </div>
-
-              {/* Add New Tag Form */}
-              <form onSubmit={handleAddTag} className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Register Protected Object or Beacon</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Item / Object Name</label>
-                    <input
-                      id="tag-name-input"
-                      type="text"
-                      placeholder="e.g. Generation-4 AI Chip Prototype"
-                      value={newTagName}
-                      onChange={(e) => setNewTagName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Device / Asset Type</label>
-                    <select
-                      id="tag-type-select"
-                      value={newTagType}
-                      onChange={(e: any) => setNewTagType(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
-                    >
-                      <option value="prototype">üî¨ Confidential Business Prototype / Product</option>
-                      <option value="artwork">üé® Proprietary Art / Gallery Piece / Cinema Set</option>
-                      <option value="building">üè¢ Protected Location / Shopfront / Signage</option>
-                      <option value="valuable">üíé Private Asset / Vault / Secret Document</option>
-                      <option value="smart_tag">üéí BlurBubble Smart Tag (Standard Child/Family)</option>
-                      <option value="airtag">üçé Apple AirTag (Re-used BLE Beacon)</option>
-                      <option value="galaxy_tag">üåå Samsung Galaxy SmartTag (Re-used)</option>
-                      <option value="phone">üì± Smartphone App (This Device / Second Phone)</option>
-                      <option value="key_fob">üîë Specialized Keychain Fob</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Assigned Censor Shield</label>
-                    <select
-                      id="tag-privacy-select"
-                      value={newTagPrivacy}
-                      onChange={(e: any) => setNewTagPrivacy(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
-                    >
-                      <option value="magic_removal">ü™Ñ Magic Eraser Removal (Inpaint Empty Space)</option>
-                      <option value="strict_blur">üî¥ Strict Blur (Dense Obfuscation)</option>
-                      <option value="pixelate">üü° 8-Bit Pixelate (Low Fidelity)</option>
-                      <option value="emoji">üîµ Shield Avatar (Interception Graphic)</option>
-                      <option value="black_bar">‚ö´ Censored Black Bar (Classic Ban)</option>
-                    </select>
-                  </div>
-                </div>
-                <button
-                  id="add-tag-btn"
-                  type="submit"
-                  className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Protection Beacon Tag
-                </button>
-              </form>
-
-              {/* Tags List */}
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-                  Broadcasting Shield Beacon Directory ({state.registeredEntities.length})
-                </span>
-
-                <div className="space-y-2.5">
-                  {state.registeredEntities.map((tag) => (
-                    <div 
-                      key={tag.id} 
-                      className={`border rounded-xl p-4 bg-slate-950/40 flex flex-col gap-3 transition-all duration-300 ${
-                        ringingTagId === tag.id
-                          ? 'border-emerald-500 bg-slate-950/80 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30'
-                          : tag.isActive ? 'border-slate-800' : 'border-slate-900 opacity-60'
-                      }`}
-                    >
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          <div className={`w-9 h-9 rounded-lg bg-slate-900 border flex items-center justify-center text-sm shrink-0 transition-colors ${
-                            ringingTagId === tag.id ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-800'
-                          }`}>
-                            {tag.type === 'smart_tag' ? 'üéí' : 
-                             tag.type === 'phone' ? 'üì±' : 
-                             tag.type === 'airtag' ? 'üçé' : 
-                             tag.type === 'galaxy_tag' ? 'üåå' : 
-                             tag.type === 'key_fob' ? 'üîë' : 
-                             tag.type === 'prototype' ? 'üî¨' : 
-                             tag.type === 'artwork' ? 'üé®' : 
-                             tag.type === 'building' ? 'üè¢' : 'üíé'}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {editingTagId === tag.id ? (
-                                <input
-                                  type="text"
-                                  value={editingTagName}
-                                  onChange={(e) => setEditingTagName(e.target.value)}
-                                  onBlur={() => handleRenameTag(tag.id, editingTagName)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleRenameTag(tag.id, editingTagName);
-                                    if (e.key === 'Escape') setEditingTagId(null);
-                                  }}
-                                  className="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-xs text-white font-sans focus:outline-none focus:border-cyan-500 w-full max-w-[180px]"
-                                  autoFocus
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingTagId(tag.id);
-                                    setEditingTagName(tag.name);
-                                  }}
-                                  className="flex items-center gap-1.5 cursor-pointer text-left hover:text-cyan-400 group/name"
-                                  title="Click to rename"
-                                >
-                                  <span className="text-sm font-semibold text-white group-hover/name:text-cyan-400 transition-colors">
-                                    {tag.name}
-                                  </span>
-                                  <Edit2 className="w-3 h-3 text-slate-500 group-hover/name:text-cyan-400 transition-colors shrink-0" />
-                                </button>
-                              )}
-                              <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800/80 px-1.5 py-0.2 rounded font-mono uppercase">
-                                {tag.type}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              <span className="text-[9px] bg-slate-900 text-slate-400 border border-slate-800 px-1.5 py-0.2 rounded font-mono">
-                                Battery: {tag.batteryPercent}%
-                              </span>
-                              <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-900/60 px-1.5 py-0.2 rounded font-mono uppercase">
-                                Target Shield: {tag.privacyLevel.toUpperCase().replace('_', ' ')}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 self-end md:self-center">
-                          <div>
-                            <select
-                              id={`tag-shield-${tag.id}`}
-                              value={tag.privacyLevel}
-                              onChange={(e) => handleTagPrivacyChange(tag.id, e.target.value as PrivacyLevel)}
-                              className="bg-slate-900 border border-slate-850 rounded px-2 py-1 text-[10px] text-slate-300 focus:outline-none focus:border-emerald-500/40"
-                            >
-                              <option value="magic_removal">Magic Eraser</option>
-                              <option value="strict_blur">Strict Blur</option>
-                              <option value="pixelate">Pixelate</option>
-                              <option value="emoji">Shield Avatar</option>
-                              <option value="black_bar">Black Bar</option>
-                              <option value="none">No Shield</option>
-                            </select>
-                          </div>
-
-                          <button
-                            id={`toggle-tag-${tag.id}`}
-                            onClick={() => handleToggleTagStatus(tag.id)}
-                            className={`text-[10px] px-2.5 py-1 rounded font-bold transition ${
-                              tag.isActive 
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' 
-                                : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-750'
-                            }`}
-                          >
-                            {tag.isActive ? 'BROADCASTING' : 'MUTED'}
-                          </button>
-
-                          {editingTagId === tag.id ? (
-                            <button
-                              id={`save-tag-btn-${tag.id}`}
-                              type="button"
-                              onClick={() => handleRenameTag(tag.id, editingTagName)}
-                              className="text-[10px] px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 font-bold rounded transition flex items-center gap-1 cursor-pointer"
-                              title="Save Name"
-                            >
-                              <Check className="w-3 h-3" />
-                              <span>Save</span>
-                            </button>
-                          ) : (
-                            <button
-                              id={`rename-tag-btn-${tag.id}`}
-                              type="button"
-                              onClick={() => {
-                                setEditingTagId(tag.id);
-                                setEditingTagName(tag.name);
-                              }}
-                              className="text-[10px] px-2.5 py-1 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 font-bold rounded transition flex items-center gap-1 cursor-pointer"
-                              title="Rename Tag"
-                            >
-                              <Edit2 className="w-3 h-3 text-slate-400" />
-                              <span>Rename</span>
-                            </button>
-                          )}
-
-                          <button
-                            id={`delete-tag-${tag.id}`}
-                            onClick={() => handleDeleteTag(tag.id)}
-                            className="p-1 text-slate-500 hover:text-red-400 transition"
-                            title="Delete Tag"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Interactive Find Tag & Simulate Help buttons */}
-                      <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-900/40">
-                        {/* 1. Find Tag / Play Sound (Phone -> Tag) */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRingingTagId(tag.id);
-                            playTagBuzzerSound();
-                            // Reset ringing state after 3 seconds
-                            setTimeout(() => {
-                              setRingingTagId((current) => (current === tag.id ? null : current));
-                            }, 3000);
-                          }}
-                          className={`flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all ${
-                            ringingTagId === tag.id
-                              ? 'bg-emerald-500 text-slate-950 animate-pulse font-extrabold shadow-[0_0_10px_rgba(16,185,129,0.3)]'
-                              : 'bg-slate-900 hover:bg-slate-850 text-emerald-400 border border-emerald-500/10 hover:border-emerald-500/30'
-                          }`}
-                          title="Trigger a high-frequency audible sweep on this smart tag's buzzer to find it"
-                        >
-                          <Volume2 className={`w-3.5 h-3.5 ${ringingTagId === tag.id ? 'animate-bounce' : ''}`} />
-                          <span>{ringingTagId === tag.id ? 'CHIRPING BUZZER...' : 'üîä Play Sound on Tag (Find Tag)'}</span>
-                        </button>
-
-                        {/* 2. Press Tag Button / Help Call (Tag -> Phone) */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const now = new Date();
-                            const timeStr = now.toTimeString().split(' ')[0];
-                            setActiveHelpAlert({
-                              tagId: tag.id,
-                              tagName: tag.name,
-                              time: timeStr
-                            });
-                            // Trigger system wide notification & buzzing rings in App.tsx
-                            window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
-                              detail: { 
-                                title: "üö® ACTIVE HELP ALERT: Son Needs Help!", 
-                                body: `Help request pressed on child tag: ${tag.name}. Mobile phone alert initiated.`,
-                                type: 'child_blocking' 
-                              } 
-                            }));
-                          }}
-                          className="flex items-center gap-1.5 text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-lg transition-all"
-                          title="Simulate child pressing the physical help button on this tag (triggers urgent phone alert)"
-                        >
-                          <Radio className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                          <span>üîò Press Tag Button (Simulate Help Call)</span>
-                        </button>
-
-                        {/* Active Chirping Notification */}
-                        {ringingTagId === tag.id && (
-                          <span className="text-[9px] font-mono text-emerald-400 animate-pulse font-semibold sm:ml-auto flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-                            CHIRPING BROADCAST IN PROGRESS
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Interactive Child Beacon Rotating Crypto ID and Tracker Scrambler Panel */}
-              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-4 mt-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-3 gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                      <ShieldAlert className="w-4 h-4 animate-pulse" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Child Beacon Anti-Tracking Matrix</h4>
-                      <p className="text-[10px] text-slate-400">GDPR Recital 38 &amp; COPPA Safeguards (CHILD_TAG_SHIELD_SECURE)</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/40 px-2 py-0.5 rounded uppercase flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block"></span>
-                      ID ACTIVE: {cryptoTimer}s LEFT
-                    </span>
-                  </div>
-                </div>
-
-                {/* Rotating ID Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Current Key Card */}
-                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-3.5 space-y-2 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-1 text-[8px] font-mono text-emerald-500/30 font-bold uppercase tracking-widest pointer-events-none">
-                      CURRENT_FINGERPRINT
-                    </div>
-                    <span className="text-[9px] text-slate-500 font-mono font-bold uppercase block">Broadcast Signature (MAC Scrambled)</span>
-                    <div className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/20 p-2 rounded border border-emerald-900/30 select-all truncate">
-                      {currentCryptoID}
-                    </div>
-                    <div className="flex justify-between items-center text-[8px] font-mono text-slate-500">
-                      <span>Status: BROADCASTING ACTIVE</span>
-                      <span>Power: Standard (0 dBm)</span>
-                    </div>
-                  </div>
-
-                  {/* Next Key Card */}
-                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-3.5 space-y-2 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-1 text-[8px] font-mono text-slate-500/30 font-bold uppercase tracking-widest pointer-events-none">
-                      NEXT_QUEUE
-                    </div>
-                    <span className="text-[9px] text-slate-500 font-mono font-bold uppercase block">Precalculated Next Fingerprint</span>
-                    <div className="text-xs font-mono font-bold text-slate-400 bg-slate-900/40 p-2 rounded border border-slate-800/80 select-all truncate">
-                      {nextCryptoID}
-                    </div>
-                    <div className="flex justify-between items-center text-[8px] font-mono text-slate-500">
-                      <span>Rotation: Automatic (SHA-256)</span>
-                      <span>Est: in {cryptoTimer} seconds</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Live Scrambled Tracker Sniffers Feed */}
-                <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 space-y-3">
-                  <div className="flex justify-between items-center border-b border-slate-900 pb-2">
-                    <span className="text-[10px] text-slate-400 uppercase font-mono font-bold flex items-center gap-1.5">
-                      <Radio className="w-3.5 h-3.5 text-rose-400" />
-                      Simulated Deflected Tracking Scrapers ({scrambledTrackers.length})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleTriggerTrackingSweep}
-                      disabled={isSweepingTrackers}
-                      className={`px-2.5 py-1 rounded text-[9px] font-mono font-bold uppercase border transition ${
-                        isSweepingTrackers
-                          ? 'bg-rose-500/10 border-rose-500/40 text-rose-400'
-                          : 'bg-slate-900 hover:bg-slate-850 border-slate-800 text-slate-300'
-                      }`}
-                    >
-                      {isSweepingTrackers ? 'SWEEPING REGISTRY...' : '‚ö° Trigger Probe Sweep Simulation'}
-                    </button>
-                  </div>
-
-                  <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
-                    {scrambledTrackers.map((track) => (
-                      <div key={track.id} className="flex justify-between items-center text-[10px] font-mono bg-slate-900/30 border border-slate-900/60 p-2 rounded hover:border-slate-800 transition">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0"></span>
-                          <span className="text-slate-300 font-bold">{track.name}</span>
-                          <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-850 px-1 py-0.2 rounded">{track.type}</span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-1.5 py-0.2 rounded uppercase">
-                            {track.status}
-                          </span>
-                          <span className="text-[8px] text-slate-500">{track.timestamp}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <p className="text-[9px] text-slate-500 leading-normal font-sans pt-1">
-                    ‚ÑπÔ∏è By rotating the cryptographic ID every 90 seconds, Bluetooth-sniffing cameras and regional retail scanners are blocked from cross-referencing your children's tags. They see an entirely unrelated signal fingerprint on every sweep, preventing digital stalking.
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab 3: Facial Recognition Database */}
-          {activeTab === 'faces' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
-                <div className="flex items-center gap-1.5 text-blue-400 font-semibold text-sm">
-                  <Smile className="w-4 h-4" />
-                  Saved Faces list (Faces to Keep Blurred)
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Backup protection. If your smart tags or phone run out of battery or are out of range, nearby smart glasses can still recognize your face and blur it automatically. Photos are saved only on your device and are never sent to any external server.
-                </p>
-              </div>
-
-              {/* Opt-in switch */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                <div className="space-y-0.5 pr-4">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Smart Glasses Recognition Opt-Out</h4>
-                  <p className="text-[10px] text-slate-400">
-                    Instruct nearby smart glasses to automatically recognize and blur your face or your family's faces.
-                  </p>
-                </div>
-                <button
-                  id="face-optout-toggle"
-                  onClick={() => onChange({ ...state, facialRecognitionOptOut: !state.facialRecognitionOptOut })}
-                  className={`text-[10px] px-3 py-1.5 rounded-lg font-bold uppercase transition ${
-                    state.facialRecognitionOptOut 
-                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
-                      : 'bg-slate-800 text-slate-400 border border-slate-700'
-                  }`}
-                >
-                  {state.facialRecognitionOptOut ? 'ENABLED (ACTIVE)' : 'DISABLED'}
-                </button>
-              </div>
-
-              {state.facialRecognitionOptOut && (
-                <>
-                  {/* Register Face Form */}
-                  <form onSubmit={handleAddFace} className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Add a New Face to Keep Blurred</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Person's Name</label>
-                        <input
-                          id="face-name-input"
-                          type="text"
-                          placeholder="e.g. Leo (My Child)"
-                          value={newFaceName}
-                          onChange={(e) => setNewFaceName(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Choose Profile Photo</label>
-                        <select
-                          id="face-photo-select"
-                          value={newFacePhoto}
-                          onChange={(e) => setNewFacePhoto(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60"
-                        >
-                          <option value="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80">üëß Child Photo 1</option>
-                          <option value="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80">üë® Male Photo 1</option>
-                          <option value="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80">üë© Female Photo 1</option>
-                          <option value="https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=150&auto=format&fit=crop&q=80">üë¶ Child Photo 2</option>
-                        </select>
-                      </div>
-                    </div>
-                    <button
-                      id="register-face-btn"
-                      type="submit"
-                      className="w-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Save Face Information
-                    </button>
-                  </form>
-
-                  {/* Registered Faces list */}
-                  <div className="space-y-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-                      Saved Faces ({state.registeredFaces.length})
-                    </span>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {state.registeredFaces.map((face) => (
-                        <div 
-                          key={face.id} 
-                          className={`p-3 border rounded-xl bg-slate-950/40 flex items-center justify-between gap-3 transition ${
-                            face.isRegistered ? 'border-slate-800' : 'border-slate-900 opacity-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="relative w-10 h-10 shrink-0 rounded-full overflow-hidden border border-slate-700">
-                              <img 
-                                src={face.photoUrl} 
-                                alt={face.name} 
-                                className="w-full h-full object-cover" 
-                                referrerPolicy="no-referrer"
-                              />
-                              {calibratingFaceId === face.id && (
-                                <>
-                                  {/* Laser grid line scan visualizer */}
-                                  <div className="absolute inset-0 bg-emerald-500/20 border-2 border-emerald-400 rounded-full animate-pulse" />
-                                  <div className="absolute left-0 right-0 h-[2px] bg-emerald-300 shadow-[0_0_8px_#10b981] animate-bounce" style={{ top: '40%' }} />
-                                </>
-                              )}
-                            </div>
-                            <div className="text-left">
-                              <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
-                                {face.name}
-                                {calibratingFaceId === face.id && (
-                                  <span className="text-[7px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.2 rounded font-mono font-bold animate-pulse">CALIBRATING</span>
-                                )}
-                              </h4>
-                              <p className="text-[9px] text-slate-500 font-sans mt-0.5">
-                                Match score: <span className={face.confidenceScore >= 0.95 ? "text-emerald-400 font-bold" : "text-slate-400 font-medium"}>{(face.confidenceScore * 100).toFixed(0)}% accuracy</span>
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5">
-                            {face.isRegistered && (
-                              <button
-                                type="button"
-                                id={`calibrate-face-${face.id}`}
-                                disabled={calibratingFaceId !== null}
-                                onClick={() => {
-                                  setCalibratingFaceId(face.id);
-                                  setCalibrationProgress(0);
-                                  playLocalSoundTest('sonar_chime', 85);
-                                  
-                                  const interval = setInterval(() => {
-                                    setCalibrationProgress(prev => {
-                                      if (prev >= 100) {
-                                        clearInterval(interval);
-                                        // Update confidence score to higher precision
-                                        const updatedFaces = state.registeredFaces.map(f => 
-                                          f.id === face.id ? { ...f, confidenceScore: Math.min(0.99, 0.96 + Math.random() * 0.03) } : f
-                                        );
-                                        onChange({
-                                          ...state,
-                                          registeredFaces: updatedFaces
-                                        });
-                                        setCalibratingFaceId(null);
-                                        playLocalSoundTest('tactical_click', 80);
-                                        return 0;
-                                      }
-                                      return prev + 10;
-                                    });
-                                  }, 150);
-                                }}
-                                className={`text-[9px] px-2 py-0.5 rounded font-bold border transition ${
-                                  calibratingFaceId === face.id
-                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 animate-pulse font-mono'
-                                    : 'bg-slate-900 hover:bg-slate-850 text-slate-400 border-slate-800 hover:text-emerald-400 hover:border-emerald-500/30'
-                                }`}
-                              >
-                                {calibratingFaceId === face.id ? `MESH: ${calibrationProgress}%` : 'CALIBRATE'}
-                              </button>
-                            )}
-                            <button
-                              id={`toggle-face-${face.id}`}
-                              onClick={() => handleToggleFaceStatus(face.id)}
-                              className={`text-[9px] px-2 py-0.5 rounded font-bold border transition ${
-                                face.isRegistered 
-                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
-                                  : 'bg-slate-800 text-slate-400 border-slate-700'
-                              }`}
-                            >
-                              {face.isRegistered ? 'VERIFIED' : 'MUTED'}
-                            </button>
-                            <button
-                              id={`delete-face-${face.id}`}
-                              onClick={() => handleDeleteFace(face.id)}
-                              className="p-1 text-slate-500 hover:text-red-400 transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Anti-AI Social Scrape & Identity Shield (No Data About Me) Panel */}
-                  <div className="mt-8 pt-6 border-t border-slate-900/60 space-y-4">
-                    <div className="bg-slate-950 border-2 border-slate-900/80 rounded-2xl overflow-hidden shadow-2xl relative">
-                      <div className="absolute top-0 right-0 p-3">
-                        <span className="text-[9px] font-mono text-emerald-400/60 uppercase tracking-widest bg-emerald-950/20 border border-emerald-900/40 px-2 py-0.5 rounded">
-                          RFC-9402 Compliant
-                        </span>
-                      </div>
-                      
-                      {/* Header */}
-                      <div className="p-5 border-b border-slate-900/80 bg-gradient-to-r from-slate-950 to-slate-900/40">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/20 rounded-xl">
-                            <Fingerprint className="w-5 h-5 text-emerald-400" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-extrabold text-white uppercase tracking-wider font-sans">
-                              Identity Shield &amp; AI Social-Scrape Blocker
-                            </h3>
-                            <p className="text-[11px] text-slate-400 max-w-xl leading-normal mt-0.5">
-                              Defends your face from reverse-image scanners (PimEyes, Clearview AI) and prevents smart glasses from linking your physical face to social media or personal accounts.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Content Area */}
-                      <div className="p-5 space-y-5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          
-                          {/* Toggle 1: Adversarial Pixel Noise Injection */}
-                          <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-800 transition">
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                                  Adversarial Pixel Poisoning
-                                </span>
-                                <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Fawkes 1.2</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 leading-normal">
-                                Injects invisible, pixel-space adjustments into your public face records. Corrupts the facial-recognition vector to cause lookup failure.
-                              </p>
-                            </div>
-                            <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                              <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.adversarialPoisoning ? 'Poisoned Embeddings' : 'Standard Embeddings'}</span>
-                              <button
-                                type="button"
-                                id="toggle-adversarial-poisoning"
-                                onClick={() => onChange({ ...state, adversarialPoisoning: !state.adversarialPoisoning })}
-                                className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                  state.adversarialPoisoning
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : 'bg-slate-900 text-slate-500 border border-slate-850'
-                                }`}
-                              >
-                                {state.adversarialPoisoning ? 'ON (ACTIVE)' : 'OFF'}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Toggle 2: Decoy Persona Broadcasting */}
-                          <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-800 transition">
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                  <Users className="w-3.5 h-3.5 text-emerald-400" />
-                                  Decoy Persona Broadcasting
-                                </span>
-                                <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Ephemeral ID</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 leading-normal">
-                                Broadcasts a randomized, virtual persona to nearby compliance-seeking smart glasses, keeping your real identity fully invisible.
-                              </p>
-                            </div>
-                            <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                              <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.decoyPersonaBroadcast ? 'Randomizing AR ID' : 'Real ID (Opt-In Only)'}</span>
-                              <button
-                                type="button"
-                                id="toggle-decoy-persona"
-                                onClick={() => onChange({ ...state, decoyPersonaBroadcast: !state.decoyPersonaBroadcast })}
-                                className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                  state.decoyPersonaBroadcast
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : 'bg-slate-900 text-slate-500 border border-slate-850'
-                                }`}
-                              >
-                                {state.decoyPersonaBroadcast ? 'ON (ACTIVE)' : 'OFF'}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Toggle 3: RFC-9402 Social Lookup Block */}
-                          <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-800 transition">
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                  <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                                  RFC-9402 Social Block
-                                </span>
-                                <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Opt-Out Header</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 leading-normal">
-                                Transmits explicit, cryptographically signed `do-not-associate` instructions in all outbound radio beacon frames to legally deny data linkups.
-                              </p>
-                            </div>
-                            <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                              <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.rfc9402SocialBlock ? 'Header Transmitting' : 'Header Muted'}</span>
-                              <button
-                                type="button"
-                                id="toggle-rfc9402-block"
-                                onClick={() => onChange({ ...state, rfc9402SocialBlock: !state.rfc9402SocialBlock })}
-                                className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                  state.rfc9402SocialBlock
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : 'bg-slate-900 text-slate-500 border border-slate-850'
-                                }`}
-                              >
-                                {state.rfc9402SocialBlock ? 'ON (ACTIVE)' : 'OFF'}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Toggle 4: Regulatory Cease-and-Desist Registration */}
-                          <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-800 transition">
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                                  Biometric Legal Block
-                                </span>
-                                <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">BIPA / CCPA</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 leading-normal">
-                                Places your face hash on a secure global exclusion ledger. Automatically delivers legal opt-out commands to PimEyes, Clearview, and similar web indexers.
-                              </p>
-                            </div>
-                            <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                              <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.regulatoryCeaseAndDesist ? 'Ledger Active' : 'Ledger Standby'}</span>
-                              <button
-                                type="button"
-                                id="toggle-legal-block"
-                                onClick={() => onChange({ ...state, regulatoryCeaseAndDesist: !state.regulatoryCeaseAndDesist })}
-                                className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                  state.regulatoryCeaseAndDesist
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : 'bg-slate-900 text-slate-500 border border-slate-850'
-                                }`}
-                              >
-                                {state.regulatoryCeaseAndDesist ? 'ON (ACTIVE)' : 'OFF'}
-                              </button>
-                            </div>
-                          </div>
-
-                        {/* UNIVERSAL RECORDING PROTECTION SHIELD */}
-                        <div className="border-t border-slate-900/60 pt-5 space-y-4">
-                          <div className="space-y-1">
-                            <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded uppercase tracking-wider">
-                              Multi-Device Broadcast Protocol
-                            </span>
-                            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 pt-1">
-                              <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                              Universal Surveillance Intercept Grid
-                            </h4>
-                            <p className="text-[10px] text-slate-400 leading-normal">
-                              Extend compliance standard refusals beyond smart glasses to all physical camera classes and recording devices within your perimeter shield range.
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Mobile Cams Block */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-                                    Mobile &amp; Smartphone Cams
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">OS Integration</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Forces compatible native mobile camera apps and user devices in range to automatically mask/blur your facial profile in photos and video feeds.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.mobileCamsBlock ? 'Broadcasting Refusal' : 'Refusal Suspended'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-mobile-cams-block"
-                                  onClick={() => onChange({ ...state, mobileCamsBlock: !state.mobileCamsBlock })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.mobileCamsBlock
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-850'
-                                  }`}
-                                >
-                                  {state.mobileCamsBlock ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* CCTV & Security Cam Refusal */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Video className="w-3.5 h-3.5 text-emerald-400" />
-                                    Municipal CCTV &amp; Security Cams
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">B2G Grid Link</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Delivers optical-refusal handshake hashes directly to compliant municipal and commercial security camera networks to enforce automated live blurs.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.cctvBlock ? 'Enforcing Live Blurs' : 'CCTV Transmitting Real'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-cctv-block"
-                                  onClick={() => onChange({ ...state, cctvBlock: !state.cctvBlock })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.cctvBlock
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-850'
-                                  }`}
-                                >
-                                  {state.cctvBlock ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Smart Home IoT Exclusion */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Home className="w-3.5 h-3.5 text-emerald-400" />
-                                    Smart Home IoT (Ring/Nest)
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Local Wi-Fi Beacon</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Broadcasts localized smart-refusal packets via BLE and Wi-Fi to neighbors' Ring, Nest, or outdoor smart cams to suspend unconsented clip recordings.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.smartHomeExclusion ? 'Suppressing IoT' : 'IoT Tracking On'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-smarthome-exclusion"
-                                  onClick={() => onChange({ ...state, smartHomeExclusion: !state.smartHomeExclusion })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.smartHomeExclusion
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-850'
-                                  }`}
-                                >
-                                  {state.smartHomeExclusion ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Aerial Drones Disruption */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                                    Drone &amp; Aerial Camera Shield
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">RF Deflector</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Encodes standard geospatial exclusion tags into localized signal bursts, notifying mapping and surveillance drones to omit your coordinate envelope.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.aerialDroneDisruption ? 'Geofence Active' : 'Standby Mode'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-aerial-disruption"
-                                  onClick={() => onChange({ ...state, aerialDroneDisruption: !state.aerialDroneDisruption })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.aerialDroneDisruption
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.aerialDroneDisruption ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* AI WEB CRAWLER & RETROACTIVE DATA SCRAPER SHIELD */}
-                        <div className="border-t border-slate-900/60 pt-5 space-y-4">
-                          <div className="space-y-1">
-                            <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded uppercase tracking-wider">
-                              AI Training Dataset Protection
-                            </span>
-                            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 pt-1">
-                              <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                              Autonomous AI Crawler &amp; Dataset Exclusion Hub
-                            </h4>
-                            <p className="text-[10px] text-slate-400 leading-normal">
-                              Prevent automated bots from scraping your face prints, spoken vocal transcripts, and personal profiles to feed large language models or biometric datasets.
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* OpenAI GPTBot */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                                    OpenAI GPTBot Opt-Out
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">robots.txt Block</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Broadcasting global exclusion headers instructing OpenAI's GPTBot and web indexes to skip your personal media, photos, and public profiles.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.gptBotExclusion ? 'Scraping Prohibited' : 'Unprotected Scraping'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-gptbot-exclusion"
-                                  onClick={() => onChange({ ...state, gptBotExclusion: !state.gptBotExclusion })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.gptBotExclusion
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.gptBotExclusion ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Google-Extended */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                                    Google-Extended Refusal
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Gemini training</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Declares strict dataset refusals to prevent Google-Extended spider crawlers from mining your speech prints or physical assets for Gemini training.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.googleExtendedBlock ? 'Gemini Block Active' : 'Index Allowed'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-google-extended-block"
-                                  onClick={() => onChange({ ...state, googleExtendedBlock: !state.googleExtendedBlock })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.googleExtendedBlock
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.googleExtendedBlock ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Anthropic crawler block */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                                    Anthropic Claude Exclusion
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Claude crawler</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Denies indexing rights to Anthropic-AI crawler agents. Protects your digital identity assets and creative vocal files from LLM integration.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.anthropicBlock ? 'Claude Excluded' : 'Crawlers Permitted'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-anthropic-block"
-                                  onClick={() => onChange({ ...state, anthropicBlock: !state.anthropicBlock })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.anthropicBlock
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.anthropicBlock ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Common Crawl */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                                    Common Crawl CCBot Block
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Dataset Shield</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Submits permanent "No-Scrape" watermarked assertions to CCBot nodes, keeping your private web footprints out of public foundation model repositories.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.commonCrawlOptOut ? 'CCBot Opt-Out Transmitted' : 'CCBot Scraping Active'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-ccbot-optout"
-                                  onClick={() => onChange({ ...state, commonCrawlOptOut: !state.commonCrawlOptOut })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.commonCrawlOptOut
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.commonCrawlOptOut ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Identity Data Brokers */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                                    Retroactive Data Broker Sweep (Spokeo, BeenVerified, Whitepages)
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Legal Automaton</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Sends automated, cryptographically signed BIPA / CCPA "Do Not Sell My Info" and deletion demands directly to 140+ popular people search directories and online background-check aggregators.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.dataBrokersSweep ? 'Continuous Automated Deletion Active' : 'Standby Mode'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-databrokers-sweep"
-                                  onClick={() => onChange({ ...state, dataBrokersSweep: !state.dataBrokersSweep })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.dataBrokersSweep
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.dataBrokersSweep ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* EU AI Act Biometric Shield */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
-                                    EU AI Act Biometric Shield
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Article 5 Ban</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Invokes Article 5 of the EU AI Act (Regulation EU 2024/1689) to legally prohibit remote real-time biometric tracking, remote facial matching, and emotion recognition.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.euAiActShieldEnabled ? 'Article 5 Armed' : 'Standby Mode'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-eu-ai-act-shield"
-                                  onClick={() => onChange({ ...state, euAiActShieldEnabled: !state.euAiActShieldEnabled })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.euAiActShieldEnabled
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.euAiActShieldEnabled ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Illinois BIPA Deletion Automaton */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <Gavel className="w-3.5 h-3.5 text-emerald-400" />
-                                    Illinois BIPA Deletion Automaton
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Statutory Penalty</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Triggers statutory penalties ($1,000 per negligent, $5,000 per intentional violation) under Illinois BIPA for unconsented scanning, enforcing mandatory data deletion.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.bipaDeletionEnabled ? 'BIPA Auto-Demand Active' : 'Standby Mode'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-bipa-deletion"
-                                  onClick={() => onChange({ ...state, bipaDeletionEnabled: !state.bipaDeletionEnabled })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.bipaDeletionEnabled
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.bipaDeletionEnabled ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* RFC-9402 Compliance Enforcer */}
-                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between hover:border-slate-85 transition">
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-white uppercase tracking-wide flex items-center gap-1.5">
-                                    <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
-                                    RFC-9402 Compliance Enforcer
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-slate-500 uppercase px-1.5 py-0.5 rounded bg-slate-900">Physical Standard</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal">
-                                  Transmits machine-readable physical privacy assertions and opt-out headers to make smart recording systems automatically drop biometric scans.
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between mt-3.5 pt-2 border-t border-slate-900/60">
-                                <span className="text-[9px] font-mono text-slate-500 uppercase">State: {state.rfc9402ComplianceEnabled ? 'Enforcing standard' : 'Standby Mode'}</span>
-                                <button
-                                  type="button"
-                                  id="toggle-rfc9402-compliance"
-                                  onClick={() => onChange({ ...state, rfc9402ComplianceEnabled: !state.rfc9402ComplianceEnabled })}
-                                  className={`text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase transition ${
-                                    state.rfc9402ComplianceEnabled
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-slate-900 text-slate-500 border border-slate-855'
-                                  }`}
-                                >
-                                  {state.rfc9402ComplianceEnabled ? 'ON (ACTIVE)' : 'OFF'}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                      </div>
-
-                        {/* Interactive Face Lookup Simulator Lab */}
-                        <div className="mt-4 p-5 bg-slate-950 border border-slate-900 rounded-xl space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                                <Activity className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                                Biometric Reverse-Lookup Simulation Lab
-                              </h4>
-                              <p className="text-[10px] text-slate-400">
-                                Test how nearby AI glasses or biometric search crawlers respond when attempting to scan and identify your physical face.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              id="run-face-search-simulation"
-                              disabled={simulatingFaceSearch}
-                              onClick={() => {
-                                setSimulatingFaceSearch(true);
-                                setFaceSearchProgress(0);
-                                setFaceSearchResult(null);
-                                setFaceSearchLogs([]);
-                                
-                                const steps = [
-                                  { progress: 10, msg: "‚ö° Scan initiated. Analyzing feed sources (Smart Glasses, Smartphones, Local CCTV)..." },
-                                  { progress: 25, msg: "üìê Extracting high-dimensional facial vector geometry..." },
-                                  { progress: 45, msg: "üì° Checking real-time RF/BLE opt-out beacon broadcast handshakes..." },
-                                  { progress: 65, msg: "üîç Querying major facial databases, AI training datasets, and scraper nodes (PimEyes, Clearview)..." },
-                                  { progress: 85, msg: "üõ∞Ô∏è Evaluating legal compliance directives and automated opt-out headers..." }
-                                ];
-                                
-                                steps.forEach((step, idx) => {
-                                  setTimeout(() => {
-                                    setFaceSearchProgress(step.progress);
-                                    setFaceSearchLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${step.msg}`]);
-                                  }, (idx + 1) * 450);
-                                });
-
-                                setTimeout(() => {
-                                  setFaceSearchProgress(100);
-                                  
-                                  // Determine outcomes based on active toggles
-                                  let blockDetails = "";
-                                  let titleResult = "";
-                                  const activeBlocks: string[] = [];
-                                  
-                                  if (state.euAiActShieldEnabled) activeBlocks.push("EU AI Act Article 5");
-                                  if (state.bipaDeletionEnabled) activeBlocks.push("BIPA Statutory Deletion");
-                                  if (state.rfc9402ComplianceEnabled) activeBlocks.push("RFC-9402 Enforcer");
-                                  
-                                  if (state.adversarialPoisoning) activeBlocks.push("Adversarial Pixel Poisoning");
-                                  if (state.rfc9402SocialBlock) activeBlocks.push("RFC-9402 Outbound Headers");
-                                  if (state.decoyPersonaBroadcast) activeBlocks.push("Decoy Ephemeral Broadcast");
-                                  if (state.regulatoryCeaseAndDesist) activeBlocks.push("BIPA/CCPA Exclusion Ledger");
-                                  if (state.mobileCamsBlock) activeBlocks.push("Universal Smartphone Blocker");
-                                  if (state.cctvBlock) activeBlocks.push("CCTV Network Opt-Out");
-                                  if (state.smartHomeExclusion) activeBlocks.push("Smart Home IoT Suppressor");
-                                  if (state.aerialDroneDisruption) activeBlocks.push("Geospatial Aerial Tagging");
-                                  if (state.gptBotExclusion) activeBlocks.push("GPTBot Dataset Shield");
-                                  if (state.googleExtendedBlock) activeBlocks.push("Google-Extended Refusal");
-                                  if (state.anthropicBlock) activeBlocks.push("Claude Core Exclusion");
-                                  if (state.commonCrawlOptOut) activeBlocks.push("CCBot Dataset Block");
-                                  if (state.dataBrokersSweep) activeBlocks.push("Automated Data Broker Sweep");
-
-                                  const logsList = [`[${new Date().toLocaleTimeString()}] üõ°Ô∏è Shield Diagnostics Summary:`];
-                                  if (state.mobileCamsBlock) {
-                                    logsList.push("  -> [SMARTPHONE INTERCEPT] Nearby smartphone camera preview frames successfully scrambled.");
-                                  }
-                                  if (state.cctvBlock) {
-                                    logsList.push("  -> [CCTV SHIELD] Compliant municipal camera networks applied real-time black-bar overlay.");
-                                  }
-                                  if (state.smartHomeExclusion) {
-                                    logsList.push("  -> [SMART HOME] Nearby Nest and Ring doorbell cameras halted active clips of your face.");
-                                  }
-                                  if (state.aerialDroneDisruption) {
-                                    logsList.push("  -> [AERIAL SHIELD] Drones flying overhead flagged current coordinate bubble as RESTRICTED.");
-                                  }
-                                  if (state.gptBotExclusion || state.googleExtendedBlock || state.anthropicBlock || state.commonCrawlOptOut) {
-                                    logsList.push("  -> [BOT EXCLUSION] GPTBot, Google-Extended, and CCBot spiders blocked from indexing media profiles.");
-                                  }
-                                  if (state.dataBrokersSweep) {
-                                    logsList.push("  -> [BROKER AUTOMATION] Sent BIPA deletion directives to PimEyes and BeenVerified databases.");
-                                   }
-                                   if (state.euAiActShieldEnabled) {
-                                     logsList.push("  -> [EU AI ACT] Enforced Article 5. Suspended public biometric classification and remote tracking nodes.");
-                                   }
-                                   if (state.bipaDeletionEnabled) {
-                                     logsList.push("  -> [BIPA LAW AUTOMATION] Triggered Illinois BIPA retroactive deletion demands with statutory penalty warnings.");
-                                   }
-                                   if (state.rfc9402ComplianceEnabled) {
-                                     logsList.push("  -> [RFC-9402 COMPLIANCE] Emitting compliant opt-out signals, requiring recording devices to drop facial profiles.");
-                                  }
-
-                                  setFaceSearchLogs(prev => [...prev, ...logsList]);
-
-                                  if (activeBlocks.length > 0) {
-                                    titleResult = `Shield Enforced: ${activeBlocks.length} Layers Active`;
-                                    blockDetails = `Your physical face profile was fully defended from lookup using standard handshakes. Active protection shields used: ${activeBlocks.join(", ")}. Facial index match returned 0 linked social handles or personal profiles.`;
-                                  } else {
-                                    titleResult = "üö® WARNING: Identity Profile Exposed";
-                                    blockDetails = "All blockers disabled! Scraper lookup successfully matched your physical face coordinates to public accounts on Instagram, X, and LinkedIn. Linked handle: @paul_stuart.";
-                                  }
-                                  
-                                  setFaceSearchResult(titleResult);
-                                  setFaceSearchLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] outcome: ${titleResult} - ${blockDetails}`]);
-                                  setSimulatingFaceSearch(false);
-                                  playLocalSoundTest('sonar_chime', 80);
-                                }, 2700);
-                              }}
-                              className={`text-[10px] px-4 py-2 rounded-lg font-bold uppercase transition select-none cursor-pointer ${
-                                simulatingFaceSearch
-                                  ? 'bg-slate-900 text-slate-500 border border-slate-850 cursor-not-allowed'
-                                  : 'bg-blue-500 hover:bg-blue-600 text-slate-950 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
-                              }`}
-                            >
-                              {simulatingFaceSearch ? "SIMULATING..." : "START SCAN TEST"}
-                            </button>
-                          </div>
-
-                          {/* Progress bar */}
-                          {simulatingFaceSearch && (
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between text-[9px] font-mono text-slate-500">
-                                <span>Scanning Matrix Coordinates...</span>
-                                <span>{faceSearchProgress}%</span>
-                              </div>
-                              <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
-                                <motion.div
-                                  className="h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${faceSearchProgress}%` }}
-                                  transition={{ duration: 0.1 }}
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Terminal Logs & Results */}
-                          {faceSearchLogs.length > 0 && (
-                            <div className="p-3.5 bg-slate-950 border border-slate-900 rounded-lg space-y-2 max-h-48 overflow-y-auto font-mono text-[9px] leading-relaxed">
-                              {faceSearchLogs.map((log, i) => (
-                                <div key={i} className={log.includes("outcome:") ? "text-emerald-400 font-bold border-t border-slate-900 pt-2 mt-2" : "text-slate-400"}>
-                                  {log}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Redirect link to Retroactive Scrub tab */}
-                  <div className="mt-8 pt-6 border-t border-slate-900/60 space-y-4">
-                    <div className="bg-gradient-to-r from-blue-950/20 to-slate-950/40 border border-blue-900/30 rounded-xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                          <Video className="w-4 h-4 text-blue-400" />
-                          Looking for Retroactive Face-Scrubbing?
-                        </h4>
-                        <p className="text-xs text-slate-400 max-w-md leading-relaxed">
-                          We have promoted the Web Face-Scrubber to its own dedicated **Retroactive Scrub** dashboard! Complete with DPA/GDPR letter templates, continuous auto-sweeping settings, and individual video-clip progress timelines.
-                        </p>
-                      </div>
-                      <button
-                        id="faces-to-scrub-shortcut"
-                        type="button"
-                        onClick={() => setActiveTab('scrub')}
-                        className="bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition shrink-0"
-                      >
-                        Open Scrub Dashboard ‚Üí
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          )}
-
-          {/* Tab 4: Retroactive Face-Scrub & Cloud Blur */}
-          {activeTab === 'scrub' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {/* Introduction Card */}
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
-                <div className="flex items-center gap-1.5 text-blue-400 font-semibold text-sm">
-                  <Video className="w-4 h-4 text-blue-400" />
-                  Blur My Face from Online Videos
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  What happens if someone already uploaded a video of you without permission? Our online scanner will search popular social media platforms (like YouTube, TikTok, and Instagram) and request they automatically blur your face in their videos without needing to take down the whole clip.
-                </p>
-                <div className="pt-2 text-[10px] text-slate-500 font-sans flex flex-wrap gap-2">
-                  <span className="text-emerald-400 font-semibold">‚úì Complies with global privacy laws</span>
-                  <span>‚Ä¢</span>
-                  <span className="text-emerald-400 font-semibold">‚úì Right to be Forgotten Ready</span>
-                  <span>‚Ä¢</span>
-                  <span className="text-emerald-400 font-semibold">‚úì Official Privacy Standards Approved</span>
-                </div>
-              </div>
-
-              {/* Dynamic Counters Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
-                  <span className="text-[9px] text-slate-500 font-sans uppercase">Scanned Videos</span>
-                  <span className="text-base font-bold text-white block font-sans">142,850m</span>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
-                  <span className="text-[9px] text-slate-500 font-sans uppercase">Supported Sites</span>
-                  <span className="text-base font-bold text-blue-400 block font-sans">4 Connected</span>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
-                  <span className="text-[9px] text-slate-500 font-sans uppercase">Sent Requests</span>
-                  <span className="text-base font-bold text-amber-400 block font-sans">{takedowns.filter(t => t.status === 'dispatched').length + takedowns.filter(t => t.status === 'takedown_success').length} Requests</span>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
-                  <span className="text-[9px] text-slate-500 font-sans uppercase">Videos Blurred</span>
-                  <span className="text-base font-bold text-emerald-400 block font-sans">{takedowns.filter(t => t.status === 'takedown_success').length} Videos</span>
-                </div>
-              </div>
-
-              {/* Sweep Configuration Panel */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <div>
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Continuous Online Searching</h4>
-                    <p className="text-[10px] text-slate-400">Our scanner continuously checks newly uploaded public videos to find and blur your face.</p>
-                  </div>
-                  <button
-                    id="auto-sweep-toggle"
-                    type="button"
-                    onClick={() => setIsAutoSweeping(!isAutoSweeping)}
-                    className={`text-[10px] px-3 py-1.5 rounded-lg font-bold uppercase transition ${
-                      isAutoSweeping 
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' 
-                        : 'bg-slate-800 text-slate-400 border border-slate-700'
-                    }`}
-                  >
-                    {isAutoSweeping ? 'ACTIVE (MONITORING)' : 'PAUSED'}
-                  </button>
-                </div>
-
-                {isAutoSweeping && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-900">
-                    <div>
-                      <label className="block text-[9px] text-slate-500 uppercase font-bold mb-1">Search Frequency</label>
-                      <select
-                        id="sweep-intensity-select"
-                        value={sweepIntensity}
-                        onChange={(e: any) => setSweepIntensity(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none"
-                      >
-                        <option value="weekly">Standard Search (Once a week)</option>
-                        <option value="daily">Daily Search (Highly Recommended)</option>
-                        <option value="realtime">Real-time Stream Search (Super Fast)</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-3 bg-slate-900/40 p-2 border border-slate-850 rounded-lg">
-                      <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
-                      <div className="min-w-0">
-                        <span className="text-[9px] text-slate-400 uppercase font-sans block">Active Search status</span>
-                        <span className="text-[10px] text-slate-300 block truncate font-sans">
-                          {sweepIntensity === 'weekly' ? 'Weekly check scheduled.' : sweepIntensity === 'daily' ? 'Scanning newly uploaded online video streams...' : 'Continuous live video scanning is running...'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Platform Connections Status: UPGRADED Social Media API Integration Module */}
-              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-5 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-900 pb-3">
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block">Social Media API Integration Hub</span>
-                    <p className="text-[10px] text-slate-400">Manage connections to bypass platform cameras and sync face hash templates.</p>
-                  </div>
-                  <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[8.5px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                    Bystander Opt-Out Standard
-                  </span>
-                </div>
-
-                {/* Grid of integrations */}
-                <div className="grid grid-cols-1 gap-3">
-                  {socialIntegrations.map((app) => {
-                    const isHandshaking = app.status === 'handshake';
-                    const isConnected = app.status === 'connected';
-                    const isAppEnabled = app.enabled;
-
-                    return (
-                      <div 
-                        key={app.id}
-                        className={`p-3.5 rounded-xl border transition-all ${
-                          !isAppEnabled
-                            ? 'bg-slate-950/20 border-slate-900/50 opacity-60'
-                            : isHandshaking
-                              ? 'bg-blue-950/10 border-blue-500/30'
-                              : 'bg-slate-900/30 border-slate-850'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                          {/* Logo + Version */}
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-lg bg-slate-950/50 w-8 h-8 rounded-lg flex items-center justify-center border border-slate-800">
-                              {app.icon}
-                            </span>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-bold text-white">{app.name}</span>
-                                <span className="text-[8px] font-mono text-slate-500 bg-slate-950 px-1 py-0.5 rounded border border-slate-900">{app.apiVersion}</span>
-                              </div>
-                              <span className="text-[9px] text-slate-400 block font-sans">Synced via Local Face Hash</span>
-                            </div>
-                          </div>
-
-                          {/* Action Controls & Toggle */}
-                          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                            {/* Toggle Button */}
-                            <button
-                              type="button"
-                              onClick={() => toggleSocialApp(app.id)}
-                              className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all ${
-                                isAppEnabled
-                                  ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                                  : 'bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700'
-                              }`}
-                            >
-                              {isAppEnabled ? 'Connected' : 'Disabled'}
-                            </button>
-
-                            {/* Trigger Handshake Button */}
-                            {isAppEnabled && (
-                              <button
-                                type="button"
-                                onClick={() => triggerSocialHandshake(app.id)}
-                                disabled={isHandshaking}
-                                className={`px-2 py-1 rounded border text-[9px] font-mono font-semibold tracking-wider transition ${
-                                  isHandshaking
-                                    ? 'bg-blue-950 border-blue-800 text-blue-400'
-                                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
-                                }`}
-                              >
-                                {isHandshaking ? 'Handshaking...' : 'Sync Handshake'}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Handshake Status & Logs Detail */}
-                        <div className="mt-2.5 pt-2.5 border-t border-slate-900/60 flex flex-col sm:flex-row justify-between gap-2 text-[9px]">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${
-                              !isAppEnabled ? 'bg-slate-600' : isHandshaking ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
-                            }`}></span>
-                            <span className="text-slate-400 font-mono">
-                              Status: <span className={`font-bold uppercase ${
-                                !isAppEnabled ? 'text-slate-500' : isHandshaking ? 'text-amber-400' : 'text-emerald-400'
-                              }`}>
-                                {!isAppEnabled ? 'Inactive / Paused' : isHandshaking ? 'Handshake Refresh...' : 'Handshake Verified (Active)'}
-                              </span>
-                            </span>
-                          </div>
-                          
-                          <div className="text-slate-500 text-right truncate max-w-full font-mono">
-                            {app.handshakeLog}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Dynamic Playground simulation panel */}
-                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 space-y-3 mt-2">
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Scrub Flagging Verification Simulator</span>
-                  </div>
-                  <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed">
-                    Verify that platform-level integrations automatically capture newly uploaded video assets matching your face template. Disabling a specific platform above will prevent its API crawler from auto-flagging matching files.
-                  </p>
-                  
-                  <div className="flex flex-col sm:flex-row items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={simulateSocialUploadDetection}
-                      disabled={isSimulatingUpload}
-                      className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shrink-0 flex items-center justify-center gap-2 ${
-                        isSimulatingUpload
-                          ? 'bg-blue-950 border border-blue-800 text-blue-400 cursor-not-allowed'
-                          : 'bg-blue-500 hover:bg-blue-600 text-slate-950 hover:scale-[1.01] active:scale-[0.99]'
-                      }`}
-                    >
-                      {isSimulatingUpload ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          Analyzing Video Frames...
-                        </>
-                      ) : (
-                        'Simulate Upload & Trigger Detection Scan'
-                      )}
-                    </button>
-                    
-                    {simulationMsg && (
-                      <span className="text-[10px] text-slate-300 font-mono font-medium block leading-normal bg-slate-900/60 p-2 border border-slate-850 rounded-lg w-full">
-                        {simulationMsg}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Family Consent & Media Whitelist Gateway Card */}
-              <div className="bg-slate-950/40 border border-slate-850 rounded-xl p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-900 pb-3">
-                  <div>
-                    <span className="text-[10px] text-blue-400 uppercase font-bold tracking-wider block">Family Consent &amp; Media Whitelist Gateway</span>
-                    <p className="text-[10.5px] text-slate-400">Add trusted platforms, profiles, or local BLE devices that are allowed to record and publish videos containing your face without being blurred.</p>
-                  </div>
-                  <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8.5px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                    TRUSTED EXEMPTIONS ENABLED
-                  </span>
-                </div>
-
-                {/* Hierarchical Priority Order Rules Visualizer */}
-                <div className="bg-slate-900/60 p-3.5 border border-slate-850 rounded-xl space-y-2.5">
-                  <div className="flex items-center gap-1.5 text-slate-300 font-bold text-xs uppercase tracking-wider">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    Sensible Rule Priority Hierarchy
-                  </div>
-                  <p className="text-[10.5px] text-slate-400 leading-normal">
-                    To prevent malicious bypass, whitelists follow a strict, un-overridable execution hierarchy:
-                  </p>
-                  <div className="grid grid-cols-1 gap-1.5 font-mono text-[9.5px]">
-                    <div className="flex items-center justify-between p-1.5 rounded bg-red-950/30 border border-red-500/20">
-                      <span className="text-red-400 font-bold">1. STRICT RESTRICTION / JUDICIAL ZONE</span>
-                      <span className="text-slate-500">Absolute Priority ‚Ä¢ Overrides Whitelist</span>
-                    </div>
-                    <div className="flex items-center justify-between p-1.5 rounded bg-slate-900/40 border border-slate-800">
-                      <span className="text-slate-300 font-bold">2. LOCAL PHYSICAL PERIMETERS</span>
-                      <span className="text-slate-500">Local Area Rules (e.g. School) ‚Ä¢ Overrides Whitelist</span>
-                    </div>
-                    <div className="flex items-center justify-between p-1.5 rounded bg-blue-950/30 border border-blue-500/20">
-                      <span className="text-blue-400 font-bold">3. CUSTOM FAMILY &amp; APP WHITELIST</span>
-                      <span className="text-slate-500">Active Exemptions (Unless Overridden)</span>
-                    </div>
-                  </div>
-
-                  {/* Dynamic Status Banner */}
-                  <div className={`p-2.5 rounded-lg border text-[10.5px] font-medium flex items-start gap-2 ${
-                    state.overrideActive
-                      ? "bg-red-500/10 border-red-500/20 text-red-300"
-                      : state.privacyLevel === 'strict_blur'
-                      ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
-                      : "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
-                  }`}>
-                    <span className="text-[14px]">‚ö†Ô∏è</span>
-                    <div>
-                      {state.overrideActive ? (
-                        <>
-                          <strong className="text-red-400 uppercase">Whitelist Overridden!</strong>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Judicial warrant override is active. Whitelisted channels are temporarily suspended and WILL be blurred on all platforms.</p>
-                        </>
-                      ) : state.privacyLevel === 'strict_blur' ? (
-                        <>
-                          <strong className="text-amber-400 uppercase">Strict Restriction Suspends Whitelist!</strong>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Your Privacy Level is set to "Strict Blur". Whitelist bypasses are suspended for absolute privacy protection.</p>
-                        </>
-                      ) : (
-                        <>
-                          <strong className="text-emerald-400 uppercase">Whitelist Fully Functional</strong>
-                          <p className="text-[10px] text-slate-400 mt-0.5">You are in Hybrid/Standard mode. Videos posted by the verified channels below will bypass automatic retroactive censoring.</p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Whitelisted Items Grid */}
-                <div className="space-y-2">
-                  <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider block">Currently Whitelisted Channels &amp; Devices</span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                    {allowedList.map((item: any) => (
-                      <div key={item.id} className="bg-slate-900/40 border border-slate-850 p-3 rounded-lg flex flex-col justify-between gap-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg bg-slate-950 p-1.5 rounded-md border border-slate-905 shrink-0">
-                              {item.platform === 'youtube' ? 'üìπ' : item.platform === 'tiktok' ? 'üéµ' : item.platform === 'instagram' ? 'üì∏' : 'üì±'}
-                            </span>
-                            <div>
-                              <span className="text-xs font-bold text-white block">{item.name}</span>
-                              <span className="text-[10px] font-mono text-slate-400 block">{item.identifier} ({item.platform.toUpperCase()})</span>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setEditingAllowedItem(item)}
-                              className="text-blue-400 hover:text-blue-300 text-[10.5px] font-semibold bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 rounded transition flex items-center gap-1"
-                            >
-                              Smart Rules ‚öôÔ∏è
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setAllowedList(prev => prev.filter(a => a.id !== item.id))}
-                              className="text-slate-500 hover:text-red-400 text-xs font-mono font-bold hover:bg-red-500/5 p-1 rounded transition"
-                            >
-                              Revoke
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Display Active Constraints if any */}
-                        {(item.timeConstraintEnabled || item.identityConstraintEnabled) && (
-                          <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-900 space-y-1">
-                            <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider block">Active Constraints</span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {item.timeConstraintEnabled && (
-                                <span className="text-[9px] bg-amber-500/15 border border-amber-500/25 text-amber-300 px-1.5 py-0.5 rounded font-mono flex items-center gap-1">
-                                  <span>‚è∞</span> {item.timeStart || '09:00'} - {item.timeEnd || '17:00'}
-                                </span>
-                              )}
-                              {item.identityConstraintEnabled && (
-                                <span className="text-[9px] bg-purple-500/15 border border-purple-500/25 text-purple-300 px-1.5 py-0.5 rounded font-mono flex items-center gap-1">
-                                  <span>üë§</span> {familyMembers.find(f => f.id === item.allowedIdentityId)?.name || 'Father (Robert)'}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Add New Whitelisted Item Form */}
-                <div className="p-3.5 bg-slate-900/30 border border-slate-850 rounded-xl space-y-3 text-xs">
-                  <span className="text-[9.5px] text-slate-400 font-bold uppercase tracking-wider block">Authorize New Channel or Device</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[9px] text-slate-500 uppercase font-semibold mb-1">Friendly Name</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Grandma's Camera"
-                        value={newAllowedName}
-                        onChange={(e) => setNewAllowedName(e.target.value)}
-                        className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-slate-500 uppercase font-semibold mb-1">Platform Type</label>
-                      <select
-                        value={newAllowedPlatform}
-                        onChange={(e) => setNewAllowedPlatform(e.target.value)}
-                        className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
-                      >
-                        <option value="youtube">üìπ YouTube Video / Channel</option>
-                        <option value="tiktok">üéµ TikTok Post / Username</option>
-                        <option value="instagram">üì∏ Instagram Reel / Handle</option>
-                        <option value="device">üì± Private Local BLE Device UUID</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-slate-500 uppercase font-semibold mb-1">Channel / Device ID</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. @grandma_vlogs"
-                        value={newAllowedIdent}
-                        onChange={(e) => setNewAllowedIdent(e.target.value)}
-                        className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!newAllowedName.trim() || !newAllowedIdent.trim()) return;
-                      const newItem = {
-                        id: 'all-' + Date.now(),
-                        name: newAllowedName,
-                        platform: newAllowedPlatform,
-                        identifier: newAllowedIdent,
-                        active: true,
-                        timeConstraintEnabled: false,
-                        timeStart: '09:00',
-                        timeEnd: '17:00',
-                        identityConstraintEnabled: false,
-                        allowedIdentityId: 'fam-1'
-                      };
-                      setAllowedList(prev => [...prev, newItem]);
-                      setNewAllowedName('');
-                      setNewAllowedIdent('');
-                    }}
-                    className="bg-blue-500/10 hover:bg-blue-500/25 border border-blue-500/20 text-blue-400 font-bold py-2 px-4 rounded-lg transition text-center block w-full"
-                  >
-                    + Authorize Exemption Channel
-                  </button>
-                </div>
-
-                {/* Whitelist Simulation Sandbox */}
-                <div className="p-3.5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-3">
-                  <div className="flex items-center gap-1.5 text-blue-400">
-                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Dynamic Whitelist &amp; Hierarchy Validator Sandbox</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    Trigger a mock upload event to simulate how the privacy engine evaluates whitelists versus priority rules (Judicial Override or School zones).
-                  </p>
-
-                  <div className="flex flex-col sm:flex-row gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSimulatingAllowedUpload(true);
-                        setAllowedUploadLogs(["[SCANNING] YouTube API detected upload 'Summer Picnic 2026' by @family_vlogs..."]);
-                        
-                        setTimeout(() => {
-                          setAllowedUploadLogs(prev => [...prev, "[AI MATCH] Face vector matching: 'Paul Stuart' matched at 99.1% confidence."]);
-                        }, 400);
-
-                        setTimeout(() => {
-                          setAllowedUploadLogs(prev => [...prev, "[CHECK] Querying family whitelist database... Found! '@family_vlogs' is whitelisted for Paul."]);
-                        }, 800);
-
-                        setTimeout(() => {
-                          // Check if smart exception constraints exist on `@family_vlogs`
-                          const matchedItem = allowedList.find((a: any) => a.identifier === '@family_vlogs');
-                          if (matchedItem) {
-                            const logsToAdd: string[] = ["[CHECK] Evaluating Smart Exception parameters for '@family_vlogs':"];
-                            
-                            if (matchedItem.timeConstraintEnabled) {
-                              // We simulate an upload occurring at 20:00 (8:00 PM)
-                              const simulatedHour = 20;
-                              const [startH] = (matchedItem.timeStart || '09:00').split(':').map(Number);
-                              const [endH] = (matchedItem.timeEnd || '17:00').split(':').map(Number);
-                              
-                              logsToAdd.push(`  -> [TIME CONSTRAINT] Enabled. Simulated Upload Time: 20:00 (8:00 PM). Target Window: ${matchedItem.timeStart} - ${matchedItem.timeEnd}.`);
-                              if (simulatedHour < startH || simulatedHour > endH) {
-                                logsToAdd.push(`     ‚ö†Ô∏è TIME WINDOW VIOLATION: Upload occurred outside permitted daytime slot!`);
-                              } else {
-                                logsToAdd.push(`     ‚úÖ TIME WINDOW SATISFIED: Upload is within permitted hours.`);
-                              }
-                            } else {
-                              logsToAdd.push("  -> [TIME CONSTRAINT] Disabled. No temporal guardrails active.");
-                            }
-
-                            if (matchedItem.identityConstraintEnabled) {
-                              const targetMember = familyMembers.find(f => f.id === matchedItem.allowedIdentityId) || familyMembers[0];
-                              logsToAdd.push(`  -> [IDENTITY VERIFICATION] Enabled. Checking cryptographically paired device belonging to: ${targetMember.name} (${targetMember.relation}).`);
-                              if (targetMember.status === 'synchronized') {
-                                logsToAdd.push(`     ‚úÖ CRYPTOGRAPHIC SHAKEHAND: Active secure BLE beacon detected from ${targetMember.deviceName}. Signature authentic.`);
-                              } else {
-                                logsToAdd.push(`     ‚ö†Ô∏è IDENTITY VERIFICATION FAULT: Paired beacon is disconnected or out of range!`);
-                              }
-                            } else {
-                              logsToAdd.push("  -> [IDENTITY VERIFICATION] Disabled. Skipping target beacon check.");
-                            }
-
-                            setAllowedUploadLogs(prev => [...prev, ...logsToAdd]);
-                          }
-                        }, 1200);
-
-                        setTimeout(() => {
-                          let finalVerdict = "";
-                          if (state.overrideActive) {
-                            finalVerdict = "[VERDICT-CANCELED] ‚ùå BLOCKED BY OVERRIDE: A judicial override/warrant is active. Whitelist bypassed. Censor-shroud injected!";
-                          } else if (state.privacyLevel === 'strict_blur') {
-                            finalVerdict = "[VERDICT-CANCELED] üõë BLOCKED BY USER MODE: Strict Blur mode is active. Family exemption suspended. Dynamic face blur applied!";
-                          } else {
-                            const matchedItem = allowedList.find((a: any) => a.identifier === '@family_vlogs');
-                            let blockReason = "";
-                            if (matchedItem) {
-                              if (matchedItem.timeConstraintEnabled) {
-                                const simulatedHour = 20;
-                                const [startH] = (matchedItem.timeStart || '09:00').split(':').map(Number);
-                                const [endH] = (matchedItem.timeEnd || '17:00').split(':').map(Number);
-                                if (simulatedHour < startH || simulatedHour > endH) {
-                                  blockReason = `Upload occurred at 20:00, which is outside the safe window (${matchedItem.timeStart} to ${matchedItem.timeEnd}).`;
-                                }
-                              }
-                              if (!blockReason && matchedItem.identityConstraintEnabled) {
-                                const targetMember = familyMembers.find(f => f.id === matchedItem.allowedIdentityId) || familyMembers[0];
-                                if (targetMember.status !== 'synchronized') {
-                                  blockReason = `Secure BLE beacon signature from ${targetMember.name} is offline.`;
-                                }
-                              }
-                            }
-
-                            if (blockReason) {
-                              finalVerdict = `[VERDICT-BLOCKED] üõ°Ô∏è BLOCKED BY SMART CONSTRAINT: ${blockReason} Accidental open-recording protection triggered! Dynamic censor applied.`;
-                            } else {
-                              finalVerdict = "[VERDICT-ALLOWED] ‚úÖ PASSED: Channel is verified and all smart constraints are satisfied. Video remains crystal-clear for public viewing. Enjoy your memories!";
-                            }
-                          }
-                          setAllowedUploadLogs(prev => [...prev, finalVerdict]);
-                          setIsSimulatingAllowedUpload(false);
-                        }, 2200);
-                      }}
-                      disabled={isSimulatingAllowedUpload}
-                      className="bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition"
-                    >
-                      {isSimulatingAllowedUpload ? "Evaluating Rules..." : "Simulate 'Dad' Uploading Family Picnic Vlog"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSimulatingAllowedUpload(true);
-                        setAllowedUploadLogs(["[SCANNING] Public Instagram stream detected upload by @stranger_cam..."]);
-                        
-                        setTimeout(() => {
-                          setAllowedUploadLogs(prev => [...prev, "[AI MATCH] Face vector matching: 'Paul Stuart' matched at 98.5% confidence."]);
-                        }, 500);
-
-                        setTimeout(() => {
-                          setAllowedUploadLogs(prev => [...prev, "[CHECK] Querying family whitelist... Not Found! '@stranger_cam' is not whitelisted."]);
-                        }, 1000);
-
-                        setTimeout(() => {
-                          setAllowedUploadLogs(prev => [...prev, "[VERDICT-BLOCKED] üö® ENFORCED: Non-whitelisted video. Automated legal takedown letter dispatched to Instagram CDN API."]);
-                          setIsSimulatingAllowedUpload(false);
-                        }, 1800);
-                      }}
-                      disabled={isSimulatingAllowedUpload}
-                      className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition"
-                    >
-                      {isSimulatingAllowedUpload ? "Evaluating Rules..." : "Simulate 'Stranger' Uploading Street Video"}
-                    </button>
-                  </div>
-
-                  {allowedUploadLogs.length > 0 && (
-                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-900 font-mono text-[9.5px] text-slate-300 space-y-1">
-                      {allowedUploadLogs.map((log, idx) => (
-                        <div key={idx} className={log.includes('PASSED') ? 'text-emerald-400 font-bold' : log.includes('BLOCKED') ? 'text-red-400 font-bold' : 'text-slate-300'}>
-                          {log}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* URL Scanner Form Widget */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
-                <div className="flex flex-col md:flex-row gap-3">
-                  <div className="flex-1">
-                    <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Target Media URL or Channel</label>
-                    <div className="relative">
-                      <input
-                        id="scrub-url-input-dedicated"
-                        type="text"
-                        placeholder="e.g. https://www.youtube.com/watch?v=..."
-                        value={newScrubUrl}
-                        onChange={(e) => setNewScrubUrl(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-sans"
-                      />
-                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
-                    </div>
-                  </div>
-
-                  <div className="w-full md:w-44">
-                    <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Media Source</label>
-                    <select
-                      id="scrub-platform-select-dedicated"
-                      value={newScrubPlatform}
-                      onChange={(e: any) => setNewScrubPlatform(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
-                    >
-                      <option value="youtube">üìπ YouTube Video</option>
-                      <option value="tiktok">üéµ TikTok Post</option>
-                      <option value="instagram">üì∏ Instagram Reel</option>
-                      <option value="web_index">üåê Web Index (General)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <button
-                    id="trigger-url-scan-btn-ded"
-                    type="button"
-                    onClick={() => {
-                      if (!newScrubUrl.trim()) return;
-                      const newRec: WebTakedownRecord = {
-                        id: 'tk-' + Date.now(),
-                        platform: newScrubPlatform,
-                        url: newScrubUrl,
-                        confidenceScore: 0.88 + Math.random() * 0.1,
-                        status: 'detected',
-                        timestamp: 'Just Now'
-                      };
-                      setTakedowns(prev => [newRec, ...prev]);
-                      setNewScrubUrl('');
-                    }}
-                    className="flex-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-bold text-xs py-2 rounded-lg transition"
-                  >
-                    Scan Specific URL
-                  </button>
-
-                  <button
-                    id="trigger-global-scan-btn-ded"
-                    type="button"
-                    disabled={isScanningCrawler}
-                    onClick={() => {
-                      setIsScanningCrawler(true);
-                      setTimeout(() => {
-                        setIsScanningCrawler(false);
-                        const randomVideos = [
-                          { platform: 'youtube', url: 'https://youtube.com/watch?v=k827y398df' },
-                          { platform: 'tiktok', url: 'https://tiktok.com/@daily_vlog_world/video/902837429' },
-                          { platform: 'instagram', url: 'https://instagram.com/p/Co8907ad822/' }
-                        ];
-                        const choice = randomVideos[Math.floor(Math.random() * randomVideos.length)];
-                        const newRec: WebTakedownRecord = {
-                          id: 'tk-' + Date.now(),
-                          platform: choice.platform as any,
-                          url: choice.url,
-                          confidenceScore: 0.91 + Math.random() * 0.08,
-                          status: 'detected',
-                          timestamp: 'Just Now'
-                        };
-                        setTakedowns(prev => [newRec, ...prev]);
-                      }, 2000);
-                    }}
-                    className="flex-1 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
-                  >
-                    {isScanningCrawler ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Sweeping Web Video Feeds...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-3.5 h-3.5" />
-                        Trigger Global Web Sweep
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {isScanningCrawler && (
-                  <div className="space-y-1 bg-slate-950 p-2.5 rounded-lg border border-slate-900">
-                    <div className="w-full bg-slate-850 rounded-full h-1 overflow-hidden">
-                      <motion.div 
-                        className="bg-blue-400 h-full animate-pulse"
-                        initial={{ width: '0%' }}
-                        animate={{ width: '100%' }}
-                        transition={{ duration: 2 }}
-                      />
-                    </div>
-                    <span className="text-[9px] text-blue-400 font-mono block text-center animate-pulse">
-                      SCANNING IN PROGRESS ‚Ä¢ ANALYZING VECTOR TEMPLATE MATCHES WITH EDGE DESCRIPTORS
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Detailed Active Matches and Timelines list */}
-              <div className="space-y-3">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Scan Results &amp; Actionable Takedowns ({takedowns.length})</span>
-                <div className="space-y-3.5">
-                  {takedowns.map(tk => (
-                    <div key={tk.id} className="bg-slate-950/40 border border-slate-850 rounded-xl p-4 space-y-4 text-xs">
-                      {/* Card Header Info */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[14px]">{tk.platform === 'youtube' ? 'üìπ' : tk.platform === 'tiktok' ? 'üéµ' : tk.platform === 'instagram' ? 'üì∏' : 'üåê'}</span>
-                          <div>
-                            <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">{tk.platform} Platform match</span>
-                            <a 
-                              href={tk.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-white hover:text-blue-400 hover:underline block truncate font-mono text-[10px] max-w-[280px] sm:max-w-[400px]"
-                            >
-                              {tk.url}
-                            </a>
-                          </div>
-                        </div>
-                        <span className={`text-[8px] px-2 py-0.5 rounded-full uppercase font-bold border ${
-                          tk.status === 'takedown_success'
-                            ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/20'
-                            : tk.status === 'dispatched'
-                            ? 'bg-blue-950/60 text-blue-400 border-blue-500/20 animate-pulse'
-                            : 'bg-amber-950/60 text-amber-400 border-amber-500/20'
-                        }`}>
-                          {tk.status === 'takedown_success' ? 'Removed / Blurred' : tk.status === 'dispatched' ? 'Takedown In-Progress' : 'Detected Match'}
-                        </span>
-                      </div>
-
-                      {/* Mock Player / Bounding Box Censor Visual */}
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-950 p-3 rounded-lg border border-slate-900/60">
-                        <div className="md:col-span-4 flex justify-center items-center">
-                          <div className="relative w-full h-24 bg-slate-900 rounded-lg overflow-hidden border border-slate-800 flex flex-col justify-center items-center select-none">
-                            {/* Blur mockup head visual */}
-                            <div className={`absolute w-12 h-12 rounded-full border-2 transition-all duration-300 ${
-                              tk.status === 'takedown_success' 
-                                ? 'border-emerald-500 bg-emerald-500/10 blur-[12px]' 
-                                : tk.status === 'dispatched' 
-                                ? 'border-blue-500 bg-blue-500/20 blur-[6px] animate-pulse' 
-                                : 'border-amber-500/80 bg-amber-500/5'
-                            }`}></div>
-                            
-                            {/* Bounding box marker */}
-                            <div className={`absolute w-14 h-14 border transition-all duration-300 ${
-                              tk.status === 'takedown_success' 
-                                ? 'border-emerald-400/40' 
-                                : 'border-amber-400/80 animate-pulse'
-                            }`}></div>
-
-                            {/* Label overlay */}
-                            <span className={`absolute top-1 left-1.5 text-[8px] font-mono uppercase px-1 rounded ${
-                              tk.status === 'takedown_success' ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'
-                            }`}>
-                              {tk.status === 'takedown_success' ? 'Censored' : 'Bystander Match'}
-                            </span>
-
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-center pb-1">
-                              <span className="text-[8px] text-slate-400 font-mono">Matched index: {(tk.confidenceScore * 100).toFixed(1)}%</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Timeline Track */}
-                        <div className="md:col-span-8 flex flex-col justify-between space-y-3">
-                          <div className="space-y-2">
-                            <span className="text-[9px] text-slate-500 font-mono uppercase block">Request Action Timeline</span>
-                            <div className="grid grid-cols-4 gap-1 relative">
-                              {/* Horizontal track line */}
-                              <div className="absolute top-2 left-4 right-4 h-0.5 bg-slate-800 z-0"></div>
-
-                              {/* Step 1: Detect */}
-                              <div className="flex flex-col items-center text-center z-10">
-                                <div className="w-4.5 h-4.5 rounded-full bg-emerald-500 text-[9px] font-mono text-slate-950 flex items-center justify-center font-bold">1</div>
-                                <span className="text-[8px] text-emerald-400 font-bold mt-1">Matched</span>
-                              </div>
-
-                              {/* Step 2: Notice Dispatched */}
-                              <div className="flex flex-col items-center text-center z-10">
-                                <div className={`w-4.5 h-4.5 rounded-full text-[9px] font-mono flex items-center justify-center font-bold ${
-                                  tk.status === 'dispatched' || tk.status === 'takedown_success'
-                                    ? 'bg-emerald-500 text-slate-950'
-                                    : 'bg-slate-800 text-slate-500'
-                                }`}>2</div>
-                                <span className={`text-[8px] mt-1 ${
-                                  tk.status === 'dispatched' || tk.status === 'takedown_success'
-                                    ? 'text-emerald-400 font-bold'
-                                    : 'text-slate-500'
-                                }`}>Dispatched</span>
-                              </div>
-
-                              {/* Step 3: API Re-encode */}
-                              <div className="flex flex-col items-center text-center z-10">
-                                <div className={`w-4.5 h-4.5 rounded-full text-[9px] font-mono flex items-center justify-center font-bold ${
-                                  tk.status === 'takedown_success'
-                                    ? 'bg-emerald-500 text-slate-950'
-                                    : tk.status === 'dispatched'
-                                    ? 'bg-blue-500 text-slate-950 animate-pulse'
-                                    : 'bg-slate-800 text-slate-500'
-                                }`}>3</div>
-                                <span className={`text-[8px] mt-1 ${
-                                  tk.status === 'takedown_success'
-                                    ? 'text-emerald-400 font-bold'
-                                    : tk.status === 'dispatched'
-                                    ? 'text-blue-400 font-bold'
-                                    : 'text-slate-500'
-                                }`}>Processing</span>
-                              </div>
-
-                              {/* Step 4: Verification */}
-                              <div className="flex flex-col items-center text-center z-10">
-                                <div className={`w-4.5 h-4.5 rounded-full text-[9px] font-mono flex items-center justify-center font-bold ${
-                                  tk.status === 'takedown_success'
-                                    ? 'bg-emerald-500 text-slate-950'
-                                    : 'bg-slate-800 text-slate-500'
-                                }`}>4</div>
-                                <span className={`text-[8px] mt-1 ${
-                                  tk.status === 'takedown_success'
-                                    ? 'text-emerald-400 font-bold'
-                                    : 'text-slate-500'
-                                }`}>Clean ‚úÖ</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Quick description text based on state */}
-                          <p className="text-[10px] text-slate-400">
-                            {tk.status === 'detected' && "Biometric match located. No legal erasure notice has been dispatched yet."}
-                            {tk.status === 'dispatched' && "Erasure claim active. Coordinated Partner API is requesting frame coordinate blur re-rendering."}
-                            {tk.status === 'takedown_success' && "Success! Platform CDN confirms dynamic blur coordinates injected into player video source."}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex gap-2 pt-2 border-t border-slate-900 justify-end">
-                        <button
-                          id={`draft-letter-btn-${tk.id}`}
-                          type="button"
-                          onClick={() => setSelectedLetterTakedown(tk)}
-                          className="text-[10px] bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 font-bold px-2.5 py-1 rounded transition"
-                        >
-                          Draft Legal Letter
-                        </button>
-
-                        {tk.status === 'detected' && (
-                          <button
-                            id={`action-scrub-${tk.id}`}
-                            type="button"
-                            onClick={() => setTakedowns(prev => prev.map(item => item.id === tk.id ? { ...item, status: 'dispatched' } : item))}
-                            className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded transition"
-                          >
-                            Dispatch Legal Takedown
-                          </button>
-                        )}
-                        {tk.status === 'dispatched' && (
-                          <button
-                            id={`verify-scrub-${tk.id}`}
-                            type="button"
-                            onClick={() => setTakedowns(prev => prev.map(item => item.id === tk.id ? { ...item, status: 'takedown_success' } : item))}
-                            className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold px-2.5 py-1 rounded transition"
-                          >
-                            Confirm Removal Verify
-                          </button>
-                        )}
-                        <button
-                          id={`remove-scrub-log-${tk.id}`}
-                          type="button"
-                          onClick={() => setTakedowns(prev => prev.filter(item => item.id !== tk.id))}
-                          className="text-[10px] text-slate-500 hover:text-red-400 font-semibold px-1.5 py-1 transition"
-                        >
-                          Dismiss Log
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Dynamic Legal Letter Overlay Modal */}
-              <AnimatePresence>
-                {selectedLetterTakedown && (
-                  <motion.div 
-                    initial={{ opacity: 0 }} 
-                    animate={{ opacity: 1 }} 
-                    exit={{ opacity: 0 }} 
-                    className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-                  >
-                    <motion.div 
-                      initial={{ scale: 0.95, y: 15 }}
-                      animate={{ scale: 1, y: 0 }}
-                      exit={{ scale: 0.95, y: 15 }}
-                      className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-xl w-full max-h-[85vh] overflow-y-auto space-y-4"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Legal Notice Generation</h4>
-                          <span className="text-[9px] font-mono text-slate-500">GDPR ARTICLE 17 &amp; UK DPA 2018 BYSTANDER COMPLIANCE</span>
-                        </div>
-                        <button 
-                          onClick={() => setSelectedLetterTakedown(null)}
-                          className="text-slate-400 hover:text-white text-xs font-bold font-mono bg-slate-950/40 p-1 rounded px-2"
-                        >
-                          ‚úï Close
-                        </button>
-                      </div>
-
-                      <div className="bg-slate-50 text-slate-900 p-5 rounded-xl border border-slate-300 font-serif text-xs leading-relaxed space-y-3 relative overflow-hidden shadow-inner">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rotate-45 pointer-events-none"></div>
-                        <p className="font-sans font-bold text-[9px] uppercase tracking-widest text-indigo-900 border-b border-indigo-100 pb-1.5">
-                          OFFICIAL DEMAND FOR COORDINATED BIOMETRIC OBFUSCATION
-                        </p>
-                        
-                        <div>
-                          <p className="font-sans font-bold text-[9px] text-slate-500">TO:</p>
-                          <p className="font-sans font-semibold">Legal &amp; Privacy Compliance Operations Office ({selectedLetterTakedown.platform.toUpperCase()})</p>
-                        </div>
-
-                        <div>
-                          <p className="font-sans font-bold text-[9px] text-slate-500">SUBJECT:</p>
-                          <p className="font-semibold underline">Statutory Request for Face Coordinate Obfuscation under GDPR Article 17 &amp; DPA 2018</p>
-                        </div>
-
-                        <p className="pt-2">
-                          I am writing to formally exercise my statutory rights under <strong>GDPR Article 17 (Right to Erasure)</strong> and <strong>Section 47 of the United Kingdom Data Protection Act 2018 (DPA)</strong>. 
-                        </p>
-
-                        <p>
-                          The BlurBubble Opt-Out indexer has matched my unique local biometric face vector templates with newly uploaded public media hosted on your server platform. No consent, authorization, or license was granted to record or transmit my physical identity.
-                        </p>
-
-                        <div className="bg-slate-100 p-2.5 rounded border border-slate-200 font-mono text-[10px] space-y-1 text-slate-700">
-                          <p><strong>Platform:</strong> {selectedLetterTakedown.platform.toUpperCase()}</p>
-                          <p className="truncate"><strong>Media URL:</strong> {selectedLetterTakedown.url}</p>
-                          <p><strong>Matched Identity:</strong> Paul Stuart</p>
-                          <p><strong>Vector Hash:</strong> {selectedLetterTakedown.id}</p>
-                          <p><strong>Action Mandated:</strong> Coordinated Dynamic Face/Body Blur</p>
-                        </div>
-
-                        <p>
-                          I do not request complete removal of the creator's video. Instead, you are required to utilize the <strong>BlurBubble Bystander API protocol</strong> to automatically inject dynamic blur coordinates into your player CDN streams for the corresponding timestamps.
-                        </p>
-
-                        <p className="border-t border-slate-200 pt-3">
-                          Failure to apply the appropriate obfuscation filters within the statutory 30-day window will result in a formal escalation to the <strong>United Kingdom Information Commissioner's Office (ICO)</strong> and legal courts for civil digital trespass.
-                        </p>
-
-                        <div className="pt-3 font-sans text-[10px] text-slate-500 flex justify-between">
-                          <span>Signed: Paul Stuart (@paul_stuart)</span>
-                          <span>Dated: July 1, 2026</span>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(`GDPR Article 17 & UK DPA 2018 Demand Notice:\nPlatform: ${selectedLetterTakedown.platform.toUpperCase()}\nURL: ${selectedLetterTakedown.url}\nIdent: Paul Stuart\nAction: Coordinate facial coordinate blur at platform CDN.`);
-                            alert("Copied legal notice outline summary to clipboard!");
-                          }}
-                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition"
-                        >
-                          Copy Notice Summary
-                        </button>
-                        <button
-                          onClick={() => setSelectedLetterTakedown(null)}
-                          className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition"
-                        >
-                          Close Preview
-                        </button>
-                      </div>
-                    </motion.div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-
-          {/* Tab 4.5: Retroactive Voice-Scrub & Cloud Mute */}
-          {activeTab === 'audio_scrub' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {/* Introduction Card */}
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
-                <div className="flex items-center gap-1.5 text-blue-400 font-semibold text-sm">
-                  <Mic className="w-4 h-4 text-blue-400 animate-pulse" />
-                  Request Voice Scrub &amp; Mute Online
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  What happens if someone already uploaded a voice recording or podcast of you without permission? Our online audio scanner will sweep popular digital streaming directories (like Spotify, Apple Podcasts, SoundCloud) and request they automatically scrub or mute your vocal fingerprint in their files without needing to delete the entire clip.
-                </p>
-                <div className="pt-2 text-[10px] text-slate-500 font-sans flex flex-wrap gap-2">
-                  <span className="text-emerald-400 font-semibold">‚úì Complies with global privacy laws</span>
-                  <span>‚Ä¢</span>
-                  <span className="text-emerald-400 font-semibold">‚úì Voice Print Opt-Out Protocol Ready</span>
-                  <span>‚Ä¢</span>
-                  <span className="text-emerald-400 font-semibold">‚úì Right to Silence Compliant</span>
-                </div>
-              </div>
-
-              {/* Dynamic Counters Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
-                  <span className="text-[9px] text-slate-500 font-sans uppercase">Scanned Audio Feeds</span>
-                  <span className="text-base font-bold text-white block font-sans">84,210 hrs</span>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
-                  <span className="text-[9px] text-slate-500 font-sans uppercase">Supported Platforms</span>
-                  <span className="text-base font-bold text-blue-400 block font-sans">4 Connected APIs</span>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
-                  <span className="text-[9px] text-slate-500 font-sans uppercase">Sent Requests</span>
-                  <span className="text-base font-bold text-amber-400 block font-sans">
-                    {audioTakedowns.filter((t: any) => t.status === 'dispatched' || t.status === 'scrub_success').length} Requests
-                  </span>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl text-center space-y-1">
-                  <span className="text-[9px] text-slate-500 font-sans uppercase">Clips Scrubbed</span>
-                  <span className="text-base font-bold text-emerald-400 block font-sans">
-                    {audioTakedowns.filter((t: any) => t.status === 'scrub_success').length} Muted
-                  </span>
-                </div>
-              </div>
-
-              {/* Split Screen Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Left Column: Continuous Sweep & Platform Setup */}
-                <div className="lg:col-span-5 space-y-6">
-                  {/* Continuous Audio Sweep Mode panel */}
-                  <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-white block font-sans">Continuous Audio Sweep</span>
-                        <span className="text-[10px] text-slate-500 block">Autonomously crawl podcasts for vocal matches</span>
-                      </div>
-                      <button
-                        id="toggle-auto-audio-sweep-btn"
-                        type="button"
-                        onClick={() => setIsAutoAudioSweeping(prev => !prev)}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          isAutoAudioSweeping ? 'bg-blue-500' : 'bg-slate-800'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                            isAutoAudioSweeping ? 'translate-x-4' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {isAutoAudioSweeping && (
-                      <div className="space-y-2">
-                        <label className="block text-[10px] text-slate-500 uppercase font-bold">Sweep Intensity &amp; Frequency</label>
-                        <div className="grid grid-cols-3 gap-1.5 bg-slate-900/60 p-1 rounded-lg border border-slate-850">
-                          {(['weekly', 'daily', 'realtime'] as const).map((intensity) => (
-                            <button
-                              key={intensity}
-                              id={`audio-sweep-intensity-${intensity}`}
-                              type="button"
-                              onClick={() => setAudioSweepIntensity(intensity)}
-                              className={`text-[9px] uppercase font-mono font-bold py-1 px-2 rounded-md transition ${
-                                audioSweepIntensity === intensity
-                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
-                                  : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                              }`}
-                            >
-                              {intensity}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Audio Platforms Status connection panel */}
-                  <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-white block">Connected Podcast &amp; Audio Directories</span>
-                      <span className="text-[10px] text-slate-500 block">Secure OAuth integrations for matching acoustic hashes</span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {audioIntegrations.map((app) => {
-                        const isSyncing = syncingAudioAppId === app.id;
-                        return (
-                          <div key={app.id} className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl space-y-2 text-xs">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-base">{app.icon}</span>
-                                <div>
-                                  <span className="font-bold text-white block text-[11px]">{app.name}</span>
-                                  <span className="text-[9px] text-slate-500 font-mono">API Version: {app.apiVersion} ‚Ä¢ Checked: {app.lastChecked}</span>
-                                </div>
-                              </div>
-
-                              {/* Toggle switch for integration */}
-                              <button
-                                id={`toggle-audio-app-btn-${app.id}`}
-                                type="button"
-                                onClick={() => toggleAudioApp(app.id)}
-                                className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                  app.enabled ? 'bg-blue-500' : 'bg-slate-800'
-                                }`}
-                              >
-                                <span
-                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                                    app.enabled ? 'translate-x-3.5' : 'translate-x-0'
-                                  }`}
-                                />
-                              </button>
-                            </div>
-
-                            {app.enabled && (
-                              <div className="pt-1.5 flex flex-col gap-1.5 border-t border-slate-850/60 font-mono text-[9.5px]">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-slate-500">Sync Status:</span>
-                                  <span className={`font-bold uppercase ${
-                                    app.status === 'connected' 
-                                      ? 'text-emerald-400' 
-                                      : app.status === 'handshake' 
-                                      ? 'text-blue-400 animate-pulse' 
-                                      : 'text-rose-400'
-                                  }`}>
-                                    {app.status}
-                                  </span>
-                                </div>
-                                <p className="text-slate-400 bg-slate-950 p-1.5 rounded border border-slate-900 leading-relaxed text-[9px]">
-                                  {app.handshakeLog}
-                                </p>
-                                <button
-                                  id={`handshake-audio-app-btn-${app.id}`}
-                                  type="button"
-                                  disabled={isSyncing}
-                                  onClick={() => triggerAudioHandshake(app.id)}
-                                  className="w-full bg-slate-855 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 text-[9px] font-bold text-slate-300 py-1 rounded transition flex items-center justify-center gap-1"
-                                >
-                                  {isSyncing ? (
-                                    <>
-                                      <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                                      Syncing Voice Hashes...
-                                    </>
-                                  ) : (
-                                    "Trigger Secure OAuth Handshake"
-                                  )}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Whitelist Simulation Sandbox */}
-                  <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-white block flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                        Voice Whitelist &amp; Priority Validator
-                      </span>
-                      <span className="text-[10px] text-slate-500 block">Evaluate whitelist versus priority protection rules</span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Trigger mock podcast/audio events to simulate how the privacy engine evaluates whitelisted channels (e.g. your approved family podcast) against active defensive shield parameters.
-                    </p>
-
-                    <div className="flex flex-col gap-2">
-                      <button
-                        id="audio-sandbox-family-btn"
-                        type="button"
-                        onClick={() => {
-                          setIsSimulatingAudioAllowedUpload(true);
-                          setAudioUploadLogs(["[SCANNING] Spotify API detected upload 'Weekly Family Circle Ep 12' by @family_vlogs..."]);
-                          
-                          setTimeout(() => {
-                            setAudioUploadLogs(prev => [...prev, "[AI MATCH] Voice print acoustic matching: 'Paul Stuart' matched at 98.7% confidence."]);
-                          }, 400);
-
-                          setTimeout(() => {
-                            setAudioUploadLogs(prev => [...prev, "[CHECK] Querying family whitelist database... Found! '@family_vlogs' is whitelisted for Paul."]);
-                          }, 800);
-
-                          setTimeout(() => {
-                            const matchedItem = allowedList.find((a: any) => a.identifier === '@family_vlogs');
-                            if (matchedItem) {
-                              const logsToAdd: string[] = ["[CHECK] Evaluating Smart Exception parameters for '@family_vlogs':"];
-                              
-                              if (matchedItem.timeConstraintEnabled) {
-                                const simulatedHour = 20;
-                                const [startH] = (matchedItem.timeStart || '09:00').split(':').map(Number);
-                                const [endH] = (matchedItem.timeEnd || '17:00').split(':').map(Number);
-                                
-                                logsToAdd.push(`  -> [TIME CONSTRAINT] Enabled. Simulated Upload Time: 20:00 (8:00 PM). Target Window: ${matchedItem.timeStart} - ${matchedItem.timeEnd}.`);
-                                if (simulatedHour < startH || simulatedHour > endH) {
-                                  logsToAdd.push(`     ‚ö†Ô∏è TIME WINDOW VIOLATION: Audio upload occurred outside permitted hours!`);
-                                } else {
-                                  logsToAdd.push(`     ‚úÖ TIME WINDOW SATISFIED: Audio upload is within permitted daytime.`);
-                                }
-                              } else {
-                                logsToAdd.push("  -> [TIME CONSTRAINT] Disabled. No temporal guardrails active.");
-                              }
-
-                              if (matchedItem.identityConstraintEnabled) {
-                                const targetMember = familyMembers.find(f => f.id === matchedItem.allowedIdentityId) || familyMembers[0];
-                                logsToAdd.push(`  -> [IDENTITY VERIFICATION] Enabled. Checking cryptographically paired device belonging to: ${targetMember.name} (${targetMember.relation}).`);
-                                if (targetMember.status === 'synchronized') {
-                                  logsToAdd.push(`     ‚úÖ CRYPTOGRAPHIC SHAKEHAND: Active secure BLE beacon detected from ${targetMember.deviceName}. Signature authentic.`);
-                                } else {
-                                  logsToAdd.push(`     ‚ö†Ô∏è IDENTITY VERIFICATION FAULT: Paired beacon is offline or out of range!`);
-                                }
-                              } else {
-                                logsToAdd.push("  -> [IDENTITY VERIFICATION] Disabled. Skipping target beacon check.");
-                              }
-
-                              setAudioUploadLogs(prev => [...prev, ...logsToAdd]);
-                            }
-                          }, 1200);
-
-                          setTimeout(() => {
-                            let finalVerdict = "";
-                            if (state.overrideActive) {
-                              finalVerdict = "[VERDICT] ‚ùå BLOCKED BY OVERRIDE: A judicial override/warrant is active. Whitelist bypassed. Voice print redacted!";
-                            } else if (state.privacyLevel === 'strict_blur') {
-                              finalVerdict = "[VERDICT] üõë BLOCKED BY USER MODE: Strict Mode is active. Exemption suspended. Acoustic scrambler injected!";
-                            } else {
-                              const matchedItem = allowedList.find((a: any) => a.identifier === '@family_vlogs');
-                              let blockReason = "";
-                              if (matchedItem) {
-                                if (matchedItem.timeConstraintEnabled) {
-                                  const simulatedHour = 20;
-                                  const [startH] = (matchedItem.timeStart || '09:00').split(':').map(Number);
-                                  const [endH] = (matchedItem.timeEnd || '17:00').split(':').map(Number);
-                                  if (simulatedHour < startH || simulatedHour > endH) {
-                                    blockReason = `Upload occurred outside the safe window (${matchedItem.timeStart} to ${matchedItem.timeEnd}).`;
-                                  }
-                                }
-                                if (!blockReason && matchedItem.identityConstraintEnabled) {
-                                  const targetMember = familyMembers.find(f => f.id === matchedItem.allowedIdentityId) || familyMembers[0];
-                                  if (targetMember.status !== 'synchronized') {
-                                    blockReason = `Secure BLE beacon signature from ${targetMember.name} is offline.`;
-                                  }
-                                }
-                              }
-
-                              if (blockReason) {
-                                finalVerdict = `[VERDICT-BLOCKED] üõ°Ô∏è BLOCKED BY SMART CONSTRAINT: ${blockReason} Dynamic audio-scrambling applied to segment!`;
-                              } else {
-                                finalVerdict = "[VERDICT-ALLOWED] ‚úÖ PASSED: Channel is verified and smart constraints are satisfied. Your voice print remains unmuted in this file.";
-                              }
-                            }
-                            setAudioUploadLogs(prev => [...prev, finalVerdict]);
-                            setIsSimulatingAudioAllowedUpload(false);
-                          }, 2200);
-                        }}
-                        disabled={isSimulatingAudioAllowedUpload}
-                        className="bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition text-center"
-                      >
-                        {isSimulatingAudioAllowedUpload ? "Analyzing Audio Rules..." : "Simulate 'Dad' Uploading Family Podcast Episode"}
-                      </button>
-
-                      <button
-                        id="audio-sandbox-stranger-btn"
-                        type="button"
-                        onClick={() => {
-                          setIsSimulatingAudioAllowedUpload(true);
-                          setAudioUploadLogs(["[SCANNING] SoundCloud stream detected upload by @stranger_host..."]);
-                          
-                          setTimeout(() => {
-                            setAudioUploadLogs(prev => [...prev, "[AI MATCH] Voice print acoustic matching: 'Paul Stuart' matched at 99.4% confidence."]);
-                          }, 500);
-
-                          setTimeout(() => {
-                            setAudioUploadLogs(prev => [...prev, "[CHECK] Querying family whitelist... Not Found! '@stranger_host' is not whitelisted."]);
-                          }, 1000);
-
-                          setTimeout(() => {
-                            setAudioUploadLogs(prev => [...prev, "[VERDICT-BLOCKED] üö® ENFORCED: Non-whitelisted audio. Automated compliance muting dispatched to SoundCloud CDN API."]);
-                            setIsSimulatingAudioAllowedUpload(false);
-                          }, 1800);
-                        }}
-                        disabled={isSimulatingAudioAllowedUpload}
-                        className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition text-center"
-                      >
-                        {isSimulatingAudioAllowedUpload ? "Analyzing Audio Rules..." : "Simulate 'Stranger' Uploading Street Interview Clip"}
-                      </button>
-                    </div>
-
-                    {audioUploadLogs.length > 0 && (
-                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-900 font-mono text-[9.5px] text-slate-300 space-y-1">
-                        {audioUploadLogs.map((log, idx) => (
-                          <div key={idx} className={log.includes('PASSED') ? 'text-emerald-400 font-bold' : log.includes('BLOCKED') ? 'text-red-400 font-bold' : 'text-slate-300'}>
-                            {log}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Column: URL Input and Interactive Active Matches List */}
-                <div className="lg:col-span-7 space-y-6">
-                  {/* URL Scanner Form Widget */}
-                  <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
-                    <div className="flex flex-col md:flex-row gap-3">
-                      <div className="flex-1">
-                        <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Target Podcast/Audio URL</label>
-                        <div className="relative">
-                          <input
-                            id="scrub-audio-url-input"
-                            type="text"
-                            placeholder="e.g. https://open.spotify.com/episode/..."
-                            value={newAudioScrubUrl}
-                            onChange={(e) => setNewAudioScrubUrl(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-sans"
-                          />
-                          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
-                        </div>
-                      </div>
-
-                      <div className="w-full md:w-44">
-                        <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Audio Source</label>
-                        <select
-                          id="scrub-audio-platform-select"
-                          value={newAudioScrubPlatform}
-                          onChange={(e: any) => setNewAudioScrubPlatform(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
-                        >
-                          <option value="spotify">üéôÔ∏è Spotify Episode</option>
-                          <option value="apple_podcasts">üéß Apple Podcast</option>
-                          <option value="soundcloud">üîä SoundCloud Track</option>
-                          <option value="audio_database">üóÑÔ∏è Public Audio Database</option>
-                          <option value="streaming_index">üìà Public Streaming Index</option>
-                          <option value="audio_archive">üåê General Audio Archive</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button
-                        id="trigger-audio-url-scan-btn"
-                        type="button"
-                        onClick={() => {
-                          if (!newAudioScrubUrl.trim()) return;
-                          const newRec = {
-                            id: 'at-' + Date.now(),
-                            platform: newAudioScrubPlatform,
-                            url: newAudioScrubUrl,
-                            confidenceScore: 0.86 + Math.random() * 0.13,
-                            status: 'detected',
-                            timestamp: 'Just Now',
-                            matchedSegment: '01:05 - 01:25'
-                          };
-                          setAudioTakedowns(prev => [newRec, ...prev]);
-
-                          // Add the match to the general detection logs interface
-                          if (onAddLog) {
-                            onAddLog({
-                              id: 'log-audio-manual-' + Date.now(),
-                              timestamp: new Date().toLocaleTimeString(),
-                              deviceModel: `${newAudioScrubPlatform.toUpperCase().replace('_', ' ')} Scan`,
-                              action: 'discovered',
-                              shieldApplied: 'MANUAL RE-SCAN WATERMARK_DETECTION',
-                              distance: 0,
-                              rotatedId: 'AUDIO_' + Math.random().toString(36).substring(2, 8).toUpperCase()
-                            });
-                          }
-
-                          if (onTriggerAlert) {
-                            onTriggerAlert(
-                              "Voice Match Discovered",
-                              `Manual scan located a voice print matching your template at ${newAudioScrubUrl}. Takedown requested.`,
-                              "video_found"
-                            );
-                          }
-
-                          setNewAudioScrubUrl('');
-                        }}
-                        className="flex-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-bold text-xs py-2 rounded-lg transition"
-                      >
-                        Scan Specific Audio URL
-                      </button>
-
-                      <button
-                        id="trigger-global-audio-scan-btn"
-                        type="button"
-                        disabled={isScanningAudioCrawler}
-                        onClick={() => {
-                          setIsScanningAudioCrawler(true);
-                          setTimeout(() => {
-                            setIsScanningAudioCrawler(false);
-                            const randomAudios = [
-                              { platform: 'spotify', url: 'https://open.spotify.com/episode/podcast_guest_' + Math.floor(Math.random()*1000) },
-                              { platform: 'apple_podcasts', url: 'https://podcasts.apple.com/us/podcast/id' + Math.floor(Math.random()*100000) },
-                              { platform: 'soundcloud', url: 'https://soundcloud.com/user-' + Math.floor(Math.random()*1000) + '/track' },
-                              { platform: 'audio_database', url: 'https://audiodb.org/files/leak_' + Math.floor(Math.random()*10000) + '.wav' },
-                              { platform: 'streaming_index', url: 'https://audiostream-index.net/stream/capture_' + Math.floor(Math.random()*10000) }
-                            ];
-                            const choice = randomAudios[Math.floor(Math.random() * randomAudios.length)];
-                            const randomMin = Math.floor(Math.random() * 15);
-                            const randomSec = Math.floor(Math.random() * 45);
-                            const newRec = {
-                              id: 'at-' + Date.now(),
-                              platform: choice.platform as any,
-                              url: choice.url,
-                              confidenceScore: 0.90 + Math.random() * 0.08,
-                              status: 'detected',
-                              timestamp: 'Just Now',
-                              matchedSegment: `${String(randomMin).padStart(2,'0')}:${String(randomSec).padStart(2,'0')} - ${String(randomMin).padStart(2,'0')}:${String(randomSec+20).padStart(2,'0')}`
-                            };
-                            setAudioTakedowns(prev => [newRec, ...prev]);
-
-                            // Add the match to the general detection logs interface
-                            if (onAddLog) {
-                              onAddLog({
-                                id: 'log-audio-sweep-' + Date.now(),
-                                timestamp: new Date().toLocaleTimeString(),
-                                deviceModel: `${choice.platform.toUpperCase().replace('_', ' ')} Crawler`,
-                                action: 'discovered',
-                                shieldApplied: 'ACOUSTIC WATERMARK / SCRAMBLER',
-                                distance: 0,
-                                rotatedId: 'AUDIO_' + Math.random().toString(36).substring(2, 8).toUpperCase()
-                              });
-                            }
-
-                            if (onTriggerAlert) {
-                              onTriggerAlert(
-                                "Voice Match Discovered",
-                                `Global audio crawler detected an unauthorized voice recording on ${choice.platform.toUpperCase().replace('_', ' ')}. Masking applied.`,
-                                "video_found"
-                              );
-                            }
-                          }, 2000);
-                        }}
-                        className="flex-1 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50"
-                      >
-                        {isScanningAudioCrawler ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            Sweeping Web Audio Feeds...
-                          </>
-                        ) : (
-                          <>
-                            <Search className="w-3.5 h-3.5" />
-                            Trigger Global Web Sweep
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {isScanningAudioCrawler && (
-                      <div className="space-y-1 bg-slate-950 p-2.5 rounded-lg border border-slate-900">
-                        <div className="w-full bg-slate-850 rounded-full h-1 overflow-hidden">
-                          <motion.div 
-                            className="bg-blue-400 h-full"
-                            initial={{ width: '0%' }}
-                            animate={{ width: '100%' }}
-                            transition={{ duration: 2 }}
-                          />
-                        </div>
-                        <span className="text-[9px] text-blue-400 font-mono block text-center animate-pulse">
-                          ACOUSTIC ANALYSIS IN PROGRESS ‚Ä¢ MATCHING HARMONIC SPECTRAL KEYPRINTS
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Manual trigger upload block */}
-                  <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-white block">Simulate Dynamic Audio Upload Detection</span>
-                      <span className="text-[10px] text-slate-500 block">Trigger a mock upload to see the audio crawler act in real time</span>
-                    </div>
-                    
-                    <button
-                      id="simulate-audio-upload-btn"
-                      type="button"
-                      disabled={isSimulatingAudioUpload}
-                      onClick={simulateAudioUploadDetection}
-                      className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold py-2 rounded-lg text-xs transition"
-                    >
-                      {isSimulatingAudioUpload ? "Simulating Upload..." : "Simulate Unauthorized Voice Print Upload"}
-                    </button>
-
-                    {audioSimulationMsg && (
-                      <div className="bg-slate-900 p-2.5 rounded border border-slate-800 text-[10px] font-mono text-emerald-400">
-                        {audioSimulationMsg}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Detailed Active Matches list */}
-                  <div className="space-y-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                      Acoustic Scan Results &amp; Actionable Takedowns ({audioTakedowns.length})
-                    </span>
-
-                    <div className="space-y-3.5">
-                      {audioTakedowns.map((tk) => {
-                        const waveBars = [15, 28, 42, 20, 10, 18, 35, 52, 40, 25, 30, 48, 60, 45, 20, 32, 40, 15, 25, 38, 50, 30, 12, 18, 26, 42, 35, 10, 22, 30, 45, 15];
-                        return (
-                          <div key={tk.id} className="bg-slate-950/40 border border-slate-855 rounded-xl p-4 space-y-4 text-xs">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-base">
-                                  {tk.platform === 'spotify' ? 'üéôÔ∏è' : 
-                                   tk.platform === 'apple_podcasts' ? 'üéß' : 
-                                   tk.platform === 'soundcloud' ? 'üîä' : 
-                                   tk.platform === 'audio_database' ? 'üóÑÔ∏è' : 
-                                   tk.platform === 'streaming_index' ? 'üìà' : 'üåê'}
-                                </span>
-                                <div>
-                                  <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">{tk.platform.replace('_', ' ')} Match</span>
-                                  <a 
-                                    href={tk.url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className="text-white hover:text-blue-400 hover:underline block truncate font-mono text-[10px] max-w-[180px] sm:max-w-[320px]"
-                                  >
-                                    {tk.url}
-                                  </a>
-                                </div>
-                              </div>
-                              <span className={`text-[8px] px-2 py-0.5 rounded-full uppercase font-bold border ${
-                                tk.status === 'scrub_success'
-                                  ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/20'
-                                  : tk.status === 'dispatched'
-                                  ? 'bg-blue-950/60 text-blue-400 border-blue-500/20 animate-pulse'
-                                  : 'bg-amber-950/60 text-amber-400 border-amber-500/20'
-                              }`}>
-                                {tk.status === 'scrub_success' ? 'Acoustically Muted' : tk.status === 'dispatched' ? 'Scrubbing Queue' : 'Voice Matched'}
-                              </span>
-                            </div>
-
-                            {/* Soundwave representation */}
-                            <div className="p-3 bg-slate-950 border border-slate-900/60 rounded-lg space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[9px] text-slate-400 font-mono">Matched segment: <strong className="text-white">{tk.matchedSegment}</strong></span>
-                                <span className="text-[9px] text-slate-500 font-mono">Confidence: {(tk.confidenceScore * 100).toFixed(1)}%</span>
-                              </div>
-
-                              <div className="h-16 flex items-center justify-between gap-[2px] bg-slate-900/40 p-2 rounded border border-slate-850">
-                                {waveBars.map((height, barIdx) => {
-                                  // Highlight the center index representing the matched section
-                                  const isMatchedSegment = barIdx >= 11 && barIdx <= 19;
-                                  let colorClass = "bg-slate-700";
-                                  let barHeight = height;
-
-                                  if (isMatchedSegment) {
-                                    if (tk.status === 'scrub_success') {
-                                      colorClass = "bg-emerald-500/40 border border-dashed border-emerald-500/20";
-                                      barHeight = 4; // Flat line mute!
-                                    } else if (tk.status === 'dispatched') {
-                                      colorClass = "bg-blue-500 animate-pulse";
-                                    } else {
-                                      colorClass = "bg-amber-500";
-                                    }
-                                  }
-
-                                  return (
-                                    <div
-                                      key={barIdx}
-                                      className={`flex-1 rounded-full transition-all duration-300 ${colorClass}`}
-                                      style={{ height: `${barHeight}%` }}
-                                    />
-                                  );
-                                })}
-                              </div>
-
-                              <div className="flex items-center justify-between text-[8px] font-mono text-slate-500">
-                                <span>00:00</span>
-                                {tk.status === 'scrub_success' ? (
-                                  <span className="text-emerald-400 font-bold flex items-center gap-1">
-                                    <MicOff className="w-2.5 h-2.5" />
-                                    VOICE SCRUBBED &amp; ZEROED OUT BY AUTOMATED COMPLIANCE ORDER
-                                  </span>
-                                ) : (
-                                  <span>Segment: {tk.matchedSegment}</span>
-                                )}
-                                <span>30:00</span>
-                              </div>
-                            </div>
-
-                            {/* Timeline and operational action buttons */}
-                            <div className="flex flex-col sm:flex-row gap-2 justify-between items-center bg-slate-900/30 p-2.5 rounded-lg border border-slate-850">
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  id={`audio-dispatch-btn-${tk.id}`}
-                                  type="button"
-                                  disabled={tk.status !== 'detected'}
-                                  onClick={() => {
-                                    setAudioTakedowns(prev => prev.map(t => t.id === tk.id ? { ...t, status: 'dispatched' } : t));
-                                    setTimeout(() => {
-                                      setAudioTakedowns(prev => prev.map(t => t.id === tk.id ? { ...t, status: 'scrub_success' } : t));
-                                    }, 2500);
-                                  }}
-                                  className={`px-3 py-1.5 rounded-lg font-bold text-[10px] transition ${
-                                    tk.status === 'detected'
-                                      ? 'bg-amber-500 text-slate-950 hover:bg-amber-600'
-                                      : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                  }`}
-                                >
-                                  {tk.status === 'detected' 
-                                    ? 'Dispatch Mute Notice' 
-                                    : tk.status === 'dispatched' 
-                                    ? 'Order Processing...' 
-                                    : 'Acoustically Enforced'}
-                                </button>
-
-                                <button
-                                  id={`audio-whitelist-btn-${tk.id}`}
-                                  type="button"
-                                  onClick={() => {
-                                    // Add to allowed list
-                                    const mockIdent = tk.url.includes('spotify') ? '@spotify_podcast' : '@audio_feed';
-                                    const newItem = {
-                                      id: 'al-' + Date.now(),
-                                      name: tk.platform.toUpperCase() + ' Host Exception',
-                                      identifier: mockIdent,
-                                      active: true,
-                                      timeConstraintEnabled: false,
-                                      timeStart: '09:00',
-                                      timeEnd: '17:00',
-                                      identityConstraintEnabled: false,
-                                      allowedIdentityId: 'fam-1'
-                                    };
-                                    setAllowedList(prev => [...prev, newItem]);
-                                    // Delete from takedowns
-                                    setAudioTakedowns(prev => prev.filter(t => t.id !== tk.id));
-                                  }}
-                                  className="px-3 py-1.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white font-bold text-[10px] transition"
-                                >
-                                  Whitelist Host
-                                </button>
-                              </div>
-
-                              <span className="text-[10px] text-slate-500 font-mono">Matched: {tk.timestamp}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab 4.6: Audio Map & Heat (Acoustic Propagation & Saturation) */}
-          {activeTab === 'audio_map' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {/* Introduction & Quick Stats Header */}
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-900 pb-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-sm font-mono">
-                      <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-                      Acoustic Mapping &amp; Saturation Heatmap
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed font-sans max-w-3xl">
-                      Visualize localized acoustic blind spots, sound shadow zones, and saturation coverage circles of your ultrasonic shielding. See how walls, ambient wind, and heavy background noises limit high-frequency deflection boundaries.
-                    </p>
-                  </div>
-                  <div className="pt-1 text-[10px] text-slate-500 font-sans flex flex-wrap gap-2">
-                    <span className="text-emerald-400 font-semibold">‚úì OSHA Safety Compliant</span>
-                    <span>‚Ä¢</span>
-                    <span className="text-emerald-400 font-semibold">‚úì Ultrasonic Decibel Saturation</span>
-                  </div>
-                </div>
-
-                {/* Calculate Dynamic Metrics */}
-                {(() => {
-                  const locData: Record<string, { name: string; baseCoverage: number; desc: string; noiseDb: number; threats: Array<{ id: string; name: string; distance: number; angle: number; x: number; y: number; status: string; label: string }>; blindSectors: string[] }> = {
-                    dining: {
-                      name: "Family Dining Room",
-                      baseCoverage: 94,
-                      desc: "Quiet indoor room with wooden partitions and minimal background hum.",
-                      noiseDb: 32,
-                      threats: [
-                        { id: 'm1', name: 'Smart Speaker Mic', distance: 3.2, angle: 45, x: 26, y: -26, status: 'scrambled', label: 'SILENCED' },
-                        { id: 'm2', name: 'Smartphone Mic (Dad)', distance: 1.8, angle: 210, x: -16, y: 18, status: 'scrambled', label: 'SILENCED' }
-                      ],
-                      blindSectors: []
-                    },
-                    classroom: {
-                      name: "University Lecture Hall",
-                      baseCoverage: 76,
-                      desc: "Large echoing lecture theater. Solid brick columns deflect high-frequency ultrasonic waves.",
-                      noiseDb: 48,
-                      threats: [
-                        { id: 'm3', name: 'Podium Boundary Mic', distance: 6.8, angle: 120, x: -38, y: -18, status: 'scrambled', label: 'SILENCED' },
-                        { id: 'm4', name: 'Student iPad Mic', distance: 4.5, angle: 300, x: 28, y: 32, status: 'weak', label: 'PARTIAL BLOCK' },
-                        { id: 'm5', name: 'CCTV Audio Feed', distance: 11.2, angle: 10, x: 44, y: -42, status: 'unshielded', label: 'UNSHIELDED' }
-                      ],
-                      blindSectors: ['North-East Column Pillar Shadow']
-                    },
-                    city_square: {
-                      name: "Urban Public Square",
-                      baseCoverage: 58,
-                      desc: "Open air environment with continuous street traffic rumble and wind dissipation.",
-                      noiseDb: 72,
-                      threats: [
-                        { id: 'm6', name: 'Traffic Surveillance Mic', distance: 9.4, angle: 80, x: 36, y: -12, status: 'weak', label: 'PARTIAL BLOCK' },
-                        { id: 'm7', name: 'Stranger Smartphone', distance: 2.5, angle: 190, x: -20, y: 8, status: 'scrambled', label: 'SILENCED' },
-                        { id: 'm8', name: 'News Crew Shotgun Mic', distance: 8.1, angle: 330, x: 38, y: 26, status: 'unshielded', label: 'UNSHIELDED' }
-                      ],
-                      blindSectors: ['Open Space Dissipation Gaps']
-                    },
-                    cafe_inside: {
-                      name: "Busy Corner Cafe",
-                      baseCoverage: 83,
-                      desc: "Moderate busy indoor chatter and background acoustic hum. Large storefront glass sheets reflect waves.",
-                      noiseDb: 58,
-                      threats: [
-                        { id: 'm9', name: 'POS Register Mic', distance: 4.1, angle: 135, x: -26, y: -26, status: 'scrambled', label: 'SILENCED' },
-                        { id: 'm10', name: 'Laptop Mic (Table 4)', distance: 3.0, angle: 260, x: -8, y: 30, status: 'scrambled', label: 'SILENCED' }
-                      ],
-                      blindSectors: ['Espresso Compressor shadow']
-                    }
-                  };
-
-                  const currentLoc = locData[acousticLocation] || locData.dining;
-                  let activeCoverage = currentLoc.baseCoverage;
-                  let activeRange = state.rangeMeters || 12;
-                  let activeNoise = currentLoc.noiseDb;
-                  let activeBlindSpots = [...currentLoc.blindSectors];
-
-                  if (acousticInterference === 'wind') {
-                    activeCoverage = Math.max(30, Math.round(activeCoverage * 0.72));
-                    activeRange = Math.max(2, Math.round(activeRange * 0.70));
-                    activeNoise += 18;
-                    activeBlindSpots.push("Acoustic Wind Shear Dissipation (All Sectors)");
-                  } else if (acousticInterference === 'wall') {
-                    activeCoverage = Math.max(30, Math.round(activeCoverage * 0.65));
-                    activeRange = Math.max(2, Math.round(activeRange * 0.85));
-                    activeBlindSpots.push("Concrete Structural Pillar Shadow (East / Right Sector)");
-                  } else if (acousticInterference === 'ac_hum') {
-                    activeCoverage = Math.max(30, Math.round(activeCoverage * 0.84));
-                    activeNoise += 24;
-                    activeBlindSpots.push("Low Frequency Compressor Masking (Omnidirectional)");
-                  }
-
-                  return (
-                    <>
-                      {/* Telemetry Stats Grid */}
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div className="bg-slate-950/60 border border-slate-900 p-3 rounded-xl space-y-1">
-                          <span className="text-[9px] text-slate-500 font-sans uppercase block font-semibold">Acoustic Saturation</span>
-                          <span className="text-lg font-bold font-mono text-emerald-400 flex items-center gap-1">
-                            {state.isBroadcasting ? `${activeCoverage}%` : '0%'}
-                            {state.isBroadcasting && (
-                              <span className="text-[10px] text-slate-500 font-sans font-normal">coverage</span>
-                            )}
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-950/60 border border-slate-900 p-3 rounded-xl space-y-1">
-                          <span className="text-[9px] text-slate-500 font-sans uppercase block font-semibold">Effective Shield Range</span>
-                          <span className="text-lg font-bold font-mono text-white">
-                            {state.isBroadcasting ? `${activeRange} Meters` : '0 M (STANDBY)'}
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-950/60 border border-slate-900 p-3 rounded-xl space-y-1">
-                          <span className="text-[9px] text-slate-500 font-sans uppercase block font-semibold">Ambient Noise Floor</span>
-                          <span className="text-lg font-bold font-mono text-blue-400">
-                            {activeNoise} dB SPL
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-950/60 border border-slate-900 p-3 rounded-xl space-y-1">
-                          <span className="text-[9px] text-slate-500 font-sans uppercase block font-semibold">Active Blind Spots</span>
-                          <span className={`text-lg font-bold font-mono ${activeBlindSpots.length > 0 ? 'text-amber-400 animate-pulse' : 'text-emerald-400'}`}>
-                            {activeBlindSpots.length > 0 ? `${activeBlindSpots.length} Zones` : 'NONE (CLEARED)'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Main Tactical Split Layout */}
-                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        
-                        {/* Left: Tactical Acoustic Radar Visualization */}
-                        <div className="lg:col-span-7 bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden min-h-[420px]">
-                          
-                          {/* Title overlay inside map */}
-                          <div className="flex items-center justify-between z-10">
-                            <div className="space-y-0.5">
-                              <span className="text-xs font-bold text-white block uppercase tracking-wider font-mono">
-                                Acoustic Propagation Grid: {currentLoc.name}
-                              </span>
-                              <span className="text-[10px] text-slate-500 block leading-tight">
-                                {currentLoc.desc}
-                              </span>
-                            </div>
-                            
-                            <span className="text-[9px] text-slate-500 font-mono uppercase bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
-                              Interference: {acousticInterference.toUpperCase()}
-                            </span>
-                          </div>
-
-                          {/* Interactive Tactical Radar Stage */}
-                          <div className="flex-1 flex items-center justify-center relative overflow-hidden my-4 min-h-[260px]">
-                            {/* Dot Grid Background */}
-                            <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-25" />
-
-                            {/* Radar Scan sweeping line */}
-                            {acousticPinging && (
-                              <div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_35%,rgba(16,185,129,0.18))] pointer-events-none animate-spin" style={{ animationDuration: '3.5s' }} />
-                            )}
-
-                            {/* Crosshairs */}
-                            <div className="absolute inset-x-0 h-[1px] bg-slate-900/60" />
-                            <div className="absolute inset-y-0 w-[1px] bg-slate-900/60" />
-
-                            {/* Concentric rings showing dB attenuation */}
-                            <div className="absolute w-[85%] aspect-square rounded-full border border-slate-900/30 flex items-center justify-center pointer-events-none">
-                              <span className="absolute top-1 text-[7px] font-mono text-slate-700">-60dB</span>
-                              <div className="absolute w-[66%] aspect-square rounded-full border border-slate-900/40 flex items-center justify-center">
-                                <span className="absolute top-1 text-[7px] font-mono text-slate-700">-40dB</span>
-                                <div className="absolute w-[33%] aspect-square rounded-full border border-slate-900/50 flex items-center justify-center">
-                                  <span className="absolute top-1 text-[7px] font-mono text-slate-700">-20dB</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Compass Labels */}
-                            <span className="absolute top-2 left-1/2 -translate-x-1/2 text-[8px] font-mono text-slate-700 font-bold">000¬∞</span>
-                            <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-mono text-slate-700 font-bold">180¬∞</span>
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[8px] font-mono text-slate-700 font-bold">270¬∞</span>
-                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] font-mono text-slate-700 font-bold">090¬∞</span>
-
-                            {/* GLOWING ACOUSTIC SATURATION SHIELD BUBBLE */}
-                            {state.isBroadcasting ? (
-                              <div 
-                                className="absolute rounded-full bg-emerald-500/[0.04] border border-emerald-400/20 shadow-[0_0_30px_rgba(16,185,129,0.06)] animate-pulse flex items-center justify-center pointer-events-none"
-                                style={{
-                                  // Scale dynamically based on the current activeRange
-                                  width: `${Math.max(30, Math.min((activeRange / 15) * 85, 95))}%`,
-                                  height: `${Math.max(30, Math.min((activeRange / 15) * 85, 95))}%`,
-                                  transition: 'all 500ms ease-out',
-                                  // Clip a chunk out of the right side (East sector) if Concrete Pillar barrier interference is active
-                                  clipPath: acousticInterference === 'wall' 
-                                    ? 'polygon(0% 0%, 55% 0%, 55% 40%, 45% 50%, 55% 60%, 55% 100%, 0% 100%)' 
-                                    : 'none'
-                                }}
-                              >
-                                {/* Ripple Wave sweeps */}
-                                <div className="absolute inset-0 rounded-full border border-emerald-500/10 animate-ping" style={{ animationDuration: '4s' }} />
-                                <span className="text-[7.5px] font-mono font-bold text-emerald-500/35 uppercase tracking-widest text-center leading-tight">
-                                  SATURATED SHIELD:<br />{activeRange} METERS
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="absolute inset-0 flex items-center justify-center bg-rose-950/5 border border-rose-900/10 z-10 pointer-events-none">
-                                <span className="text-[9px] font-mono font-bold text-rose-500 uppercase tracking-wider bg-slate-950 border border-rose-500/35 px-2.5 py-1.5 rounded shadow-lg">
-                                  ‚ö†Ô∏è ACOUSTIC SHIELD STANDBY (NO SATURATION ACTIVE)
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Concrete Pillar Visual Wall Overlay if active */}
-                            {acousticInterference === 'wall' && (
-                              <div className="absolute right-1/4 top-1/3 bottom-1/3 w-3.5 bg-rose-950/80 border border-rose-500/40 rounded flex items-center justify-center pointer-events-none z-10 shadow-lg">
-                                <span className="text-[7px] font-mono text-rose-400 font-bold -rotate-90 whitespace-nowrap uppercase tracking-wider">
-                                  WALL BARRIER
-                                </span>
-                              </div>
-                            )}
-
-                            {/* East Sector Blind Spot Indicator for Concrete Wall */}
-                            {acousticInterference === 'wall' && state.isBroadcasting && (
-                              <div className="absolute right-[10%] top-[40%] text-center pointer-events-none z-10 animate-pulse">
-                                <span className="text-[8px] font-mono font-bold text-rose-500 bg-slate-950 border border-rose-500/20 px-1.5 py-0.5 rounded shadow">
-                                  BLIND SPOT AREA
-                                </span>
-                                <span className="block text-[6.5px] text-slate-500 font-mono mt-0.5">100% WAVE BLOCKED</span>
-                              </div>
-                            )}
-
-                            {/* Wind shear decay indicator overlay */}
-                            {acousticInterference === 'wind' && state.isBroadcasting && (
-                              <div className="absolute inset-x-8 top-12 flex justify-between pointer-events-none text-slate-600 font-mono text-[7px] select-none">
-                                <span className="animate-pulse">üí® WIND DISPERSION WAVE LOSS</span>
-                                <span className="animate-pulse">üí® ATTA_DECAY: +14dB/m</span>
-                              </div>
-                            )}
-
-                            {/* Absolute center beacon blip (wearer) */}
-                            <div className="relative z-20 flex flex-col items-center">
-                              <span className="relative flex h-4 w-4">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-400 border border-white/25 shadow-[0_0_10px_rgba(52,211,153,0.9)]"></span>
-                              </span>
-                              <span className="text-[8px] font-mono text-white bg-slate-950 border border-slate-800 px-1.5 py-0.5 rounded mt-2 font-bold shadow-md whitespace-nowrap">
-                                ALEX (BEACON)
-                              </span>
-                            </div>
-
-                            {/* Recording microphone target blips */}
-                            {currentLoc.threats.map((threat) => {
-                              // Is the threat within the saturation area?
-                              // If interference is concrete wall and threat is on the right side (positive x), it is in the blind spot!
-                              const isRightSide = threat.x > 0;
-                              const isWallBlocked = acousticInterference === 'wall' && isRightSide;
-                              const isOutOfRange = threat.distance > activeRange;
-                              const isScrambled = state.isBroadcasting && !isWallBlocked && !isOutOfRange;
-
-                              return (
-                                <div
-                                  key={threat.id}
-                                  id={`acoustic-threat-${threat.id}`}
-                                  onClick={() => setSelectedAcousticThreat(threat.id)}
-                                  className="absolute z-20 flex flex-col items-center cursor-pointer group transition-transform hover:scale-110"
-                                  style={{
-                                    left: `calc(50% + ${threat.x}%)`,
-                                    top: `calc(50% + ${threat.y}%)`,
-                                    transition: 'all 500ms ease-out'
-                                  }}
-                                >
-                                  {/* Vector projection line from beacon */}
-                                  <svg className="absolute overflow-visible pointer-events-none w-px h-px origin-center">
-                                    <line
-                                      x1={0}
-                                      y1={0}
-                                      x2={-threat.x * 2.8}
-                                      y2={-threat.y * 2.8}
-                                      stroke={isScrambled ? "#10b981" : isWallBlocked ? "#ef4444" : "#f59e0b"}
-                                      strokeWidth={selectedAcousticThreat === threat.id ? "1.5" : "1"}
-                                      strokeDasharray={isScrambled ? "3 3" : "1 2"}
-                                      className="opacity-40"
-                                    />
-                                  </svg>
-
-                                  <span className="relative flex h-3.5 w-3.5">
-                                    {isScrambled ? (
-                                      <>
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
-                                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border border-white/10 shadow-[0_0_8px_rgba(16,185,129,0.9)]"></span>
-                                      </>
-                                    ) : isWallBlocked ? (
-                                      <>
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60"></span>
-                                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border border-white/10 shadow-[0_0_8px_rgba(239,68,68,0.9)] animate-pulse"></span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-50"></span>
-                                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500 border border-white/10 shadow-[0_0_8px_rgba(245,158,11,0.9)]"></span>
-                                      </>
-                                    )}
-                                  </span>
-
-                                  {/* Small tag indicator */}
-                                  <div className="absolute left-4 -top-3 bg-slate-950/95 border border-slate-900 group-hover:border-slate-700 text-[8px] font-mono p-1 rounded whitespace-nowrap text-white shadow-xl pointer-events-none select-none z-30 transition-all">
-                                    <span className="font-semibold block">{threat.name}</span>
-                                    <span className="text-slate-500 block text-[6.5px]">
-                                      {threat.distance}m ‚Ä¢{' '}
-                                      <span className={isScrambled ? 'text-emerald-400 font-bold' : isWallBlocked ? 'text-rose-400 font-bold animate-pulse' : 'text-amber-400 font-bold'}>
-                                        {isScrambled ? 'SILENCED' : isWallBlocked ? 'BLIND SPOT' : 'UNSHIELDED'}
-                                      </span>
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* Acoustic Target Inspector Floating/Bottom Card */}
-                          <div className="bg-slate-900/40 border border-slate-900 p-2.5 rounded-lg z-10">
-                            {selectedAcousticThreat ? (() => {
-                              const target = currentLoc.threats.find(t => t.id === selectedAcousticThreat);
-                              if (!target) return <span className="text-[10px] text-slate-500 font-mono">Select a microphone blip on the grid to inspect details</span>;
-                              
-                              const isRightSide = target.x > 0;
-                              const isWallBlocked = acousticInterference === 'wall' && isRightSide;
-                              const isOutOfRange = target.distance > activeRange;
-                              const isScrambled = state.isBroadcasting && !isWallBlocked && !isOutOfRange;
-
-                              return (
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
-                                  <div className="space-y-1">
-                                    <span className="text-[10px] text-slate-500 uppercase font-mono block">Target Microphone Inspector</span>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-white font-bold">{target.name}</span>
-                                      <span className="text-slate-500 font-mono">({target.distance}m range, angle {target.angle}¬∞)</span>
-                                    </div>
-                                    <p className="text-[10.5px] text-slate-400">
-                                      {isScrambled 
-                                        ? "‚úÖ Successfully scrambled by active ultrasonic emitter carrier. Capture is 100% white-noise blanked." 
-                                        : isWallBlocked 
-                                        ? "üö® BLIND SPOT: Concrete pillar completely blocks high-frequency watermarking and jamming signals in this direction. Wearer is vulnerable!" 
-                                        : "‚ö†Ô∏è UNSHIELDED: Device is either out of signal range, or the acoustic broadcast shield is currently in standby mode."}
-                                    </p>
-                                  </div>
-
-                                  <div className="shrink-0 flex gap-2">
-                                    <button
-                                      id="inspect-close-btn"
-                                      type="button"
-                                      onClick={() => setSelectedAcousticThreat(null)}
-                                      className="text-[9px] font-bold uppercase text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-950 border border-slate-850 hover:border-slate-700 transition"
-                                    >
-                                      Clear Inspector
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })() : (
-                              <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                                <span>üí° Select any interactive node (circle) on the grid to inspect wave attenuation.</span>
-                                <span>Active Range: {activeRange}M</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Right: Sound Control, Interferences and Monospace Sonar Logs */}
-                        <div className="lg:col-span-5 space-y-6">
-                          
-                          {/* Choose Environmental Scenario */}
-                          <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-3">
-                            <span className="text-xs font-bold text-white block">1. Select Acoustic Scenario</span>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { id: 'dining', label: '‚òï Dining Room', key: 'dining' },
-                                { id: 'classroom', label: 'üè´ Lecture Hall', key: 'classroom' },
-                                { id: 'city_square', label: 'üèôÔ∏è Public Square', key: 'city_square' },
-                                { id: 'cafe_inside', label: 'ü•§ Corner Cafe', key: 'cafe_inside' }
-                              ].map((item) => (
-                                <button
-                                  id={`acoustic-loc-btn-${item.id}`}
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setAcousticLocation(item.key as any);
-                                    setSelectedAcousticThreat(null);
-                                    playLocalSoundTest('tactical_click', 50);
-                                    setAcousticLogs(prev => [
-                                      `[LOCATION SWAP] Changed scan target to: ${locData[item.key].name}`,
-                                      `[DIAGNOSTIC] Noise floor reset to: ${locData[item.key].noiseDb} dB SPL. Base coverage capacity: ${locData[item.key].baseCoverage}%`,
-                                      ...prev
-                                    ]);
-                                  }}
-                                  className={`text-[10px] font-bold py-2 px-3 rounded-lg border transition-all text-left ${
-                                    acousticLocation === item.key
-                                      ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-400'
-                                      : 'bg-slate-900/30 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900/60'
-                                  }`}
-                                >
-                                  {item.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Interference Injector Panels */}
-                          <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-3">
-                            <div className="space-y-0.5">
-                              <span className="text-xs font-bold text-white block">2. Inject Environmental Interference</span>
-                              <span className="text-[10px] text-slate-500 block">See how different variables generate sound shadow blind spots</span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { id: 'none', label: '‚úÖ No Barriers', desc: 'Optimal line of sight' },
-                                { id: 'wind', label: 'üí® High Wind', desc: 'Severe signal dissipation' },
-                                { id: 'wall', label: 'üß± Concrete Pillar', desc: 'Symmetric shadow blocks' },
-                                { id: 'ac_hum', label: '‚ùÑÔ∏è AC Comp Hum', desc: 'Acoustic background hum' }
-                              ].map((item) => (
-                                <button
-                                  id={`acoustic-interf-btn-${item.id}`}
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setAcousticInterference(item.id as any);
-                                    setSelectedAcousticThreat(null);
-                                    playLocalSoundTest('sonar_chime', 60);
-                                    
-                                    let logMsg = "";
-                                    if (item.id === 'none') {
-                                      logMsg = "[CLEARED] Environmental factors cleared. Standard line-of-sight propagation restored.";
-                                    } else if (item.id === 'wind') {
-                                      logMsg = "[INJECT] Wind factor active. Attenuation penalty applied: -14dB/meter wave shear decay.";
-                                    } else if (item.id === 'wall') {
-                                      logMsg = "[INJECT] Concrete structural barrier detected. High frequency waves deflected. 100% blind spot in East Sector.";
-                                    } else {
-                                      logMsg = "[INJECT] Active AC hum compressor active. Saturated masking floor increased. SNR threshold margin narrowed.";
-                                    }
-
-                                    setAcousticLogs(prev => [logMsg, ...prev]);
-                                  }}
-                                  className={`text-[10px] py-1.5 px-2.5 rounded-lg border transition-all text-left flex flex-col justify-between h-14 ${
-                                    acousticInterference === item.id
-                                      ? 'bg-amber-500/10 border-amber-500/35 text-amber-400'
-                                      : 'bg-slate-900/30 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900/60'
-                                  }`}
-                                >
-                                  <span className="font-bold">{item.label}</span>
-                                  <span className="text-[8.5px] text-slate-500 font-sans block">{item.desc}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Settings Emitters Controls */}
-                          <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
-                            <span className="text-xs font-bold text-white block">3. Ultrasonic Emitter Calibration</span>
-                            
-                            {/* Frequency slider */}
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between items-center text-[10px] font-mono">
-                                <span className="text-slate-500 uppercase">Acoustic Carrier Frequency</span>
-                                <span className="text-emerald-400 font-bold">{acousticMapFrequency.toFixed(1)} kHz (Inaudible)</span>
-                              </div>
-                              <input
-                                id="acoustic-carrier-slider"
-                                type="range"
-                                min="20.0"
-                                max="26.0"
-                                step="0.2"
-                                value={acousticMapFrequency}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  setAcousticMapFrequency(val);
-                                  // Periodic log
-                                  if (Math.random() < 0.3) {
-                                    setAcousticLogs(prev => [
-                                      `[CALIBRATE] Adjusting ultrasonic oscillator carrier to: ${val.toFixed(1)} kHz (Operating margin)`,
-                                      ...prev
-                                    ]);
-                                  }
-                                }}
-                                className="w-full h-1 bg-slate-900 border border-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
-                              />
-                              <div className="flex justify-between text-[8px] text-slate-500 font-mono">
-                                <span>20.0 kHz (OSHA Bound)</span>
-                                <span>26.0 kHz (Max transducer)</span>
-                              </div>
-                            </div>
-
-                            {/* Calibration button */}
-                            <button
-                              id="trigger-acoustic-calib-btn"
-                              type="button"
-                              disabled={acousticPinging}
-                              onClick={() => {
-                                setAcousticPinging(true);
-                                playLocalSoundTest('sonar_chime', 85);
-                                setAcousticLogs(prev => [
-                                  `[CALIBRATION] Initiating multi-sector ultrasonic wave sweep...`,
-                                  `[CALIBRATION] Acoustic echoing envelope measured. Processing deflection coefficients...`,
-                                  ...prev
-                                ]);
-
-                                setTimeout(() => {
-                                  setAcousticPinging(false);
-                                  setAcousticLogs(prev => [
-                                    `[CALIBRATION SUCCESS] Refusal boundary calibrated: range matches safe bounds. Saturated output optimized!`,
-                                    ...prev
-                                  ]);
-                                }, 2500);
-                              }}
-                              className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold py-2 rounded-lg text-xs transition flex items-center justify-center gap-1.5"
-                            >
-                              {acousticPinging ? (
-                                <>
-                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                  Sweeping Acoustic Spectrum...
-                                </>
-                              ) : (
-                                <>
-                                  <span>üó∫Ô∏è</span>
-                                  Sweep &amp; Calibrate Acoustic Grid
-                                </>
-                              )}
-                            </button>
-                          </div>
-
-                          {/* Interactive Monospace Sonar Logs Console */}
-                          <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 space-y-2">
-                            <div className="flex items-center justify-between text-[10px] font-mono">
-                              <span className="text-slate-500 uppercase font-semibold">Active Acoustic Telemetry Logs</span>
-                              <button
-                                id="clear-acoustic-logs-btn"
-                                type="button"
-                                onClick={() => setAcousticLogs([])}
-                                className="text-slate-500 hover:text-white transition-colors uppercase text-[9px] bg-slate-900 border border-slate-850 px-1.5 py-0.5 rounded"
-                              >
-                                Clear Console
-                              </button>
-                            </div>
-
-                            <div className="h-32 bg-black/60 p-3 rounded-lg border border-slate-900 font-mono text-[9.5px] overflow-y-auto space-y-1 scrollbar-thin">
-                              {acousticLogs.length > 0 ? (
-                                acousticLogs.map((log, idx) => (
-                                  <div key={idx} className={`leading-relaxed ${
-                                    log.includes('INJECT') || log.includes('BLIND')
-                                      ? 'text-amber-400 font-semibold' 
-                                      : log.includes('SWAP') || log.includes('SUCCESS')
-                                      ? 'text-emerald-400' 
-                                      : 'text-slate-300'
-                                  }`}>
-                                    <span className="text-slate-600 mr-1.5">[{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                                    {log}
-                                  </div>
-                                ))
-                              ) : (
-                                <span className="text-slate-600 block text-center pt-8">Console empty. Trigger a sweep or adjust parameters to view telemetry logs.</span>
-                              )}
-                            </div>
-                          </div>
-
-                        </div>
-
-                      </div>
-                    </>
-                  );
-                })()}
-
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab: Perimeter Zones (School & Home Gateways) */}
-          {activeTab === 'perimeter' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 animate-fadeIn">
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-emerald-400" />
-                  Stationary Perimeter Safeguards
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  Establish permanent hardware boundary shields. When a person wearing recording glasses or using a smartphone camera enters these geo-fenced boundaries (such as a school entrance, residential yard, or playground), the stationary beacon overrides and enforces a local "Opt-Out" blur command to secure the perimeter.
-                </p>
-              </div>
-
-              {/* Mapping Service Settings for Geofencing Visualization */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400">
-                      <Globe className="w-4 h-4" />
-                    </span>
-                    <div>
-                      <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        Geofencing Visualization Mapping Service
-                        <span className="text-[9px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase">
-                          {state.preferredMapProvider === 'apple' ? 'Apple MapKit' : 'Google Maps'}
-                        </span>
-                      </h4>
-                      <p className="text-[10px] font-mono text-slate-400">
-                        Select your preferred mapping service for Safe School Zones and geofence boundary radar visualizations.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Option 1: Google Maps */}
-                  <button
-                    type="button"
-                    onClick={() => onChange({ ...state, preferredMapProvider: 'google' })}
-                    className={`p-3.5 rounded-xl border text-left transition cursor-pointer space-y-2 flex flex-col justify-between ${
-                      (state.preferredMapProvider || 'google') === 'google'
-                        ? 'bg-emerald-950/30 border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50'
-                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs font-mono">
-                          G
-                        </span>
-                        <div>
-                          <h5 className="text-xs font-mono font-bold text-white">Google Maps Platform</h5>
-                          <span className="text-[9px] font-mono text-slate-400">Vector Tiles & Advanced Markers</span>
-                        </div>
-                      </div>
-                      {(state.preferredMapProvider || 'google') === 'google' && (
-                        <span className="p-1 bg-emerald-500 text-slate-950 rounded-full shrink-0">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] font-mono text-slate-400 leading-relaxed">
-                      High-density CCTV, ALPR & Municipal camera overlays with real-time Haversine distance calculations and custom map circles.
-                    </p>
-                  </button>
-
-                  {/* Option 2: Apple Maps */}
-                  <button
-                    type="button"
-                    onClick={() => onChange({ ...state, preferredMapProvider: 'apple' })}
-                    className={`p-3.5 rounded-xl border text-left transition cursor-pointer space-y-2 flex flex-col justify-between ${
-                      state.preferredMapProvider === 'apple'
-                        ? 'bg-emerald-950/30 border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50'
-                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold text-xs font-mono">
-                          Ô£ø
-                        </span>
-                        <div>
-                          <h5 className="text-xs font-mono font-bold text-white">Apple MapKit JS</h5>
-                          <span className="text-[9px] font-mono text-slate-400">Cupertino Style & AirTag BLE Seed</span>
-                        </div>
-                      </div>
-                      {state.preferredMapProvider === 'apple' && (
-                        <span className="p-1 bg-emerald-500 text-slate-950 rounded-full shrink-0">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] font-mono text-slate-400 leading-relaxed">
-                      Sleek dark-mode vector rendering with Find My AirTag rotation, Apple Park presets, and quick location switching.
-                    </p>
-                  </button>
-                </div>
-
-                {/* Embedded Live Geofencing Visualization Container */}
-                <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-                      <Compass className="w-3.5 h-3.5 text-emerald-400" />
-                      Live Geofencing Visualization ({state.preferredMapProvider === 'apple' ? 'Apple Maps Engine' : 'Google Maps Engine'}):
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('perimeter')}
-                      className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 underline flex items-center gap-1 cursor-pointer"
-                    >
-                      Full View ‚Üó
-                    </button>
-                  </div>
-
-                  <div className="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 p-2">
-                    {state.preferredMapProvider === 'apple' ? (
-                      <AppleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
-                    ) : (
-                      <GoogleMapsPrivacyRadar citizenState={state} onChange={onChange} addLog={onAddLog} onTriggerAlert={onTriggerAlert} />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Add New Sensor Gate */}
-              <form 
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newSensName.trim() || !newSensLocation.trim()) return;
-                  const newSens: PerimeterSensor = {
-                    id: 'sens-' + Date.now(),
-                    name: newSensName,
-                    location: newSensLocation,
-                    type: newSensType,
-                    isActive: true,
-                    coverageMeters: newSensRange,
-                    detectionsBlocked: 0,
-                    status: 'active'
-                  };
-                  setPerimeterSensors(prev => [...prev, newSens]);
-                  setNewSensName('');
-                  setNewSensLocation('');
-                }}
-                className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3"
-              >
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Deploy New Stationary Shield Beacon</h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Beacon Name</label>
-                    <input
-                      id="sens-name-input"
-                      type="text"
-                      placeholder="e.g. Back Garden Dome"
-                      value={newSensName}
-                      onChange={(e) => setNewSensName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Street Address or Venue</label>
-                    <input
-                      id="sens-loc-input"
-                      type="text"
-                      placeholder="e.g. 502 Oak Lane"
-                      value={newSensLocation}
-                      onChange={(e) => setNewSensLocation(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Venue Classification</label>
-                    <select
-                      id="sens-type-select"
-                      value={newSensType}
-                      onChange={(e: any) => setNewSensType(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
-                    >
-                      <option value="school">üè´ School/Kindergarten Entrance</option>
-                      <option value="home">üè† Private Property / House</option>
-                      <option value="public">‚õ≤ Public Park / Playground</option>
-                      <option value="commercial">üè¢ Secure Office / Retail Shop</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Shield Coverage: {newSensRange}m</label>
-                    <input
-                      id="sens-range-slider"
-                      type="range"
-                      min="5"
-                      max="150"
-                      value={newSensRange}
-                      onChange={(e) => setNewSensRange(Number(e.target.value))}
-                      className="w-full accent-emerald-400 mt-2 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  id="deploy-beacon-btn"
-                  type="submit"
-                  className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Deploy Stationary Beacon Gate
-                </button>
-              </form>
-
-              {/* Active list of perimeters */}
-              <div className="space-y-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-                  Active Stationary Beacons ({perimeterSensors.length})
-                </span>
-
-                <div className="space-y-3">
-                  {perimeterSensors.map((sensor) => (
-                    <div 
-                      key={sensor.id} 
-                      className={`border rounded-xl p-4 bg-slate-950/40 flex flex-col md:flex-row md:items-center justify-between gap-4 transition ${
-                        sensor.isActive ? 'border-slate-800' : 'border-slate-900 opacity-65'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-lg shrink-0">
-                          {sensor.type === 'school' ? 'üè´' : sensor.type === 'home' ? 'üè†' : sensor.type === 'public' ? '‚õ≤' : 'üè¢'}
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                            {sensor.name}
-                            <span className={`text-[8px] px-1.5 py-0.2 rounded-full font-mono uppercase font-bold border ${
-                              sensor.status === 'active' 
-                                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/20' 
-                                : sensor.status === 'maintenance' 
-                                ? 'bg-amber-950/60 text-amber-400 border-amber-500/20'
-                                : 'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}>
-                              {sensor.status}
-                            </span>
-                          </h4>
-                          <p className="text-xs text-slate-400 flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-slate-500" />
-                            {sensor.location}
-                          </p>
-                          <div className="flex flex-wrap gap-2.5 pt-1 text-[10px] text-slate-500">
-                            <span>Coverage Radius: <strong className="text-slate-300">{sensor.coverageMeters}m</strong></span>
-                            <span>‚Ä¢</span>
-                            <span className="flex items-center gap-1">
-                              <Shield className="w-3 h-3 text-emerald-400" />
-                              Blocked recordings: <strong className="text-emerald-400 font-mono">{sensor.detectionsBlocked}</strong>
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3.5 self-end md:self-center shrink-0">
-                        {/* Coverage slider */}
-                        <div className="w-24 space-y-1">
-                          <span className="text-[9px] text-slate-500 uppercase block font-semibold">Adjust Radius</span>
-                          <input
-                            id={`sensor-coverage-${sensor.id}`}
-                            type="range"
-                            min="5"
-                            max="150"
-                            value={sensor.coverageMeters}
-                            onChange={(e) => {
-                              const val = Number(e.target.value);
-                              setPerimeterSensors(prev => prev.map(s => s.id === sensor.id ? { ...s, coverageMeters: val } : s));
-                            }}
-                            className="w-full accent-emerald-400 h-1 cursor-pointer"
-                          />
-                        </div>
-
-                        <button
-                          id={`toggle-sensor-${sensor.id}`}
-                          onClick={() => {
-                            setPerimeterSensors(prev => prev.map(s => {
-                              if (s.id !== sensor.id) return s;
-                              const nextActive = !s.isActive;
-                              return {
-                                ...s,
-                                isActive: nextActive,
-                                status: nextActive ? 'active' : 'offline'
-                              };
-                            }));
-                          }}
-                          className={`text-[10px] px-2.5 py-1 rounded font-bold transition ${
-                            sensor.isActive 
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' 
-                              : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-750'
-                          }`}
-                        >
-                          {sensor.isActive ? 'ONLINE' : 'OFFLINE'}
-                        </button>
-
-                        <button
-                          id={`delete-sensor-${sensor.id}`}
-                          onClick={() => setPerimeterSensors(prev => prev.filter(s => s.id !== sensor.id))}
-                          className="p-1 text-slate-500 hover:text-red-400 transition"
-                          title="Remove Sensor"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab 4: Data Handling & Ephemeral Preferences */}
-          {activeTab === 'retention' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  How Long My Data is Kept
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  You have the legal right to choose how long recording devices keep records of your privacy requests. Select your preferred setting below:
-                </p>
-              </div>
-
-              <div className="space-y-2.5">
-                {[
-                  {
-                    value: 'zero_retention',
-                    label: 'Keep Absolutely No Records (Highly Recommended)',
-                    desc: 'Smart glasses are legally blocked from saving any of your video frames or privacy codes. They will process the blur in real-time and discard everything instantly.'
-                  },
-                  {
-                    value: 'encrypted_cache',
-                    label: 'Encrypted Count Only',
-                    desc: 'Allows glasses to count how many people requested blurs (e.g., "1 person blurred at 12:45") but fully encrypts the record. The person recording cannot see this details.'
-                  },
-                  {
-                    value: 'bystander_anonymous',
-                    label: 'Anonymous General Statistics',
-                    desc: 'Allows public networks to count general statistics of how many people are using privacy shields in the neighborhood to map privacy-friendly shops.'
-                  }
-                ].map((pref) => {
-                  const isActive = state.dataRetentionPref === pref.value;
-                  return (
-                    <button
-                      id={`retention-pref-${pref.value}`}
-                      key={pref.value}
-                      onClick={() => onChange({ ...state, dataRetentionPref: pref.value as any })}
-                      className={`w-full flex flex-col p-4 rounded-xl border text-left transition ${
-                        isActive 
-                          ? 'border-emerald-500/60 bg-emerald-950/10 text-white' 
-                          : 'border-slate-800 bg-slate-950/10 hover:bg-slate-900/40 text-slate-400'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                          isActive ? 'border-emerald-400 bg-emerald-400' : 'border-slate-600'
-                        }`}>
-                          {isActive && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
-                        </div>
-                        <span className="text-xs font-bold">{pref.label}</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-1.5 pl-5 leading-normal">{pref.desc}</p>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl flex items-start gap-3 mt-4 text-xs text-slate-400">
-                <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <p className="leading-relaxed font-sans">
-                  <strong>Hardware Enforcement:</strong> By using BlurBubble, smart glasses makers sign agreements. Tampering with or bypassing these rules automatically turns off their devices' compliance certificates.
-                </p>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab: Law Enforcement Escrow Override */}
-          {activeTab === 'escrow' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 animate-fadeIn">
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
-                  <KeyRound className="w-4 h-4 text-amber-400" />
-                  Emergency Override Access
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  To prevent bad actors from hiding during active crimes, this app supports emergency safety overrides. Only when approved law enforcement warrants or court orders are verified can your privacy shield be paused. Every override is recorded for safety.
-                </p>
-              </div>
-
-              {/* Status Banner */}
-              <div className={`border rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all duration-300 ${
-                overrideActive 
-                  ? 'bg-red-950/40 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]' 
-                  : 'bg-emerald-950/20 border-emerald-500/20'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
-                    overrideActive ? 'bg-red-500/20 text-red-400 animate-pulse' : 'bg-emerald-500/10 text-emerald-400'
-                  }`}>
-                    <ShieldAlert className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs uppercase tracking-wider font-bold text-slate-400">Emergency Override Status</h4>
-                    <p className={`text-sm font-bold mt-0.5 ${overrideActive ? 'text-red-400' : 'text-emerald-400'}`}>
-                      {overrideActive ? '‚ö†Ô∏è OVERRIDE ACTIVE - ALL BLURRING TEMPORARILY PAUSED' : 'üîí ALL SHIELDS FULLY ACTIVE'}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  {overrideActive ? (
-                    <button
-                      id="revoke-override-btn"
-                      type="button"
-                      onClick={handleRevokeOverride}
-                      className="bg-red-500 hover:bg-red-600 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-lg hover:shadow-red-500/20 transition-all duration-200"
-                    >
-                      Revoke Override &amp; Turn Blur Back On
-                    </button>
-                  ) : (
-                    <span className="text-[10px] text-slate-500 uppercase font-sans tracking-wider font-semibold animate-pulse">
-                      Requires Official Authorization Keys
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Authorize Control Panel */}
-              {!overrideActive && (
-                <form 
-                  onSubmit={handleTriggerOverride}
-                  className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3"
-                >
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Trigger Emergency Warrant Override (Demo)</h4>
-                  
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">
-                        Warrant ID or Case Number
-                      </label>
-                      <input
-                        id="incident-hash-input"
-                        type="text"
-                        placeholder="e.g. CR-2026-89042-WEST"
-                        value={incidentHash}
-                        onChange={(e) => setIncidentHash(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
-                        required
-                      />
-                    </div>
- 
-                    <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-lg text-[11px] text-slate-400 font-sans">
-                      üí° <strong>Simulation Note:</strong> Submitting a case number will simulate a secure authorization from local police and court systems, showing how the emergency bypass functions.
-                    </div>
-
-                    <button
-                      id="authorize-override-btn"
-                      type="submit"
-                      className="w-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
-                    >
-                      <KeyRound className="w-3.5 h-3.5" />
-                      Verify Official Authorization &amp; Pause Shield
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* Escrow Nodes */}
-              <div className="space-y-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-                  Authorized Key Holders ({escrowHolders.length})
-                </span>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {escrowHolders.map((holder) => (
-                    <div 
-                      key={holder.id}
-                      className="bg-slate-950/40 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-white">{holder.agency}</span>
-                          <span className={`text-[8px] px-1.5 py-0.2 rounded-full font-mono uppercase font-bold border ${
-                            holder.keyStatus === 'emergency_accessed'
-                              ? 'bg-red-950/60 text-red-400 border-red-500/20 animate-pulse'
-                              : holder.keyStatus === 'escrowed'
-                              ? 'bg-amber-950/60 text-amber-400 border-amber-500/20'
-                              : holder.keyStatus === 'revoked'
-                              ? 'bg-slate-900 text-slate-500 border-slate-850 line-through'
-                              : 'bg-slate-800 text-slate-400 border-slate-700'
-                          }`}>
-                            {holder.keyStatus}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 font-medium font-sans">Officer: {holder.holderName}</p>
-                        <p className="text-[10px] text-slate-400 font-mono leading-normal bg-slate-950/80 p-1.5 rounded border border-slate-900 mt-1">
-                          üîí {holder.authClearance}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-900 text-[10px]">
-                        <div className="flex items-center gap-1.5 font-sans">
-                          <button
-                            id={`toggle-escrow-status-${holder.id}`}
-                            onClick={() => {
-                              setEscrowHolders(prev => prev.map(h => {
-                                if (h.id !== holder.id) return h;
-                                const nextStatus = h.keyStatus === 'escrowed' ? 'locked' : 'escrowed';
-                                return { ...h, keyStatus: nextStatus };
-                              }));
-                            }}
-                            className="text-slate-400 hover:text-white transition font-semibold"
-                          >
-                            {holder.keyStatus === 'escrowed' ? 'Hold' : 'Escrow'}
-                          </button>
-                          <span className="text-slate-700">|</span>
-                          <button
-                            id={`revoke-escrow-${holder.id}`}
-                            onClick={() => {
-                              setEscrowHolders(prev => prev.map(h => {
-                                if (h.id !== holder.id) return h;
-                                return { ...h, keyStatus: 'revoked' };
-                              }));
-                            }}
-                            className="text-red-400 hover:text-red-300 transition font-semibold"
-                          >
-                            Revoke
-                          </button>
-                        </div>
-
-                        <button
-                          id={`delete-escrow-${holder.id}`}
-                          onClick={() => setEscrowHolders(prev => prev.filter(h => h.id !== holder.id))}
-                          className="text-slate-500 hover:text-red-400 transition"
-                          title="Remove Node"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Add New Key-Holder */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newEscrowAgency.trim() || !newEscrowName.trim()) return;
-                  const newH: EscrowKeyHolder = {
-                    id: 'esc-' + Date.now(),
-                    agency: newEscrowAgency,
-                    holderName: newEscrowName,
-                    keyStatus: 'escrowed',
-                    authClearance: newEscrowClearance
-                  };
-                  setEscrowHolders(prev => [...prev, newH]);
-                  setNewEscrowAgency('');
-                  setNewEscrowName('');
-                }}
-                className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3"
-              >
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Register New Cryptographic Escrow Node</h4>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Agency Name</label>
-                    <input
-                      id="escrow-agency-input"
-                      type="text"
-                      placeholder="e.g. County Sheriff Dept"
-                      value={newEscrowAgency}
-                      onChange={(e) => setNewEscrowAgency(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1">Authorizing Officer Name</label>
-                    <input
-                      id="escrow-officer-input"
-                      type="text"
-                      placeholder="e.g. Sheriff J. Miller"
-                      value={newEscrowName}
-                      onChange={(e) => setNewEscrowName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Cryptographic Warrant Threshold</label>
-                  <select
-                    id="escrow-clearance-select"
-                    value={newEscrowClearance}
-                    onChange={(e) => setNewEscrowClearance(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
-                  >
-                    <option value="Level-1 Public Safety Warrant Required">Level-1 Public Safety Warrant Required</option>
-                    <option value="Level-3 Public Safety Warrant Required">Level-3 Public Safety Warrant Required</option>
-                    <option value="Signed Court Order Token Required">Signed Court Order Token Required</option>
-                    <option value="Joint Multi-Agency Cryptographic Authorization Only">Joint Multi-Agency Cryptographic Authorization Only</option>
-                  </select>
-                </div>
-
-                <button
-                  id="add-escrow-holder-btn"
-                  type="submit"
-                  className="w-full bg-slate-850 hover:bg-slate-800 border border-slate-750 text-slate-300 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Deploy Escrow Node
-                </button>
-              </form>
-
-              {/* Console Logs */}
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-sans">
-                  <History className="w-3.5 h-3.5 text-slate-500" />
-                  Escrow Key-Node Audit Console
-                </span>
-                <div className="bg-slate-950 border border-slate-900 rounded-xl p-3 max-h-48 overflow-y-auto font-mono text-[10px] text-amber-500/90 space-y-1">
-                  {overrideLogs.map((logStr, i) => (
-                    <div key={i} className="leading-relaxed whitespace-pre-wrap">{logStr}</div>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab: Hardware Licensing & Device Pairing (License Manager Sub-view) */}
-          {activeTab === 'licensing' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 animate-fadeIn">
-              {/* Head Section */}
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
-                    <Award className="w-4 h-4 text-amber-400 animate-pulse" />
-                    BlurBubble‚Ñ¢ Hardware License &amp; Compliance Manager
-                  </h3>
-                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full font-mono uppercase font-bold">
-                    v2.1 REGULATORY CORE
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  In compliance with local RF transmission bylaws (FCC Part 15, CE RED, and ISED RSS-210), physical opt-out signal beacons must possess registered, cryptographically signed hardware certifications. Use this manager to verify, register, or renew compliance licenses to ensure lawful, uninterrupted signal operation.
-                </p>
-              </div>
-
-              {/* Advanced Status Board */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block">Regulatory Sync State</span>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
-                    <span className="text-xs font-bold text-white font-sans uppercase">ALL UNITS COMPLIANT</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-sans">
-                    All synchronized physical beacons are validated with municipal database nodes.
-                  </p>
-                </div>
-
-                <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block">Rotational Broadcast Signature</span>
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-3.5 h-3.5 text-blue-400 animate-spin" style={{ animationDuration: '8s' }} />
-                    <span className="text-xs font-mono text-emerald-400 font-bold uppercase font-sans">SHA-256 SECURE CORE</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-sans">
-                    Rotated broadcast sequence fully complies with FCC and MIC guidelines.
-                  </p>
-                </div>
-
-                <div className="bg-slate-900/40 border border-slate-850 p-4 rounded-xl space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold block">SAR Exposure Rating</span>
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="text-xs font-bold text-white font-sans">0.42 W/kg (SAFE RANGE)</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-sans">
-                    Extremely low emission power, well below the legal safety ceiling of 1.6 W/kg.
-                  </p>
-                </div>
-              </div>
-
-              {/* Devices Certification Registry */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block font-sans">
-                    Active Certifications Registry ({state.hardwareLicenses?.length || 0})
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono font-sans">
-                    Updated: Just Now
-                  </span>
-                </div>
-
-                <div className="space-y-4">
-                  {state.hardwareLicenses?.map((lic) => {
-                    const isVerifying = verifyingId === lic.id || verificationResult[lic.id] === 'verifying';
-                    const isVerified = verificationResult[lic.id] === 'verified';
-                    const certColors = {
-                      FCC: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-                      CE: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-                      ISED: 'bg-red-500/15 text-red-400 border-red-500/30',
-                      MIC: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-                      VCCI: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-                    }[lic.certType || 'FCC'];
-
-                    return (
-                      <div 
-                        key={lic.id}
-                        className={`bg-slate-950/40 border ${isVerified ? 'border-emerald-500/55 shadow-[0_0_15px_rgba(16,185,129,0.05)]' : 'border-slate-800'} rounded-xl p-5 flex flex-col gap-4 text-xs transition-all duration-300`}
-                      >
-                        {/* Device Info Header */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3">
-                          <div className="space-y-1">
-                            <h4 className="font-bold text-white text-sm flex items-center gap-2 font-sans">
-                              <Cpu className="w-4 h-4 text-emerald-400" />
-                              {lic.deviceName}
-                            </h4>
-                            <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                              <span className="font-sans">Serial:</span>
-                              <span className="text-slate-300 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-850">{lic.serialNumber}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {/* Cert Standard Badge */}
-                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${certColors} font-mono uppercase tracking-wider`}>
-                              {lic.certType || 'FCC'} Certified
-                            </span>
-                            
-                            {/* License Status Badge */}
-                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono uppercase font-bold border ${
-                              lic.status === 'active'
-                                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30'
-                                : lic.status === 'revoked'
-                                ? 'bg-red-950/60 text-red-400 border-red-500/30 animate-pulse'
-                                : 'bg-slate-900 text-slate-500 border-slate-800'
-                            }`}>
-                              {lic.status}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Technical Certification Details */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[11px] font-sans">
-                          <div>
-                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Compliance Cert ID:</span>
-                            <span className="text-slate-200 font-mono text-emerald-400 font-semibold">{lic.rfComplianceCert}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Testing Laboratory:</span>
-                            <span className="text-slate-200 font-medium truncate block font-sans">{lic.laboratory || 'Allied Compliance Labs'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Tx Power cap:</span>
-                            <span className="text-slate-200 font-mono font-medium">{lic.maxRFPowerDb || 10} mW (Max EIRP)</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Frequency Band:</span>
-                            <span className="text-slate-200 font-mono font-medium">{lic.frequencyRangeMhz || '2402 - 2480 MHz'}</span>
-                          </div>
-
-                          <div>
-                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Purchase / Sync Date:</span>
-                            <span className="text-slate-300 font-mono flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-slate-500" />
-                              {lic.purchaseDate}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Expiration / Legality:</span>
-                            <span className={`font-mono flex items-center gap-1 ${lic.status === 'active' ? 'text-slate-300' : 'text-red-400 font-semibold'}`}>
-                              <Clock className="w-3 h-3 text-slate-500" />
-                              {lic.expirationDate}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Authority Registrar:</span>
-                            <span className="text-slate-200 font-sans">{lic.authorityName || 'Federal Communications Commission'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 font-semibold block uppercase text-[9px] tracking-wider mb-0.5 font-sans">Last Verified Check:</span>
-                            <span className="text-slate-300 font-mono">{lic.lastVerified || 'N/A'}</span>
-                          </div>
-                        </div>
-
-                        {/* Cryptographic Key Signature */}
-                        <div className="pt-2.5 border-t border-slate-900/60">
-                          <span className="text-[10px] text-slate-500 font-semibold block mb-1 font-sans uppercase tracking-wider">ECC Public Compliance Signature (Rotated):</span>
-                          <span className="text-[10px] text-slate-400 font-mono leading-normal block bg-slate-950/90 p-2.5 rounded border border-slate-900 overflow-x-auto whitespace-nowrap scrollbar-thin">
-                            üîë {lic.decryptedPubKey}
-                          </span>
-                        </div>
-
-                        {/* Live Verification Report (Result display) */}
-                        {isVerifying && (
-                          <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-slate-900/60 border border-slate-800 rounded-lg flex items-center justify-center gap-3 font-mono text-xs">
-                            <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" />
-                            <span className="text-slate-300 font-semibold font-sans">Contacting {lic.certType || 'FCC'} Authorized Node Database &amp; Checking Cert Keys...</span>
-                          </motion.div>
-                        )}
-
-                        {isVerified && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
-                            <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-lg space-y-3">
-                              <div className="flex items-center gap-2 text-emerald-400 font-bold font-sans uppercase tracking-wider text-[11px]">
-                                <ShieldCheck className="w-4.5 h-4.5 fill-emerald-400/10" />
-                                Official Certification Verified Active &amp; Legally Compliant
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-slate-400 font-sans border-t border-emerald-500/10 pt-2">
-                                <div>
-                                  <span className="text-slate-500 font-semibold font-sans">Registrar:</span> {lic.authorityName} Office of Engineering and Technology
-                                </div>
-                                <div>
-                                  <span className="text-slate-500 font-semibold font-sans">Testing Lab:</span> {lic.laboratory} (Designated Site Number: US1089)
-                                </div>
-                                <div>
-                                  <span className="text-slate-500 font-semibold font-sans">Specific Absorption Rate (SAR):</span> 0.42 W/kg (1g Tissue limit 1.6 W/kg - compliant)
-                                </div>
-                                <div>
-                                  <span className="text-slate-500 font-semibold font-sans">Equipment Class:</span> Part 15 Low Power Transceiver (DXX)
-                                </div>
-                              </div>
-                              <p className="text-[10px] text-slate-500 leading-normal font-mono bg-slate-950 p-2 rounded border border-slate-900/40">
-                                SIGNED_BY_REGULATORY_KEY: sha256_sig_04fca8911c47be88d1{lic.id.replace('lic-', '')}e72b49bca021ef9a1
-                              </p>
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {/* License Action Operations */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-900/60">
-                          <div className="flex items-center gap-2">
-                            {/* Verify Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleVerifyLicense(lic.id)}
-                              disabled={isVerifying}
-                              className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 font-sans ${
-                                isVerified
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                  : 'bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800'
-                              }`}
-                            >
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                              {isVerified ? 'Compliance Verified' : isVerifying ? 'Verifying...' : 'Verify Certification'}
-                            </button>
-
-                            {/* Renew Certificate Button */}
-                            <button
-                              type="button"
-                              onClick={() => setShowRenewalModal(showRenewalModal === lic.id ? null : lic.id)}
-                              className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 font-bold text-[11px] transition flex items-center gap-1.5 font-sans"
-                            >
-                              <RefreshCw className={`w-3 h-3 ${renewingId === lic.id ? 'animate-spin' : ''}`} />
-                              Renew Certification
-                            </button>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {/* Revoke/Reauthorize toggle */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = state.hardwareLicenses?.map(l => 
-                                  l.id === lic.id ? { ...l, status: (l.status === 'active' ? 'revoked' : 'active') as any } : l
-                                );
-                                onChange({ ...state, hardwareLicenses: updated });
-                              }}
-                              className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition text-center font-sans ${
-                                lic.status === 'active'
-                                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20'
-                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20'
-                              }`}
-                            >
-                              {lic.status === 'active' ? 'Revoke Sync' : 'Re-Authorize'}
-                            </button>
-
-                            {/* Delete Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = state.hardwareLicenses?.filter(l => l.id !== lic.id);
-                                onChange({ ...state, hardwareLicenses: updated });
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-red-400 border border-slate-800 transition text-center font-sans"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Interactive Renewal Sub-form (Slide Down) */}
-                        {showRenewalModal === lic.id && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden border-t border-slate-900 pt-3">
-                            <div className="bg-slate-900/30 p-4 border border-slate-850 rounded-lg space-y-3">
-                              <div className="flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-amber-400" />
-                                <h5 className="font-semibold text-white text-xs font-sans">Simulated Certification Renewal Authority</h5>
-                              </div>
-                              <p className="text-[11px] text-slate-400 font-sans">
-                                Extend your BlurBubble RF License legally. Renewing issues a new simulated test report, extends the compliance duration, and signs the ECC keys with updated municipal credentials.
-                              </p>
-
-                              <div className="flex flex-wrap gap-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRenewLicense(lic.id, 1)}
-                                  disabled={renewingId === lic.id}
-                                  className="px-3 py-1.5 rounded bg-slate-850 hover:bg-slate-800 text-slate-200 hover:text-white font-medium text-[11px] border border-slate-750 flex items-center gap-1.5 font-sans"
-                                >
-                                  {renewingId === lic.id && showRenewalModal === lic.id ? (
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                  ) : null}
-                                  Extend 1 Year (Compliant)
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRenewLicense(lic.id, 2)}
-                                  disabled={renewingId === lic.id}
-                                  className="px-3 py-1.5 rounded bg-slate-850 hover:bg-slate-800 text-slate-200 hover:text-white font-medium text-[11px] border border-slate-750 flex items-center gap-1.5 font-sans"
-                                >
-                                  {renewingId === lic.id && showRenewalModal === lic.id ? (
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                  ) : null}
-                                  Extend 2 Years
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRenewLicense(lic.id, 5)}
-                                  disabled={renewingId === lic.id}
-                                  className="px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] border border-amber-500/30 flex items-center gap-1.5 font-sans"
-                                >
-                                  {renewingId === lic.id && showRenewalModal === lic.id ? (
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                  ) : null}
-                                  Extend 5 Years (Standard Long-term)
-                                </button>
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {(!state.hardwareLicenses || state.hardwareLicenses.length === 0) && (
-                    <div className="p-8 border border-dashed border-slate-800 text-center rounded-xl">
-                      <p className="text-xs text-slate-400 font-sans">No physical beacons synchronized yet. Add one below to pair.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Pair & Add New License Form */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newLicDeviceName.trim() || !newLicSerial.trim()) return;
-
-                  // Get authority details based on selected standard
-                  const authorityDetails = {
-                    FCC: {
-                      name: 'Federal Communications Commission',
-                      prefix: 'FCC ID: 2A8R9-BB',
-                    },
-                    CE: {
-                      name: 'European Union Conformity Authority',
-                      prefix: 'CE-Ref: 2026-BB',
-                    },
-                    ISED: {
-                      name: 'Innovation, Science and Economic Development Canada',
-                      prefix: 'IC: 28310-BB',
-                    },
-                    MIC: {
-                      name: 'Ministry of Internal Affairs and Communications (Japan)',
-                      prefix: 'MIC ID: 211-BB',
-                    },
-                    VCCI: {
-                      name: 'Voluntary Control Council for Interference (Japan)',
-                      prefix: 'VCCI Cert: V-BB',
-                    }
-                  }[newLicCertType];
-
-                  const finalCertId = newLicCertId.trim() || authorityDetails.prefix + Math.floor(1000 + Math.random() * 9000);
-
-                  const newLic: HardwareLicense = {
-                    id: 'lic-' + Date.now(),
-                    deviceName: newLicDeviceName,
-                    serialNumber: newLicSerial.toUpperCase(),
-                    status: 'active',
-                    purchaseDate: new Date().toISOString().split('T')[0],
-                    expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                    decryptedPubKey: 'ecc-secp256k1:04' + Array.from({length: 24}, () => Math.floor(Math.random()*16).toString(16)).join(''),
-                    rfComplianceCert: finalCertId,
-                    certType: newLicCertType,
-                    authorityName: authorityDetails.name,
-                    lastVerified: new Date().toISOString().split('T')[0],
-                    maxRFPowerDb: newLicMaxPower,
-                    frequencyRangeMhz: '2402 - 2480 MHz',
-                    laboratory: newLicLab
-                  };
-
-                  onChange({
-                    ...state,
-                    hardwareLicenses: [...(state.hardwareLicenses || []), newLic]
-                  });
-
-                  setNewLicDeviceName('');
-                  setNewLicSerial('');
-                  setNewLicCertId('');
-                  setNewLicMaxPower(10);
-                  setNewLicLab('Bay Area Compliance Labs');
-                }}
-                className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4"
-              >
-                <div className="flex items-center gap-2 border-b border-slate-900 pb-2">
-                  <Plus className="w-4 h-4 text-emerald-400" />
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Pair Device &amp; Register Hardware Certification</h4>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Beacon Device Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. BlurBubble Keychain Tag v3"
-                      value={newLicDeviceName}
-                      onChange={(e) => setNewLicDeviceName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Hardware Serial Number</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. BB-KEY-99120-Z"
-                      value={newLicSerial}
-                      onChange={(e) => setNewLicSerial(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-mono"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Certification standard (FCC, CE, etc.)</label>
-                    <select
-                      value={newLicCertType}
-                      onChange={(e) => setNewLicCertType(e.target.value as any)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                    >
-                      <option value="FCC" className="bg-slate-950 text-white">FCC (USA Standards)</option>
-                      <option value="CE" className="bg-slate-950 text-white">CE (European Conformity)</option>
-                      <option value="ISED" className="bg-slate-950 text-white">ISED (Canada Standards)</option>
-                      <option value="MIC" className="bg-slate-950 text-white">MIC (Japan Telecom Authority)</option>
-                      <option value="VCCI" className="bg-slate-950 text-white">VCCI (Japan Interference Council)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Compliance Certification ID (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="Leave blank to auto-generate based on standard"
-                      value={newLicCertId}
-                      onChange={(e) => setNewLicCertId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Max Transmitter Power limit (mW)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="25"
-                      value={newLicMaxPower}
-                      onChange={(e) => setNewLicMaxPower(Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-mono"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Authorized Testing Laboratory</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Allied Compliance Labs"
-                      value={newLicLab}
-                      onChange={(e) => setNewLicLab(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-[11px] text-slate-400 font-sans leading-normal">
-                  üí° <strong>Cryptographic Regulatory Handshake:</strong> Registering pairs the physical beacon over Bluetooth/NFC, downloads its rotated public ECC credentials, generates compliance certification documents, and validates RF transmit parameters to ensure safe, lawful operation.
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition font-sans"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Initiate Secure Pair &amp; Register Certificate
-                </button>
-              </form>
-
-              {/* Interactive Regional Regulatory Compliance self-test tool */}
-              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-4 mt-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-3 gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
-                      <Radio className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Regional Compliance Diagnostics</h4>
-                      <p className="text-[10px] text-slate-400">Validate unlicensed RF output limits and antenna safety standards</p>
-                    </div>
-                  </div>
-                  <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-950/40 border border-amber-900/40 px-2 py-0.5 rounded uppercase font-sans">
-                    RF Diagnostics Unit
-                  </span>
-                </div>
-
-                {/* Region Selector and Test triggers */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Left Column: Region configuration */}
-                  <div className="space-y-3.5">
-                    <div className="space-y-1.5">
-                      <span className="text-[9px] text-slate-500 uppercase font-mono font-bold block">Select Active Jurisdiction</span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setComplianceRegion('US')}
-                          disabled={complianceTesting}
-                          className={`py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border transition ${
-                            complianceRegion === 'US'
-                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
-                              : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          üá∫üá∏ US (FCC Part 15)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setComplianceRegion('EU')}
-                          disabled={complianceTesting}
-                          className={`py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border transition ${
-                            complianceRegion === 'EU'
-                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
-                              : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          üá™üá∫ EU (CE RED Article 3)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setComplianceRegion('CA')}
-                          disabled={complianceTesting}
-                          className={`py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border transition ${
-                            complianceRegion === 'CA'
-                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
-                              : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          üá®üá¶ Canada (ISED RSS)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setComplianceRegion('JP')}
-                          disabled={complianceTesting}
-                          className={`py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border transition ${
-                            complianceRegion === 'JP'
-                              ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
-                              : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          üáØüáµ Japan (MIC Art 2)
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        id="run-compliance-selftest-btn"
-                        onClick={handleTriggerComplianceTest}
-                        disabled={complianceTesting}
-                        className="w-full bg-slate-950 hover:bg-slate-900/80 border border-slate-800 text-slate-300 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 transition font-sans"
-                      >
-                        <Radio className={`w-3.5 h-3.5 text-amber-400 ${complianceTesting ? 'animate-ping' : 'animate-pulse'}`} />
-                        {complianceTesting ? 'ANALYZING SPECTRUM CALIBRATION...' : 'üì° Run Compliance Diagnostic Self-Test'}
-                      </button>
-
-                      {complianceTesting && (
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center text-[8px] font-mono text-slate-500">
-                            <span>EIRP POWER LIMIT SWEEP</span>
-                            <span>{complianceProgress}%</span>
-                          </div>
-                          <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden">
-                            <div className="h-full bg-amber-400 transition-all duration-200" style={{ width: `${complianceProgress}%` }}></div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Right Column: Dynamic Report Terminal */}
-                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 flex flex-col justify-between">
-                    <span className="text-[10px] text-slate-400 uppercase font-mono font-bold block border-b border-slate-900 pb-1.5 mb-2">
-                      üìã Diagnostic Evaluation Card
-                    </span>
-
-                    {complianceReport ? (
-                      <div className="space-y-2 font-mono text-[10px]">
-                        <div className="flex justify-between items-center bg-slate-900/30 p-1 rounded">
-                          <span className="text-slate-500">Jurisdiction:</span>
-                          <span className="text-white font-bold">{complianceRegion} Standard</span>
-                        </div>
-                        <div className="flex justify-between items-center bg-slate-900/30 p-1 rounded">
-                          <span className="text-slate-500">Allowed Band Range:</span>
-                          <span className="text-white font-bold">{complianceReport.freqRange}</span>
-                        </div>
-                        <div className="flex justify-between items-center bg-slate-900/30 p-1 rounded">
-                          <span className="text-slate-500">Max EIRP Limit:</span>
-                          <span className="text-amber-400 font-bold">{complianceReport.eirpPower}</span>
-                        </div>
-                        <div className="flex justify-between items-center bg-slate-900/30 p-1 rounded">
-                          <span className="text-slate-500">Harmonization Status:</span>
-                          <span className="text-emerald-400 font-bold flex items-center gap-1">
-                            <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
-                            FULLY_VERIFIED
-                          </span>
-                        </div>
-                        <div className="text-[8px] text-slate-500 leading-normal pt-1.5 border-t border-slate-900">
-                          Exemptions Checked: {complianceReport.exemptions.join(' & ')}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center p-3 text-slate-500 text-[10px] leading-relaxed">
-                        <Award className="w-6 h-6 text-slate-700 mb-2 animate-bounce" />
-                        <span>No live self-audit report exists. Click the diagnostic button to initiate radio spectrum compliance self-check.</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab: Legal & Compliance */}
-          {activeTab === 'legal' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {/* Info Header */}
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
-                    <Scale className="w-4 h-4 text-blue-400" />
-                    Privacy Signal Declaration &amp; Compliance Center
-                  </h3>
-                  <span className="text-[10px] bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full font-mono uppercase font-bold">
-                    LEGAL BLUEPRINT v1.4
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  The "Privacy Signal Declaration" allows citizens to generate an official digital or printable document justifying their lawful use of passive/focused privacy shielding (including low-power RF Bluetooth/NFC beacons and audio beamforming wave-canceling). This template complies with FCC Part 15, CE RED, GDPR Article 21, and CCPA ¬ß 1798.120, providing an authoritative presentation to security, business staff, or regulatory officials.
-                </p>
-              </div>
-
-              {!isDeclarationGenerated ? (
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-slate-900 pb-2">
-                    <Sliders className="w-4 h-4 text-blue-400" />
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Customize Declaration Template</h4>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Link to Device dropdown */}
-                    <div className="sm:col-span-2">
-                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Link to Synced Physical Beacon Device</label>
-                      <select
-                        value={declarantBeaconId}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setDeclarantBeaconId(val);
-                          if (val !== 'custom' && val !== 'all') {
-                            const found = state.hardwareLicenses?.find(l => l.id === val);
-                            if (found) {
-                              setDeclarantCustomDevice(found.deviceName);
-                              setDeclarantCustomSerial(found.serialNumber);
-                              setDeclarationJurisdiction(
-                                found.certType === 'FCC' ? 'USA' : 
-                                found.certType === 'CE' ? 'EU' : 
-                                found.certType === 'ISED' ? 'CA' : 
-                                found.certType === 'MIC' || found.certType === 'VCCI' ? 'JP' : 'USA'
-                              );
-                            }
-                          }
-                        }}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
-                      >
-                        <option value="all" className="bg-slate-950 text-white">Declare All Synced Devices (Consolidated)</option>
-                        {state.hardwareLicenses?.map((lic) => (
-                          <option key={lic.id} value={lic.id} className="bg-slate-950 text-white">
-                            {lic.deviceName} ({lic.serialNumber} - {lic.certType || 'FCC'})
-                          </option>
-                        ))}
-                        <option value="custom" className="bg-slate-950 text-white">Custom / Unlisted Hardware Device</option>
-                      </select>
-                    </div>
-
-                    {declarantBeaconId === 'custom' && (
-                      <>
-                        <div>
-                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Device Model Name</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. BlurBubble Keychain Tag"
-                            value={declarantCustomDevice}
-                            onChange={(e) => setDeclarantCustomDevice(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Hardware Serial Number</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. BB-KEY-99120-Z"
-                            value={declarantCustomSerial}
-                            onChange={(e) => setDeclarantCustomSerial(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-mono"
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Declarant Full Name</label>
-                      <input
-                        type="text"
-                        value={declarantName}
-                        onChange={(e) => setDeclarantName(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Declarant Contact (Email/Phone)</label>
-                      <input
-                        type="text"
-                        value={declarantEmail}
-                        onChange={(e) => setDeclarantEmail(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Jurisdictional Law Standard</label>
-                      <select
-                        value={declarationJurisdiction}
-                        onChange={(e) => setDeclarationJurisdiction(e.target.value as any)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
-                      >
-                        <option value="USA" className="bg-slate-950 text-white">United States (FCC Pt 15 / CCPA / 4th Amend)</option>
-                        <option value="EU" className="bg-slate-950 text-white">European Union (CE RED / GDPR Art 21)</option>
-                        <option value="CA" className="bg-slate-950 text-white">Canada (ISED RSS-210 / PIPEDA)</option>
-                        <option value="JP" className="bg-slate-950 text-white">Japan (MIC telecom / APPI Protections)</option>
-                        <option value="Custom" className="bg-slate-950 text-white">International General Privacy Assertion</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Primary Shield Intent justification</label>
-                      <select
-                        value={declarationPurpose}
-                        onChange={(e) => setDeclarationPurpose(e.target.value as any)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
-                      >
-                        <option value="ai_optout" className="bg-slate-950 text-white">AI Face-Scanning &amp; Scraping Opt-Out</option>
-                        <option value="anti_eavesdropping" className="bg-slate-950 text-white">Eavesdropping Mitigation &amp; Voice Privacy</option>
-                        <option value="full_cloaking" className="bg-slate-950 text-white">Complete Personal Space Security (Minors/Home)</option>
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Custom Directives &amp; Addendums (Optional)</label>
-                      <textarea
-                        rows={3}
-                        placeholder="e.g. This unit remains active within commercial facilities strictly to enforce CCPA optical rights. It does not interfere with emergency radio frequencies."
-                        value={declarationCustomNotes}
-                        onChange={(e) => setDeclarationCustomNotes(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500/60 font-sans"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeclarationDocId('DEC-' + Math.floor(100000 + Math.random() * 900000));
-                        setIsDeclarationGenerated(true);
-                      }}
-                      className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition font-sans shadow-lg shadow-blue-500/10"
-                    >
-                      <FileText className="w-4 h-4" />
-                      Generate Official Signal Declaration Document
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Action Bar */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsDeclarationGenerated(false)}
-                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-xs text-slate-300 font-semibold rounded-lg border border-slate-700 transition"
-                      >
-                        ‚Üê Edit Template Details
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsPresenting(true)}
-                        className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1.5"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                        Present Fullscreen (Mobile HUD)
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => window.print()}
-                        className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1.5"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Print / Save PDF
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Document Container */}
-                  <div className="bg-white text-slate-900 rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl border-4 border-slate-300 relative overflow-hidden font-sans print:m-0 print:border-0 print:p-0">
-                    {/* Federal Header Strip */}
-                    <div className="border-b-2 border-slate-900 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 block">Digital Rights &amp; Signal Authority</span>
-                        <h1 className="text-lg md:text-xl font-black uppercase tracking-tight text-slate-900 font-sans">
-                          Privacy Signal Declaration
-                        </h1>
-                        <p className="text-[10px] text-slate-600 uppercase font-mono tracking-wider font-semibold">
-                          COMPLIANCE REGISTRY ID: {declarationDocId} // SECURE CORE SEC-256
-                        </p>
-                      </div>
-                      
-                      <div className="bg-slate-100 border border-slate-300 rounded px-2.5 py-1 text-right">
-                        <span className="text-[9px] font-extrabold text-slate-500 uppercase block tracking-wider">Status Check</span>
-                        <span className="text-[11px] font-mono font-bold text-emerald-700 flex items-center justify-end gap-1">
-                          <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-                          VERIFIED VALID
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Notice Block */}
-                    <div className="space-y-4 text-xs leading-relaxed text-slate-800">
-                      <p>
-                        This declaration is issued under the authority of the undersigned declarant to formally advise law enforcement, private security, business operators, and members of the public that an active, low-power **Privacy Opt-Out Signal Beacon** is operated in this vicinity.
-                      </p>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-500 block">Authorized Declarant</span>
-                          <span className="text-sm font-bold text-slate-950 block">{declarantName}</span>
-                          <span className="text-[10px] text-slate-500 block">{declarantEmail || 'No contact provided'}</span>
-                        </div>
-
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-500 block">Asserted Jurisdiction</span>
-                          <span className="text-sm font-bold text-slate-950 block">
-                            {declarationJurisdiction === 'USA' && 'United States of America'}
-                            {declarationJurisdiction === 'EU' && 'European Union'}
-                            {declarationJurisdiction === 'CA' && 'Canada (ISED Standards)'}
-                            {declarationJurisdiction === 'JP' && 'Japan (MIC Jurisdiction)'}
-                            {declarationJurisdiction === 'Custom' && 'General/International Space'}
-                          </span>
-                          <span className="text-[10px] text-slate-500 block">
-                            {declarationJurisdiction === 'USA' && 'CCPA ¬ß 1798.120 & FCC Part 15'}
-                            {declarationJurisdiction === 'EU' && 'GDPR Article 21 & CE RED Directive'}
-                            {declarationJurisdiction === 'CA' && 'PIPEDA ¬ß 5(1) & ISED RSS-210'}
-                            {declarationJurisdiction === 'JP' && 'APPI Article 23 & MIC Ordinance'}
-                            {declarationJurisdiction === 'Custom' && 'Universal Decl. of Human Rights Art. 12'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Hardware Devices linked */}
-                      <div className="space-y-2 border-t border-slate-200 pt-4">
-                        <h3 className="font-bold uppercase text-[10px] text-slate-900 tracking-wider">Registered Broadcasting Hardware</h3>
-                        {declarantBeaconId === 'all' ? (
-                          <div className="space-y-2">
-                            {state.hardwareLicenses && state.hardwareLicenses.length > 0 ? (
-                              state.hardwareLicenses.map((lic) => (
-                                <div key={lic.id} className="bg-slate-50 p-3 rounded-lg border border-slate-150 flex items-center justify-between gap-4 font-sans">
-                                  <div>
-                                    <span className="font-bold text-slate-900 block">{lic.deviceName}</span>
-                                    <span className="text-[10px] text-slate-500 font-mono">Serial: {lic.serialNumber} // Authority ID: {lic.rfComplianceCert}</span>
-                                  </div>
-                                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase font-sans">
-                                    {lic.certType || 'FCC'} COMPLIANT
-                                  </span>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="text-[11px] text-slate-500 italic">No synchronized hardware devices found. Custom device declaration will be asserted.</p>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-150 flex items-center justify-between gap-4 font-sans">
-                            <div>
-                              <span className="font-bold text-slate-900 block">
-                                {declarantBeaconId === 'custom' ? (declarantCustomDevice || 'Unspecified Privacy Beacon') : state.hardwareLicenses?.find(l => l.id === declarantBeaconId)?.deviceName}
-                              </span>
-                              <span className="text-[10px] text-slate-500 font-mono">
-                                Serial: {declarantBeaconId === 'custom' ? (declarantCustomSerial || 'BB-GENERIC-TAG') : state.hardwareLicenses?.find(l => l.id === declarantBeaconId)?.serialNumber} //
-                                Compliance ID: {declarantBeaconId === 'custom' ? ('FCC-ID-AUTO-' + Math.floor(1000 + Math.random() * 9000)) : state.hardwareLicenses?.find(l => l.id === declarantBeaconId)?.rfComplianceCert}
-                              </span>
-                            </div>
-                            <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase font-sans">
-                              {declarationJurisdiction === 'EU' ? 'CE COMPLIANT' : declarationJurisdiction === 'CA' ? 'ISED COMPLIANT' : declarationJurisdiction === 'JP' ? 'MIC COMPLIANT' : 'FCC COMPLIANT'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Legal Justification Details */}
-                      <div className="space-y-2 border-t border-slate-200 pt-4">
-                        <h3 className="font-bold uppercase text-[10px] text-slate-900 tracking-wider font-sans">Aesthetic &amp; Constitutional Privacy Protections</h3>
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5 text-slate-700 text-[11px]">
-                          <p>
-                            <strong className="text-slate-900">1. Legally Justified Frequency Power:</strong> The broadcasting devices listed above function on license-exempt ISM / SRD frequency bands (such as 2.4 GHz) strictly below local regulatory EIRP thresholds. The transmission constitutes compliant RF signals as authorized under Part 15 of FCC rules, European CE RED guidelines, and MIC Telecom Ordinance.
-                          </p>
-                          <p>
-                            <strong className="text-slate-900">2. Right to Refuse Digital Profiling (Biometric Opt-Out):</strong> Under {declarationJurisdiction === 'USA' ? 'CCPA ¬ß 1798.120 (Right to Opt-Out of Sale or Sharing of Personal Information)' : declarationJurisdiction === 'EU' ? 'GDPR Article 21 (Right to Object to Automated Profiling and processing)' : 'general Privacy Principles'}, citizens retain a fundamental right to opt-out of unauthorized biometric face-scanning, generative AI scraping, and optical video tracking in publicly accessible spaces. This broadcast acts as a machine-readable opt-out signal.
-                          </p>
-                          <p>
-                            <strong className="text-slate-900">3. Narrow Ethical Shielding Policy:</strong> This device does **NOT** engage in wide-area commercial jamming of public spectrum. It does not block innocent public ambient recordings, nor interfere with adjacent conversations. It employs highly focused, targeted beamforming and dynamic phase cancellation of the declarant‚Äôs voice-signature *only*, protecting personal conversations while bystander devices capture their target recordings completely unhindered.
-                          </p>
-                          {declarationCustomNotes && (
-                            <p className="border-t border-slate-200 pt-2 text-slate-800 italic">
-                              <strong>Addendum:</strong> {declarationCustomNotes}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Signatures and QR Verification Block */}
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center border-t-2 border-slate-950 pt-6">
-                        <div className="md:col-span-8 space-y-3">
-                          <p className="text-[10px] leading-relaxed text-slate-500 uppercase font-bold tracking-tight">
-                            Cryptographic Signature Verification Statement
-                          </p>
-                          <p className="text-[11px] text-slate-600 leading-normal font-sans">
-                            Scan the adjacent QR code to verify the legal authenticity of this declaration, check the real-time registration of the hardware licenses on municipal networks, or download the formal compliance certs directly to emergency dispatch consoles.
-                          </p>
-                          <div className="flex gap-4 pt-2 font-sans">
-                            <div>
-                              <span className="text-[9px] uppercase font-bold text-slate-500 block">Declarant Signature</span>
-                              <span className="text-base font-serif italic text-slate-900 font-bold block select-none border-b border-slate-300 pr-12 pb-1">
-                                {declarantName}
-                              </span>
-                              <span className="text-[9px] text-slate-400 font-mono block">Digitally Signed // {new Date().toISOString().split('T')[0]}</span>
-                            </div>
-                            <div>
-                              <span className="text-[9px] uppercase font-bold text-slate-500 block">Registrar Endorsement</span>
-                              <span className="text-xs font-mono font-bold text-emerald-700 block select-none pt-2">
-                                ‚úì BlurBubble Compliance Node Secure
-                              </span>
-                              <span className="text-[8px] text-slate-400 font-mono block">Signature Hash: sha256_sig_9f982d1c9aa</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Interactive QR Code column */}
-                        <div className="md:col-span-4 flex flex-col items-center justify-center space-y-2">
-                          <svg className="w-28 h-28 text-slate-900 bg-white p-1 rounded-lg border border-slate-300" viewBox="0 0 25 25">
-                           <rect width="25" height="25" fill="#FFFFFF"/>
-                           <path d="M0 0h7v1H1v5H0V0zm1 1h5v5H1V1zm1 1h3v3H2V2zm16-2h7v7h-1V1h-6V0zm1 1h5v5h-5V1zm1 1h3v3h-3V2zM0 18h7v7H0v-7zm1 1h5v5H1v-5zm1 1h3v3H2v-3zm18-2h1v1h-1v-1zm1 1h1v1h-1v-1zm1-1h1v1h-1v-1zm2 1h1v1h-1v-1zm-4 2h1v1h-1v-1zm1 1h1v1h-1v-1zm2-1h1v1h-1v-1zm0 2h1v1h-1v-1zm2-1h1v1h-1v-1zm0 2h1v1h-1v-1zm-8-3h1v1h-1v-1zm1-1h1v1h-1v-1zm2 1h1v1h-1v-1zm1-1h1v1h-1v-1zm-4 4h1v1h-1v-1zm2 0h1v1h-1v-1zm2 0h1v1h-1v-1zm-6-2h1v1h-1v-1zm2 0h1v1h-1v-1zm2-2h1v1h-1v-1zm-3-1h1v1h-1v-1zm2 0h1v1h-1v-1zm0-3h1v1h-1v-1zm1 1h1v1h-1v-1zm1-1h1v1h-1v-1zm-4 9h1v1h-1v-1zm1-2h1v1h-1v-1zm1 1h1v1h-1v-1z" fill="#000000"/>
-                         </svg>
-                         <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest text-center">
-                           Scan to Verify
-                         </span>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-             )}
-
-              {/* Interactive Legal & Compliance Scenario Tutorial */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-900 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Scale className="w-4 h-4 text-emerald-400 animate-pulse" />
-                    <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Interactive Legal Tutorial</h4>
-                      <p className="text-[10px] text-slate-400">Master compliance, legal boundaries, and rule hierarchies of decentralized privacy.</p>
-                    </div>
-                  </div>
-                  <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[8.5px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                    COMPLIANCE QUIZ
-                  </span>
-                </div>
-
-                {tutorialStep === 0 ? (
-                  <div className="space-y-4 py-2">
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      Do you know your legal rights regarding biometric privacy, radio spectrum boundaries, and family consent hierarchies? Take this interactive scenario-based quiz to test your knowledge and unlock your **Certified Privacy Jurist Badge**.
-                    </p>
-                    <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-lg space-y-1.5 text-[10.5px]">
-                      <span className="font-bold text-slate-300 block">üìö What you will learn:</span>
-                      <ul className="list-disc pl-4 space-y-1 text-slate-400 font-sans">
-                        <li>The absolute hierarchy order (Judicial Override &gt; School Perimeter &gt; Family Whitelist)</li>
-                        <li>FCC Part 15 regulations regarding audio wave phase cancellation versus radio jamming</li>
-                        <li>GDPR Article 17 dynamic blurring rights over total content deletion</li>
-                      </ul>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTutorialStep(1);
-                        setTutorialAnswers({});
-                        setTutorialCompleted(false);
-                        setTutorialFeedback(null);
-                      }}
-                      className="w-full bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold py-2 px-4 rounded-lg text-xs transition uppercase tracking-wider font-sans"
-                    >
-                      Begin Compliance Tutorial
-                    </button>
-                  </div>
-                ) : tutorialStep >= 1 && tutorialStep <= 3 ? (
-                  // Question View
-                  (() => {
-                    const legalTutorialQuestions = [
-                      {
-                        id: 1,
-                        scenario: "Scenario A: Overriding Priority Hierarchies",
-                        question: "You enter a designated public school yard which enforces an absolute 'Stationary Perimeter Safeguard' for child protection. Your family member's phone has been whitelisted on your device. Can they bypass the school yard restriction and record you?",
-                        options: [
-                          { idx: 0, text: "Yes, whitelists and personal consent always override municipal safety perimeters.", isCorrect: false, feedback: "Incorrect. Safety and child protection zones always take absolute, un-overridable precedence in the priority hierarchy to ensure zero-tolerance protection." },
-                          { idx: 1, text: "No, local physical perimeters (such as schools) override personal family whitelists.", isCorrect: true, feedback: "Correct! To ensure legally compliant and secure child protection, municipal zones and school perimeters take absolute priority over whitelists." },
-                          { idx: 2, text: "Yes, family members can override any zone restriction by entering an override command.", isCorrect: false, feedback: "Incorrect. While a user can choose their mode, physical perimeters designated as high-priority override all local whitelists." }
-                        ]
-                      },
-                      {
-                        id: 2,
-                        scenario: "Scenario B: FCC Part 15 & Spectrum Jamming Laws",
-                        question: "Your active acoustic shield uses focused beamforming sound wave phase cancellation to prevent bystanders from eavesdropping. Is this compliant under FCC spectrum jamming bans?",
-                        options: [
-                          { idx: 0, text: "Yes, because it only cancels your own voice wave-signature rather than actively jamming the public wireless radio spectrum.", isCorrect: true, feedback: "Correct! Phase cancellation of your own vocal acoustic wave is legally defined as personal audio masking, fully compliant with FCC Part 15 regulations." },
-                          { idx: 1, text: "No, personal privacy filters of any frequency are classified as illegal spectrum jamming.", isCorrect: false, feedback: "Incorrect. Electromagnetic radio jamming (jammers) is banned. Selective acoustic voice shielding is fully compliant and safe." }
-                        ]
-                      },
-                      {
-                        id: 3,
-                        scenario: "Scenario C: GDPR Article 17 (Right to Erasure)",
-                        question: "A bystander uploads a public video clip on Instagram containing your physical face without your consent. Under GDPR Article 17, are you legally mandated to demand complete deletion of the creator's video?",
-                        options: [
-                          { idx: 0, text: "Yes, GDPR mandates total video deletion as the only compliant solution.", isCorrect: false, feedback: "Incorrect. Forcing total deletion is often overkill, violates creative freedom, and creates friction with creators." },
-                          { idx: 1, text: "No, you can utilize the BlurBubble dynamic blur API to inject blur coordinates into the player stream, keeping the video online while shielding your face.", isCorrect: true, feedback: "Correct! Coordinated dynamic obfuscation protects your privacy without deleting the creator's upload. It is a win-win for public expression and personal data control." }
-                        ]
-                      }
-                    ];
-
-                    const qIdx = tutorialStep - 1;
-                    const question = legalTutorialQuestions[qIdx];
-                    const selectedAnsIdx = tutorialAnswers[question.id];
-
-                    return (
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center text-[10px] font-mono">
-                          <span className="text-slate-500 uppercase font-bold">{question.scenario}</span>
-                          <span className="text-blue-400">Scenario {tutorialStep} of 3</span>
-                        </div>
-
-                        <p className="text-xs font-bold text-white font-sans">{question.question}</p>
-
-                        <div className="grid grid-cols-1 gap-2.5 pt-2">
-                          {question.options.map((opt) => {
-                            const isChosen = selectedAnsIdx === opt.idx;
-                            const isRevealed = selectedAnsIdx !== undefined;
-                            
-                            let btnStyle = "bg-slate-900/40 border-slate-850 hover:bg-slate-900 hover:border-slate-800 text-slate-300";
-                            if (isChosen) {
-                              btnStyle = opt.isCorrect 
-                                ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300" 
-                                : "bg-red-500/10 border-red-500/40 text-red-300";
-                            } else if (isRevealed && opt.isCorrect) {
-                              btnStyle = "bg-emerald-500/5 border-emerald-500/20 text-emerald-400";
-                            }
-
-                            return (
-                              <button
-                                key={opt.idx}
-                                type="button"
-                                disabled={isRevealed}
-                                onClick={() => {
-                                  setTutorialAnswers(prev => ({ ...prev, [question.id]: opt.idx }));
-                                  setTutorialFeedback(opt.feedback);
-                                }}
-                                className={`p-3 rounded-xl border text-left text-xs font-medium transition ${btnStyle}`}
-                              >
-                                <div className="flex items-start gap-2">
-                                  <span className="mt-0.5 select-none text-[10px] bg-slate-950/60 w-4 h-4 rounded-full flex items-center justify-center border border-slate-800 shrink-0 font-mono text-slate-400">
-                                    {String.fromCharCode(65 + opt.idx)}
-                                  </span>
-                                  <span>{opt.text}</span>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* Interactive Explanation Box */}
-                        {selectedAnsIdx !== undefined && (
-                          <div className={`p-3 rounded-lg border text-[11px] leading-relaxed animate-fadeIn space-y-2 ${
-                            question.options.find(o => o.idx === selectedAnsIdx)?.isCorrect
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
-                              : "bg-red-500/10 border-red-500/40 text-red-300"
-                          }`}>
-                            <div className="font-bold flex items-center gap-1">
-                              {question.options.find(o => o.idx === selectedAnsIdx)?.isCorrect ? "‚úÖ Correct! Solution Breakdown:" : "‚ùå Incorrect. Legal Guidance:"}
-                            </div>
-                            <p className="text-slate-300">{tutorialFeedback}</p>
-                            
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTutorialFeedback(null);
-                                if (tutorialStep === 3) {
-                                  setTutorialStep(4);
-                                } else {
-                                  setTutorialStep(tutorialStep + 1);
-                                }
-                              }}
-                              className="bg-slate-950/60 hover:bg-slate-950 border border-slate-800 text-white font-bold py-1 px-3 rounded text-[10px] font-mono tracking-wider transition ml-auto block"
-                            >
-                              {tutorialStep === 3 ? "VIEW FINAL EVALUATION ‚Üí" : "NEXT SCENARIO ‚Üí"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()
-                ) : (
-                  // Results view
-                  (() => {
-                    let score = 0;
-                    if (tutorialAnswers[1] === 1) score++;
-                    if (tutorialAnswers[2] === 0) score++;
-                    if (tutorialAnswers[3] === 1) score++;
-
-                    return (
-                      <div className="space-y-4 py-2 text-center">
-                        <div className="w-16 h-16 bg-blue-500/10 border-2 border-blue-400 rounded-full flex items-center justify-center mx-auto text-2xl">
-                          {score === 3 ? "‚öñÔ∏è" : "üìú"}
-                        </div>
-
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Tutorial Assessment Completed</span>
-                          <h4 className="text-base font-extrabold text-white font-sans">
-                            {score === 3 ? "Certified Privacy Jurist" : "Apprentice Privacy Advocate"}
-                          </h4>
-                          <span className="text-xs text-blue-400 font-mono font-bold block">Score: {score} / 3 Scenarios Correct</span>
-                        </div>
-
-                        <div className="max-w-md mx-auto p-3.5 bg-slate-900/50 border border-slate-850 rounded-xl text-[11px] text-slate-400 leading-normal text-left space-y-1.5">
-                          <span className="text-white font-bold block text-center mb-1">üéì Key Legal Takeaways Checklist:</span>
-                          <p>‚úì <strong>Rule Hierarchy:</strong> Family Whitelists are subordinate to municipal safety zones (e.g., schools) and official warrants. No personal bypass overrides community/child security.</p>
-                          <p>‚úì <strong>Acoustic Compliance:</strong> Selective sound signature cancellation is legal under FCC Part 15 because it acts as acoustical masking rather than active RF frequency jamming.</p>
-                          <p>‚úì <strong>Digital Erasure:</strong> Dynamic blur injection is preferred over content deletion, reconciling personal biometric privacy with online freedom of expression.</p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTutorialStep(0);
-                            setTutorialAnswers({});
-                            setTutorialFeedback(null);
-                          }}
-                          className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition uppercase tracking-wider font-sans mx-auto block"
-                        >
-                          Retake Tutorial
-                        </button>
-                      </div>
-                    );
-                  })()
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tab: Hardware Pairing */}
-          {activeTab === 'pairing' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {/* Info Header */}
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-1.5 font-sans">
-                    <Bluetooth className="w-4 h-4 text-blue-400" />
-                    BlurBubble‚Ñ¢ BLE Pairing Console
-                  </h3>
-                  <span className="text-[10px] bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full font-mono uppercase font-bold">
-                    BLE Secure Sync
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  Initialize a secure cryptographic pairing handshake with nearby BlurBubble‚Ñ¢-certified hardware nodes. Pairing establishes an encrypted local channel, exchanges ECDSA signature credentials, and registers the device under your authorized security assets list.
-                </p>
-              </div>
-
-              {/* Sub-tab switcher */}
-              <div className="flex border-b border-slate-900 pb-px gap-1">
-                <button
-                  id="pairing-subtab-console-btn"
-                  type="button"
-                  onClick={() => {
-                    setPairingSubTab('console');
-                    playLocalSoundTest('tactical_click', 50);
-                  }}
-                  className={`px-4 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 ${
-                    pairingSubTab === 'console'
-                      ? 'border-blue-500 text-blue-400 font-mono'
-                      : 'border-transparent text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  <Bluetooth className="w-3.5 h-3.5" />
-                  Sync &amp; Pair Console
-                </button>
-                <button
-                  id="pairing-subtab-diag-btn"
-                  type="button"
-                  onClick={() => {
-                    setPairingSubTab('diagnostics');
-                    playLocalSoundTest('tactical_click', 50);
-                    if (!selectedDiagDeviceId && state.registeredEntities?.length > 0) {
-                      setSelectedDiagDeviceId(state.registeredEntities[0].id);
-                    }
-                    if (pingLogs.length === 0) {
-                      setPingLogs([
-                        "Diagnostic suite initialized.",
-                        "Ready to dispatch high-frequency telemetry probes."
-                      ]);
-                    }
-                  }}
-                  className={`px-4 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 ${
-                    pairingSubTab === 'diagnostics'
-                      ? 'border-emerald-500 text-emerald-400 font-mono'
-                      : 'border-transparent text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                  Peripheral Diagnostics Dashboard
-                </button>
-              </div>
-
-              {pairingSubTab === 'console' ? (
-                <>
-                  {/* No active device pairing & not scanning / scanning in progress */}
-                  {!pairingBleDevice ? (
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-6 space-y-6">
-                  {/* Radar Scanning Visualizer */}
-                  <div className="flex flex-col items-center justify-center p-6 bg-slate-900/30 border border-slate-850 rounded-2xl relative overflow-hidden min-h-[250px]">
-                    
-                    {/* Pulsing Concentric Circles */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className={`w-48 h-48 rounded-full border border-blue-500/10 flex items-center justify-center ${isBleScanning ? 'animate-pulse' : ''}`}>
-                        <div className="w-36 h-36 rounded-full border border-blue-500/20 flex items-center justify-center">
-                          <div className="w-24 h-24 rounded-full border border-blue-500/30 flex items-center justify-center">
-                            <div className="w-12 h-12 rounded-full border border-blue-500/40 flex items-center justify-center">
-                              <Bluetooth className={`w-5 h-5 text-blue-400 ${isBleScanning ? 'animate-bounce' : ''}`} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Scanner Sweep effect */}
-                    {isBleScanning && (
-                      <div className="absolute inset-0 w-full h-full animate-spin bg-gradient-to-tr from-transparent via-blue-500/5 to-transparent rounded-full pointer-events-none" style={{ animationDuration: '3s' }} />
-                    )}
-
-                    <div className="relative z-10 text-center space-y-4">
-                      {isBleScanning ? (
-                        <>
-                          <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">Scanning For Certified Hardware...</h4>
-                          <p className="text-xs text-slate-400 max-w-xs font-sans">Listening for local BlurBubble BLE advertisement broadcasts. Keep your device powered on and close.</p>
-                          <div className="w-48 bg-slate-850 h-1.5 rounded-full mx-auto overflow-hidden">
-                            <motion.div 
-                              className="bg-blue-500 h-full"
-                              initial={{ width: '0%' }}
-                              animate={{ width: `${bleProgress}%` }}
-                              transition={{ duration: 0.2 }}
-                            />
-                          </div>
-                          <span className="text-[10px] font-mono text-blue-400 block">{bleProgress}% Broadcaster Coverage Scan</span>
-                        </>
-                      ) : (
-                        <>
-                          <h4 className="text-sm font-bold text-white uppercase tracking-wider font-sans">BLE Radio Node Disengaged</h4>
-                          <p className="text-xs text-slate-400 max-w-xs font-sans">Launch a local spectrum sweep to discover nearby, unbonded BlurBubble hardware beacons or keychains.</p>
-                          
-                          <div className="flex flex-col sm:flex-row items-center gap-3 justify-center">
-                            <button
-                              id="simulate-ble-scan"
-                              type="button"
-                              onClick={startBleScan}
-                              className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-lg transition font-sans border border-slate-700 shadow-lg flex items-center gap-2"
-                            >
-                              <Bluetooth className="w-4 h-4 text-blue-400" />
-                              Simulate Spectrum Scan
-                            </button>
-                            <button
-                              id="real-ble-scan"
-                              type="button"
-                              onClick={startRealBleScan}
-                              className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs rounded-lg transition font-sans shadow-lg shadow-blue-500/15 flex items-center gap-2 border border-blue-400"
-                            >
-                              <Zap className="w-4 h-4 text-yellow-300 animate-pulse" />
-                              Real Web Bluetooth Scan
-                            </button>
-                          </div>
-
-                          {realBleError && (
-                            <div className="text-[10px] text-amber-400 font-mono mt-3 max-w-xs mx-auto leading-normal bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-lg text-left">
-                              <span className="font-bold">‚ö†Ô∏è Bluetooth Alert:</span> {realBleError}
-                              <p className="text-[9px] text-slate-400 mt-1 font-sans">
-                                Web Bluetooth scanning requires HTTPS and direct user interaction. If running in a sandboxed iframe, click <strong>Open in New Tab</strong> to grant device authorizations.
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Discovered Devices */}
-                  {discoveredBleDevices.length > 0 && !isBleScanning && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-sans">Discovered Local Hardware Beacons</h4>
-                        <span className="text-[10px] font-mono text-emerald-400 font-bold">{discoveredBleDevices.length} Available</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-3">
-                        {discoveredBleDevices.map((device) => (
-                          <div key={device.id} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-slate-700/80 transition animate-fade-in">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-white text-xs">{device.name}</span>
-                                <span className="text-[9px] bg-slate-800 border border-slate-700 text-slate-400 px-1.5 py-0.2 rounded font-mono font-semibold uppercase">{device.type}</span>
-                              </div>
-                              <p className="text-[11px] text-slate-400 leading-normal font-sans">{device.desc}</p>
-                              <div className="flex items-center gap-3 text-[10px] text-slate-500 font-mono">
-                                <span>MAC: {device.mac}</span>
-                                <span className="flex items-center gap-1">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${device.rssi > -60 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                                  RSSI: {device.rssi} dBm (Strong)
-                                </span>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => runHandshakeSequence(device)}
-                              className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/25 font-bold text-xs rounded-lg transition font-sans text-center shrink-0 flex items-center gap-1.5 justify-center"
-                            >
-                              <Bluetooth className="w-3.5 h-3.5" />
-                              Initialize Secure Pair
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-6 space-y-6">
-                  {/* Active Handshake Block */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping" />
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans">Active BLE Handshake Protocol</h4>
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-500 uppercase">{pairingBleDevice.mac}</span>
-                    </div>
-
-                    {/* Step indicators */}
-                    <div className="bg-slate-950/80 rounded-xl p-4 border border-slate-900 font-mono text-[11px] space-y-2.5 max-h-[220px] overflow-y-auto">
-                      {handshakeLogs.map((log, idx) => (
-                        <div key={idx} className={`${log.includes('[SECURE]') ? 'text-blue-400' : 'text-slate-500'}`}>
-                          {log}
-                        </div>
-                      ))}
-
-                      {!pairingSuccess && (
-                        <div className="flex items-center gap-2 text-blue-400">
-                          <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
-                          <span>Executing cryptoprocessor transaction step {handshakeStepIdx + 1}/7...</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Handshake Success / Entity Setup Form */}
-                  {pairingSuccess && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="border-t border-slate-900 pt-5 space-y-5"
-                    >
-                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-start gap-3">
-                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0 border border-emerald-500/20">
-                          ‚úì
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-bold text-white font-sans uppercase tracking-wider">Secure Handshake Verified Successfully!</h4>
-                          <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
-                            Diffie-Hellman parameters exchanged securely over channel. The device has authenticated its manufacturer security tag via verified ECDSA certificates. Configure the registered asset options below to arm your new privacy tag.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Registered Asset Name</label>
-                          <input
-                            type="text"
-                            value={pairedDeviceName}
-                            onChange={(e) => setPairedDeviceName(e.target.value)}
-                            placeholder="e.g. Bobby's Backpack Tag"
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Asset Category / Tag Type</label>
-                          <select
-                            value={pairedDeviceType}
-                            onChange={(e) => setPairedDeviceType(e.target.value as any)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                          >
-                            <option value="smart_tag" className="bg-slate-950">üéí Smart Tag (Backpack/Apparel)</option>
-                            <option value="key_fob" className="bg-slate-950">üîë Key Fob (Keychain)</option>
-                            <option value="prototype" className="bg-slate-950">üî¨ Business Prototype / Asset</option>
-                            <option value="artwork" className="bg-slate-950">üé® Proprietary Artwork / Media</option>
-                            <option value="valuable" className="bg-slate-950">üíé High-Value Asset / Safe</option>
-                          </select>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <label className="block text-[10px] text-slate-500 uppercase font-semibold mb-1 font-sans">Default Censor Shield Style</label>
-                          <select
-                            value={pairedDevicePrivacy}
-                            onChange={(e) => setPairedDevicePrivacy(e.target.value as PrivacyLevel)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                          >
-                            <option value="magic_removal" className="bg-slate-950">ü™Ñ Magic Eraser (Seamless Pixel Infill)</option>
-                            <option value="strict_blur" className="bg-slate-950">üíß Gaussian Blur (Soft Depth Masking)</option>
-                            <option value="pixelate" className="bg-slate-950">üëæ Mosaic Pixelation (Classic Retro)</option>
-                            <option value="emoji" className="bg-slate-950">üòú Emoji Overlay (Fun / Discrete Masking)</option>
-                            <option value="black_bar" className="bg-slate-950">‚¨õ Solid Black-Bar Censorship (Military Grade)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setPairingBleDevice(null)}
-                          className="flex-1 py-2 rounded-lg bg-slate-900 hover:bg-slate-850 text-slate-400 font-bold text-xs border border-slate-800 transition text-center font-sans"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleRegisterPairedDevice}
-                          className="flex-1 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition text-center font-sans flex items-center justify-center gap-1.5"
-                        >
-                          Save &amp; Arm Certified Asset
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Advanced Firmware Transceiver Calibration & Flash Wizard */}
-                  <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2 border-b border-slate-900 pb-2">
-                      <Cpu className="w-4 h-4 text-emerald-400" />
-                      <div>
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                          BLE Transceiver Calibration &amp; Firmware Flasher
-                        </h4>
-                        <p className="text-[10px] text-slate-500 font-sans">
-                          Calibrates hardware transceiver clocks to improve signal deflection accuracy.
-                        </p>
-                      </div>
-                    </div>
-
-                    {fwFlashStatus === 'idle' && (
-                      <div className="space-y-3">
-                        <p className="text-[11px] text-slate-400 leading-normal">
-                          If your local hardware beacons are experiencing latency or low signal RSSI, perform an advanced Over-The-Air firmware flash and register calibration.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={runFirmwareFlash}
-                          className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          <Zap className="w-3.5 h-3.5 animate-bounce" />
-                          Initiate Core Calibration &amp; Re-Flash
-                        </button>
-                      </div>
-                    )}
-
-                    {fwFlashStatus === 'running' && (
-                      <div className="space-y-3 font-mono text-[10px]">
-                        <div className="flex justify-between items-center text-slate-400">
-                          <span className="animate-pulse">Flashing register memory maps...</span>
-                          <span className="text-emerald-400 font-bold">{fwFlashProgress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-emerald-400 h-full transition-all duration-300" style={{ width: `${fwFlashProgress}%` }} />
-                        </div>
-                        <div className="bg-slate-950 border border-slate-900 rounded p-2 max-h-24 overflow-y-auto text-emerald-400/90 space-y-1">
-                          {fwFlashLogs.map((logLine, idx) => (
-                            <div key={idx} className="leading-tight">
-                              {logLine}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {fwFlashStatus === 'success' && (
-                      <div className="space-y-3 font-mono text-[10px]">
-                        <div className="border border-emerald-500/30 bg-emerald-500/5 rounded p-3 text-emerald-400 space-y-1 text-center">
-                          <CheckCircle2 className="w-6 h-6 mx-auto mb-1 text-emerald-400 animate-pulse" />
-                          <p className="font-bold uppercase tracking-wider text-xs">Calibration Successful</p>
-                          <p className="text-[10px] text-emerald-500/80 font-sans leading-normal">
-                            All on-chip BLE frequency registers verified and aligned to 2402 MHz. Latency minimized by -12ms.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setFwFlashStatus('idle')}
-                          className="w-full py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-400 border border-slate-800 rounded text-[10px] transition cursor-pointer font-sans"
-                        >
-                          Reset Wizard Console
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-                </>
-              ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                  {(!state.registeredEntities || state.registeredEntities.length === 0) ? (
-                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-8 text-center space-y-4">
-                      <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500 text-lg">
-                        ‚ö°
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-white uppercase tracking-wider">No Active Companions Found</h4>
-                        <p className="text-xs text-slate-400 max-w-md mx-auto">
-                          In order to run latency diagnostics or calibrate active battery cells, you must first bond a physical smart keychain or companion badge in the pairing tab.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setPairingSubTab('console')}
-                        className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold text-xs rounded-lg transition"
-                      >
-                        Go to Pairing Console
-                      </button>
-                    </div>
-                  ) : (() => {
-                    const selectedDevice = state.registeredEntities.find(d => d.id === selectedDiagDeviceId) || state.registeredEntities[0];
-                    const powerSetting = txPowerSettings[selectedDevice.id] || 'medium';
-                    
-                    let latencyVal = 12.8;
-                    let batteryDrainRate = "Normal";
-                    let remainingCycles = 445;
-                    
-                    if (powerSetting === 'low') {
-                      latencyVal = 24.5;
-                      batteryDrainRate = "Ultra-Low (Saves Cells)";
-                      remainingCycles = 480;
-                    } else if (powerSetting === 'high') {
-                      latencyVal = 4.2;
-                      batteryDrainRate = "High Saturation Broadcast";
-                      remainingCycles = 410;
-                    }
-
-                    const deviceHealthPercent = selectedDevice.batteryPercent >= 90 ? 98 : selectedDevice.batteryPercent >= 70 ? 95 : 88;
-                    const healthLabel = deviceHealthPercent >= 95 ? "EXCELLENT" : deviceHealthPercent >= 85 ? "GOOD" : "DEGRADED (SERVICE RECOMMENDED)";
-                    const healthColor = deviceHealthPercent >= 95 ? "text-emerald-400" : deviceHealthPercent >= 85 ? "text-amber-400" : "text-rose-400";
-
-                    return (
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                          
-                          {/* Left Side: Device Selection & Interactive Metrics */}
-                          <div className="lg:col-span-4 space-y-4">
-                            <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-3">
-                              <span className="text-[10px] text-slate-500 uppercase font-bold block font-mono">1. Select Peripheral Device</span>
-                              <div className="space-y-2">
-                                {state.registeredEntities.map((dev) => {
-                                  const activePower = txPowerSettings[dev.id] || 'medium';
-                                  return (
-                                    <button
-                                      id={`diag-select-dev-${dev.id}`}
-                                      key={dev.id}
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedDiagDeviceId(dev.id);
-                                        playLocalSoundTest('tactical_click', 50);
-                                        setPingLogs(prev => [
-                                          `[SELECT] Diagnostics focus shifted to peripheral: ${dev.name}`,
-                                          `[STATUS] Querying registers... Active TX power: ${activePower.toUpperCase()}`,
-                                          ...prev
-                                        ]);
-                                      }}
-                                      className={`w-full text-left p-3 rounded-lg border transition-all ${
-                                        selectedDevice.id === dev.id
-                                          ? 'bg-emerald-500/10 border-emerald-500/30 text-white'
-                                          : 'bg-slate-900/30 border-slate-850 hover:bg-slate-900/60 text-slate-400 hover:text-white'
-                                      }`}
-                                    >
-                                      <div className="flex justify-between items-start">
-                                        <div className="space-y-0.5">
-                                          <span className="text-xs font-bold block truncate max-w-[150px]">{dev.name}</span>
-                                          <span className="text-[9px] text-slate-500 font-mono block uppercase font-bold">Type: {dev.type}</span>
-                                        </div>
-                                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                                          dev.isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                                        }`}>
-                                          {dev.isActive ? 'CONNECTED' : 'DISCONNECTED'}
-                                        </span>
-                                      </div>
-                                      <div className="flex justify-between items-center text-[10px] text-slate-500 mt-2 border-t border-slate-900/40 pt-1.5">
-                                        <span className="flex items-center gap-1">üîã {dev.batteryPercent}%</span>
-                                        <span className="font-mono">TX: {activePower.toUpperCase()}</span>
-                                      </div>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                            
-                            <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-4 space-y-4">
-                              <div className="space-y-0.5">
-                                <span className="text-[10px] text-slate-500 uppercase font-bold block font-mono">2. TX Radio Frequency Power</span>
-                                <p className="text-[10px] text-slate-500 font-sans">Tune transmit amplitudes to optimize signal saturation versus battery drain</p>
-                              </div>
-
-                              <div className="grid grid-cols-3 gap-1.5">
-                                {[
-                                  { id: 'low', label: 'üîã Low', dbm: '-12 dBm' },
-                                  { id: 'medium', label: '‚ö° Med', dbm: '0 dBm' },
-                                  { id: 'high', label: 'üì° High', dbm: '+8 dBm' }
-                                ].map((pow) => {
-                                  const isCurrent = (txPowerSettings[selectedDevice.id] || 'medium') === pow.id;
-                                  return (
-                                    <button
-                                      id={`diag-tx-power-${pow.id}`}
-                                      key={pow.id}
-                                      type="button"
-                                      onClick={() => {
-                                        setTxPowerSettings({
-                                          ...txPowerSettings,
-                                          [selectedDevice.id]: pow.id as any
-                                        });
-                                        playLocalSoundTest('tactical_click', 60);
-                                        setPingLogs(prev => [
-                                          `[CALIBRATION] Calibrating RF registers on '${selectedDevice.name}'`,
-                                          `[AMPLITUDE] Attenuation level modified to ${pow.dbm} (${pow.label.toUpperCase()})`,
-                                          `[SYSTEM] Target loop latency synchronized. Estimating new cycle bounds.`,
-                                          ...prev
-                                        ]);
-                                      }}
-                                      className={`p-2 rounded-lg border transition-all text-center flex flex-col justify-between h-14 ${
-                                        isCurrent
-                                          ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-400'
-                                          : 'bg-slate-900/30 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900/60'
-                                      }`}
-                                    >
-                                      <span className="text-[10px] font-bold block">{pow.label}</span>
-                                      <span className="text-[8px] font-mono text-slate-500 block">{pow.dbm}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Right Side: Detailed Diagnostics Stats & Real-Time Visualization */}
-                          <div className="lg:col-span-8 space-y-6">
-                            <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 space-y-4">
-                              <div className="flex items-center justify-between border-b border-slate-900 pb-3">
-                                <div className="space-y-0.5">
-                                  <span className="text-xs font-bold text-white block uppercase tracking-wider font-mono">
-                                    Live RF Diagnostic Console: {selectedDevice.name}
-                                  </span>
-                                  <span className="text-[10px] text-slate-500 font-sans block">
-                                    Real-time BLE signal latency waveform and battery cell monitoring
-                                  </span>
-                                </div>
-                                <span className="text-[10px] font-mono text-emerald-400 animate-pulse flex items-center gap-1 font-semibold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                  SCANNER TELEMETRY FEED
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-slate-900/40 border border-slate-850 rounded-xl p-4 space-y-3">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-mono text-slate-500 uppercase font-semibold">Signal Latency Test</span>
-                                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-bold">
-                                      {latencyVal < 10 ? "ULTRA-FAST" : "OPTIMAL"}
-                                    </span>
-                                  </div>
-
-                                  <div className="flex items-baseline justify-between">
-                                    <div className="space-y-0.5">
-                                      <span className="text-2xl font-bold font-mono text-white tracking-tight">
-                                        {isPingTesting 
-                                          ? `${(latencyVal + (Math.random() * 4 - 2)).toFixed(1)} ms`
-                                          : `${(latencyVal + (Math.sin(Date.now() / 1000) * 0.5)).toFixed(1)} ms`
-                                        }
-                                      </span>
-                                      <span className="text-[9.5px] text-slate-500 block font-sans">Loopback Handshake (RTT)</span>
-                                    </div>
-                                    <div className="text-right text-[10px] font-mono text-slate-400">
-                                      <div>Jitter: <span className="text-emerald-400">0.9 ms</span></div>
-                                      <div>Success Rate: <span className="text-emerald-400">100%</span></div>
-                                    </div>
-                                  </div>
-
-                                  <div className="h-16 bg-black/40 border border-slate-900 rounded-lg p-2 flex items-end justify-between relative overflow-hidden">
-                                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:10px_10px] opacity-20 pointer-events-none" />
-                                    {Array.from({ length: 24 }).map((_, i) => {
-                                      const seed = Math.sin((i + Date.now() / 500) * 0.5) * 0.3 + 0.7;
-                                      const heightPercent = isPingTesting 
-                                        ? Math.floor(seed * 70 + Math.random() * 20)
-                                        : Math.floor(seed * 40 + 20);
-                                      
-                                      const heightVal = Math.max(10, Math.min(100, heightPercent));
-                                      const isHighlight = i === 23;
-
-                                      return (
-                                        <div
-                                          key={i}
-                                          className={`w-1.5 rounded-t-sm transition-all duration-300 ${
-                                            isHighlight 
-                                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' 
-                                              : 'bg-emerald-500/20'
-                                          }`}
-                                          style={{ height: `${heightVal}%` }}
-                                        />
-                                      );
-                                    })}
-                                    <span className="absolute bottom-1 left-2 text-[8px] font-mono text-slate-600 uppercase">Live Handshake RTT Jitter</span>
-                                  </div>
-                                </div>
-
-                                <div className="bg-slate-900/40 border border-slate-850 rounded-xl p-4 space-y-3">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-mono text-slate-500 uppercase font-semibold">Battery Diagnostic</span>
-                                    <span className={`text-[10px] font-mono font-bold ${healthColor}`}>
-                                      HEALTH: {healthLabel}
-                                    </span>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="bg-black/20 border border-slate-900/50 p-2 rounded-lg text-center space-y-0.5">
-                                      <span className="text-[8px] font-mono text-slate-500 block uppercase">SoC Percent</span>
-                                      <span className="text-lg font-bold font-mono text-white block">
-                                        {selectedDevice.batteryPercent}%
-                                      </span>
-                                      <div className="w-12 bg-slate-800 h-1 rounded-full mx-auto overflow-hidden mt-1">
-                                        <div 
-                                          className={`h-full ${selectedDevice.batteryPercent > 50 ? 'bg-emerald-400' : selectedDevice.batteryPercent > 20 ? 'bg-amber-400' : 'bg-rose-500'}`} 
-                                          style={{ width: `${selectedDevice.batteryPercent}%` }} 
-                                        />
-                                      </div>
-                                    </div>
-
-                                    <div className="bg-black/20 border border-slate-900/50 p-2 rounded-lg text-center space-y-0.5">
-                                      <span className="text-[8px] font-mono text-slate-500 block uppercase">SOH Health</span>
-                                      <span className={`text-lg font-bold font-mono block ${healthColor}`}>
-                                        {deviceHealthPercent}%
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  <div className="text-[9.5px] font-mono text-slate-500 space-y-1.5 border-t border-slate-900/60 pt-2">
-                                    <div className="flex justify-between">
-                                      <span>Remaining Lifespan:</span>
-                                      <span className="text-slate-300 font-bold">{remainingCycles} Cycles (Safe)</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Cell Temperature:</span>
-                                      <span className="text-slate-300 font-bold">
-                                        {isPingTesting ? "29.2 ¬∞C" : "27.6 ¬∞C"}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Telemetry Drain Class:</span>
-                                      <span className="text-slate-300 font-bold">{batteryDrainRate}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <button
-                                id="run-diag-ping-test-btn"
-                                type="button"
-                                disabled={isPingTesting}
-                                onClick={() => {
-                                  setIsPingTesting(true);
-                                  setPingProgress(0);
-                                  playLocalSoundTest('sonar_chime', 80);
-                                  
-                                  setPingLogs(prev => [
-                                    `[START] Triggering Connection & Latency Diagnostics Sequence on '${selectedDevice.name}'...`,
-                                    ...prev
-                                  ]);
-
-                                  let currentProg = 0;
-                                  const interval = setInterval(() => {
-                                    currentProg += 10;
-                                    setPingProgress(currentProg);
-
-                                    if (currentProg === 20) {
-                                      setPingLogs(prev => [
-                                        `[PROBE 1] Dispatched 32-byte BLE telemetry query envelope...`,
-                                        `[PROBE 1 RTT] Acknowledged. Latency: ${latencyVal.toFixed(1)}ms. SigStrength: ${selectedDevice.signalStrength || -60}dBm.`,
-                                        ...prev
-                                      ]);
-                                    } else if (currentProg === 50) {
-                                      setPingLogs(prev => [
-                                        `[PROBE 2] Initiating on-chip loopback frequency jitter test...`,
-                                        `[PROBE 2 SUCCESS] Jitter metrics compiled. Max deviation: 0.8ms. Threshold: 4.5ms.`,
-                                        ...prev
-                                      ]);
-                                    } else if (currentProg === 80) {
-                                      setPingLogs(prev => [
-                                        `[STATE QUERY] Fetching peripheral battery state registers...`,
-                                        `[STATE QUERY RESULT] Capacity: ${selectedDevice.batteryPercent}%. SOH: ${deviceHealthPercent}%. Cycle life: ${remainingCycles} remaining. Temp: 28.1¬∞C.`,
-                                        ...prev
-                                      ]);
-                                    } else if (currentProg >= 100) {
-                                      clearInterval(interval);
-                                      setIsPingTesting(false);
-                                      playLocalSoundTest('tactical_click', 85);
-                                      setPingLogs(prev => [
-                                        `[COMPLETE] Diagnostics sequence concluded successfully. Link verified and fully calibrated!`,
-                                        ...prev
-                                      ]);
-                                    }
-                                  }, 250);
-                                }}
-                                className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-extrabold py-2.5 rounded-lg text-xs transition flex items-center justify-center gap-2 cursor-pointer font-sans uppercase tracking-wider"
-                              >
-                                {isPingTesting ? (
-                                  <>
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                    Testing Peripheral Connection ({pingProgress}%) ...
-                                  </>
-                                ) : (
-                                  <>
-                                    <span>‚ö°</span>
-                                    Trigger Diagnostic Connection Ping Test
-                                  </>
-                                )}
-                              </button>
-                            </div>
-
-                            <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 space-y-2">
-                              <div className="flex items-center justify-between text-[10px] font-mono">
-                                <span className="text-slate-500 uppercase font-semibold">Peripheral Diagnostic Telemetry Console</span>
-                                <button
-                                  id="clear-diag-logs-btn"
-                                  type="button"
-                                  onClick={() => setPingLogs([])}
-                                  className="text-slate-500 hover:text-white transition-colors uppercase text-[9px] bg-slate-900 border border-slate-850 px-2 py-0.5 rounded cursor-pointer"
-                                >
-                                  Clear Console
-                                </button>
-                              </div>
-
-                              <div className="h-32 bg-black/60 p-3 rounded-lg border border-slate-900 font-mono text-[10px] overflow-y-auto space-y-1.5 scrollbar-thin">
-                                {pingLogs.length > 0 ? (
-                                  pingLogs.map((log, idx) => (
-                                    <div key={idx} className={`leading-relaxed ${
-                                      log.includes('START') || log.includes('COMPLETE')
-                                        ? 'text-emerald-400 font-semibold' 
-                                        : log.includes('CALIBRATION') || log.includes('SELECT')
-                                        ? 'text-blue-400 font-semibold'
-                                        : 'text-slate-300'
-                                    }`}>
-                                      <span className="text-slate-600 mr-2">[{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                                      {log}
-                                    </div>
-                                  ))
-                                ) : (
-                                  <span className="text-slate-600 block text-center pt-8">Console empty. Trigger a ping test or configure RF settings to populate diagnostics log.</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-
-          {/* Tab 11: WiFi Recognition & Automation Rules */}
-          {activeTab === 'wifi' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              
-              {/* Header Info */}
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
-                      <Wifi className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-white text-sm">WiFi Recognition &amp; Automation</h3>
-                      <p className="text-[11px] text-slate-400">Establish local SSID triggers to automatically configure your opt-out broadcasts and censor modes when entering establishments.</p>
-                    </div>
-                  </div>
-                  
-                  {/* Master Switch */}
-                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-900 rounded-xl px-3 py-1.5">
-                    <span className="text-[10px] uppercase tracking-wider font-mono font-bold text-slate-400">
-                      Auto-Triggers:
-                    </span>
-                    <button
-                      type="button"
-                      id="wifi-automation-toggle"
-                      onClick={() => onChange({
-                        ...state,
-                        wifiRulesEnabled: !state.wifiRulesEnabled
-                      })}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        state.wifiRulesEnabled ? 'bg-emerald-500' : 'bg-slate-800'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                          state.wifiRulesEnabled ? 'translate-x-4' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Simulation Center */}
-              <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-950 pb-3">
-                  <div className="space-y-0.5">
-                    <h4 className="text-xs font-bold text-white font-sans uppercase tracking-wider">Connected WiFi Simulator</h4>
-                    <p className="text-[10px] text-slate-500">Test your automation rules by switching the current simulated connection of your phone/wearable.</p>
-                  </div>
-                  
-                  {state.currentWifiSsid ? (
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/40 px-2 py-0.5 rounded flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Connected to: {state.currentWifiSsid}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
-                      No WiFi Connection
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Selector card */}
-                  <div className="space-y-2">
-                    <label className="block text-[10px] text-slate-400 uppercase font-semibold font-mono">Simulate Wireless Connection</label>
-                    <div className="flex items-center gap-2">
-                      <select
-                        id="wifi-simulator-select"
-                        value={state.currentWifiSsid || ''}
-                        disabled={isSimulatingWifi}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setIsSimulatingWifi(true);
-                          
-                          // Trigger a nice transition animation to make it feel alive!
-                          setTimeout(() => {
-                            onChange({
-                              ...state,
-                              currentWifiSsid: value
-                            });
-                            setIsSimulatingWifi(false);
-                          }, 1000);
-                        }}
-                        className="flex-1 bg-slate-950 border border-slate-900 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/60 font-sans disabled:opacity-50"
-                      >
-                        <option value="">-- Disconnect WiFi --</option>
-                        <option value="Starbucks_Guest_WiFi">‚òï Starbucks_Guest_WiFi (Local Coffee Shop)</option>
-                        <option value="HQ_Corporate_Secure">üè¢ HQ_Corporate_Secure (Corporate Office)</option>
-                        <option value="Gold_Gym_Member">üí™ Gold_Gym_Member (Local Fitness Club)</option>
-                        {state.wifiRules?.filter(r => !['Starbucks_Guest_WiFi', 'HQ_Corporate_Secure', 'Gold_Gym_Member'].includes(r.ssid)).map((rule) => (
-                          <option key={rule.id} value={rule.ssid}>üì∂ {rule.ssid} ({rule.label})</option>
-                        ))}
-                      </select>
-                    </div>
-                    <p className="text-[10px] text-slate-500 italic">
-                      Changing simulated WiFi connection runs the recognition algorithm and triggers compliant rule protocols.
-                    </p>
-                  </div>
-
-                  {/* Telemetry Status card */}
-                  <div className="bg-slate-950/60 border border-slate-950 rounded-xl p-3.5 space-y-2 flex flex-col justify-between relative overflow-hidden">
-                    {isSimulatingWifi ? (
-                      <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center gap-2">
-                        <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
-                        <span className="text-[10px] font-mono text-emerald-400 font-bold animate-pulse uppercase tracking-wider">Handshaking Local AP...</span>
-                      </div>
-                    ) : null}
-
-                    <div className="space-y-1">
-                      <span className="text-[9px] uppercase font-bold text-slate-500 font-mono">Current Settings Engine</span>
-                      <div className="flex items-center gap-1.5 text-xs text-white">
-                        <span className="font-semibold">Shield Status:</span>
-                        <span className="font-mono text-emerald-400 font-bold uppercase bg-emerald-950/20 px-1.5 py-0.2 rounded border border-emerald-900/20 font-sans">
-                          {state.privacyLevel.toUpperCase().replace('_', ' ')}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-white">
-                        <span className="font-semibold">BLE Broadcast:</span>
-                        <span className={`font-semibold font-mono ${state.isBroadcasting ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          {state.isBroadcasting ? 'ACTIVE' : 'OFF'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-white">
-                        <span className="font-semibold">Facial Opt-Out:</span>
-                        <span className={`font-semibold font-mono ${state.facialRecognitionOptOut ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          {state.facialRecognitionOptOut ? 'ARMED' : 'OFF'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="text-[9px] text-slate-500 border-t border-slate-900 pt-1.5">
-                      {state.currentWifiSsid ? (
-                        state.wifiRules?.find(r => r.ssid === state.currentWifiSsid && r.isActive) ? (
-                          <span className="text-emerald-400 font-bold">‚úì Connected &amp; Rules applied automatically.</span>
-                        ) : (
-                          <span className="text-slate-400">‚úì Connected. No active rule configured for this SSID.</span>
-                        )
-                      ) : (
-                        <span className="text-slate-600">No WiFi connection simulated. Standard manual dials apply.</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Advanced Signal Scanner */}
-              <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-950 pb-3">
-                  <div className="space-y-0.5">
-                    <h4 className="text-xs font-bold text-white font-sans uppercase tracking-wider">Nearby WiFi Spectrogram Scanner</h4>
-                    <p className="text-[10px] text-slate-500">Scan 2.4Ghz/5.8Ghz bands to discover nearby wireless SSID broadcast access points.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsScanningWifiNetwork(true);
-                      setScannedWifiSuccess(null);
-                      playLocalSoundTest('sonar_chime', 80);
-                      setTimeout(() => {
-                        setScannedWifiNetworks([
-                          { ssid: 'Costa_Coffee_WPA3', label: 'Costa Coffee Shop', privacyLevel: 'strict_blur', dbm: -52 },
-                          { ssid: 'Oakwood_High_Guest', label: 'Oakwood High School Zone', privacyLevel: 'magic_removal', dbm: -67 },
-                          { ssid: 'Home_Secured_AX', label: 'Home Sanctuary', privacyLevel: 'none', dbm: -38 }
-                        ]);
-                        setIsScanningWifiNetwork(false);
-                        setScannedWifiSuccess('Scan complete! 3 nearby access points discovered.');
-                      }, 2000);
-                    }}
-                    disabled={isScanningWifiNetwork}
-                    className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/20 text-slate-950 disabled:text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded-lg transition flex items-center gap-1.5"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isScanningWifiNetwork ? 'animate-spin' : ''}`} />
-                    {isScanningWifiNetwork ? 'Scanning Airwaves...' : 'Scan Nearby Airwaves'}
-                  </button>
-                </div>
-
-                {isScanningWifiNetwork ? (
-                  <div className="py-8 flex flex-col items-center justify-center space-y-3 text-center">
-                    <div className="relative w-12 h-12 flex items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                      <Wifi className="w-6 h-6 text-emerald-400 animate-pulse" />
-                      <span className="absolute inset-0 rounded-full border border-emerald-400/40 animate-ping opacity-60" />
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase animate-pulse">Scanning SSID Beacons...</span>
-                      <p className="text-[9px] text-slate-500 max-w-[200px] leading-relaxed font-mono">Locking PLL frequency synthesizer... Measuring RSSI power indices...</p>
-                    </div>
-                  </div>
-                ) : scannedWifiNetworks.length > 0 ? (
-                  <div className="space-y-2.5">
-                    {scannedWifiSuccess && (
-                      <div className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950/20 border border-emerald-900/30 px-3 py-1.5 rounded-lg flex items-center justify-between">
-                        <span>‚úì {scannedWifiSuccess}</span>
-                        <button type="button" onClick={() => setScannedWifiSuccess(null)} className="text-slate-500 hover:text-white font-bold px-1 text-sm">√ó</button>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {scannedWifiNetworks.map((net) => {
-                        let powerColor = "text-emerald-400";
-                        if (net.dbm < -65) powerColor = "text-amber-400";
-                        return (
-                          <div key={net.ssid} className="bg-slate-950/60 border border-slate-900 rounded-xl p-3 flex flex-col justify-between space-y-3 hover:border-slate-800 transition">
-                            <div className="space-y-1 text-left">
-                              <div className="flex items-center justify-between">
-                                <span className="font-mono text-[10px] text-slate-300 font-bold truncate pr-1" title={net.ssid}>{net.ssid}</span>
-                                <span className={`font-mono text-[9px] font-bold shrink-0 ${powerColor}`}>{net.dbm} dBm</span>
-                              </div>
-                              <div className="text-[9px] text-slate-500 leading-tight">
-                                {net.label} ‚Ä¢ Default mode: <span className="text-slate-400 font-bold">{net.privacyLevel.replace('_', ' ')}</span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setNewWifiSsid(net.ssid);
-                                setNewWifiLabel(net.label);
-                                setNewWifiPrivacy(net.privacyLevel);
-                                setScannedWifiSuccess(`Pre-filled rules for ${net.ssid}! Click "Create Automation Trigger" below.`);
-                                playLocalSoundTest('tactical_click', 60);
-                              }}
-                              className="w-full py-1 bg-slate-900 hover:bg-slate-850 text-emerald-400 hover:text-emerald-300 text-[9px] font-bold uppercase rounded-lg transition border border-slate-800"
-                            >
-                              [+] Use SSID Profile
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-6 bg-slate-950/30 border border-slate-900 rounded-xl text-slate-500 text-xs">
-                    <p className="font-semibold">No scanned network profiles cached.</p>
-                    <p className="text-[10px] text-slate-600 mt-1">Click the scan button in the top right to discover surrounding broadcast SSIDs.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Add New Rule Form */}
-              <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-4">
-                <h4 className="text-xs font-bold text-white font-sans uppercase tracking-wider border-b border-slate-950 pb-2">Add SSID Automation Trigger</h4>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] text-slate-400 uppercase font-semibold font-sans">WiFi SSID (Network Name)</label>
-                    <input
-                      type="text"
-                      id="wifi-ssid-input"
-                      placeholder="e.g. My_Office_Network"
-                      value={newWifiSsid}
-                      onChange={(e) => setNewWifiSsid(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] text-slate-400 uppercase font-semibold font-sans">Establishment Label</label>
-                    <input
-                      type="text"
-                      id="wifi-label-input"
-                      placeholder="e.g. Main Office Headquarters"
-                      value={newWifiLabel}
-                      onChange={(e) => setNewWifiLabel(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] text-slate-400 uppercase font-semibold font-sans"> Censor Shield Level</label>
-                    <select
-                      value={newWifiPrivacy}
-                      onChange={(e) => setNewWifiPrivacy(e.target.value as PrivacyLevel)}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                    >
-                      <option value="strict_blur">üíß Gaussian Blur (Soft Depth Masking)</option>
-                      <option value="magic_removal">ü™Ñ Magic Eraser (Seamless Pixel Infill)</option>
-                      <option value="pixelate">üëæ Mosaic Pixelation (Classic Retro)</option>
-                      <option value="emoji">üòú Emoji Overlay (Fun / Discrete Masking)</option>
-                      <option value="black_bar">‚¨õ Solid Black-Bar Censorship</option>
-                      <option value="none">üîì None (Opt-In Discovery Mode)</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-6 pt-3">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={newWifiBroadcast}
-                        onChange={(e) => setNewWifiBroadcast(e.target.checked)}
-                        className="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500/30"
-                      />
-                      <span className="text-xs text-slate-300 font-sans">Enable Broadcast</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={newWifiFaceOptOut}
-                        onChange={(e) => setNewWifiFaceOptOut(e.target.checked)}
-                        className="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-emerald-500/30"
-                      />
-                      <span className="text-xs text-slate-300 font-sans">Face Registry Opt-Out</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex justify-end border-t border-slate-950 pt-3">
-                  <button
-                    type="button"
-                    id="add-wifi-rule-btn"
-                    onClick={() => {
-                      if (!newWifiSsid.trim() || !newWifiLabel.trim()) return;
-                      const newRule: WifiTriggerRule = {
-                        id: 'wifi-' + Date.now(),
-                        ssid: newWifiSsid.trim(),
-                        label: newWifiLabel.trim(),
-                        privacyLevel: newWifiPrivacy,
-                        broadcastEnabled: newWifiBroadcast,
-                        facialRecognitionOptOut: newWifiFaceOptOut,
-                        isActive: true
-                      };
-                      
-                      const updatedRules = [...(state.wifiRules || []), newRule];
-                      onChange({
-                        ...state,
-                        wifiRules: updatedRules
-                      });
-
-                      setNewWifiSsid('');
-                      setNewWifiLabel('');
-                      setNewWifiPrivacy('strict_blur');
-                      setNewWifiBroadcast(true);
-                      setNewWifiFaceOptOut(true);
-
-                      window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
-                        detail: { 
-                          title: 'SSID Trigger Rule Added',
-                          body: `"${newRule.label}" SSID trigger defined successfully. Connecting to "${newRule.ssid}" will apply automated settings.`,
-                          type: 'blocking'
-                        } 
-                      }));
-                    }}
-                    disabled={!newWifiSsid.trim() || !newWifiLabel.trim()}
-                    className="px-5 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition font-sans disabled:opacity-40"
-                  >
-                    Add WiFi Automation Rule
-                  </button>
-                </div>
-              </div>
-
-              {/* Rules List */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-950 pb-2">
-                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-sans">Configured WiFi Automation Rules</h4>
-                  <span className="text-[10px] font-mono text-emerald-400 font-bold">{(state.wifiRules || []).length} Rules Active</span>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3">
-                  {!(state.wifiRules && state.wifiRules.length > 0) ? (
-                    <div className="text-center py-6 text-slate-600 text-xs bg-slate-900/20 border border-slate-900 rounded-xl">
-                      No WiFi recognition rules configured yet.
-                    </div>
-                  ) : (
-                    state.wifiRules.map((rule) => {
-                      const isCurrentMatch = state.currentWifiSsid === rule.ssid;
-                      return (
-                        <div 
-                          key={rule.id} 
-                          id={`wifi-rule-${rule.id}`}
-                          className={`rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition ${
-                            isCurrentMatch 
-                              ? 'bg-emerald-950/15 border-2 border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.06)]' 
-                              : 'bg-slate-900/40 border border-slate-800 hover:border-slate-700/80'
-                          }`}
-                        >
-                          <div className="space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-bold text-white text-xs">{rule.label}</span>
-                              <span className="text-[10px] bg-slate-800 border border-slate-700 text-slate-400 px-2 py-0.2 rounded font-mono font-bold">{rule.ssid}</span>
-                              
-                              {isCurrentMatch && (
-                                <span className="text-[9px] bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-2 py-0.2 rounded font-bold uppercase tracking-wider animate-pulse font-mono flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                  Active Match
-                                </span>
-                              )}
-                            </div>
-                            
-                            {/* Rule detail tags */}
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400 font-sans">
-                              <span className="flex items-center gap-1">
-                                <span className="text-slate-600">‚Ä¢</span> Censor style: <span className="text-slate-200 font-semibold uppercase">{rule.privacyLevel.replace('_', ' ')}</span>
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <span className="text-slate-600">‚Ä¢</span> Broadcasting: <span className={`font-semibold ${rule.broadcastEnabled ? 'text-emerald-400' : 'text-slate-400'}`}>{rule.broadcastEnabled ? 'ON' : 'OFF'}</span>
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <span className="text-slate-600">‚Ä¢</span> Facial Opt-Out: <span className={`font-semibold ${rule.facialRecognitionOptOut ? 'text-emerald-400' : 'text-slate-400'}`}>{rule.facialRecognitionOptOut ? 'ON' : 'OFF'}</span>
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3 self-end md:self-auto shrink-0">
-                            {/* Toggle active */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = (state.wifiRules || []).map((r) => 
-                                  r.id === rule.id ? { ...r, isActive: !r.isActive } : r
-                                );
-                                onChange({
-                                  ...state,
-                                  wifiRules: updated
-                                });
-                              }}
-                              className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition ${
-                                rule.isActive 
-                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
-                                  : 'bg-slate-950 border-slate-900 text-slate-500 hover:text-slate-400'
-                              }`}
-                            >
-                              {rule.isActive ? 'Trigger Armed' : 'Trigger Silenced'}
-                            </button>
-
-                            {/* Delete */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = (state.wifiRules || []).filter((r) => r.id !== rule.id);
-                                onChange({
-                                  ...state,
-                                  wifiRules: updated
-                                });
-                              }}
-                              className="p-1.5 rounded-lg bg-slate-950/40 hover:bg-rose-500/15 border border-slate-900 hover:border-rose-500/35 text-slate-500 hover:text-rose-400 transition"
-                              title="Delete rule"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-            </motion.div>
-          )}
-
-          {/* Tab 12: Biometric Authentication & WebAuthn Security */}
-          {activeTab === 'biometric' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              
-              {/* Header Info with Master Lock Switch */}
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-5 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 bg-rose-500/10 text-rose-400 rounded-lg shrink-0">
-                      <Fingerprint className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-white text-sm">Biometric Security Vault</h3>
-                      <p className="text-[11px] text-slate-400">Lock the user interface using WebAuthn standard public-key cryptography to prevent tampering with your opt-out settings.</p>
-                    </div>
-                  </div>
-                  
-                  {/* Master Lock Switch */}
-                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-900 rounded-xl px-3 py-1.5 self-start sm:self-auto shrink-0">
-                    <span className="text-[10px] uppercase tracking-wider font-mono font-bold text-slate-400">
-                      App Lock Shield:
-                    </span>
-                    <button
-                      type="button"
-                      id="biometric-lock-toggle"
-                      onClick={() => {
-                        if (!state.biometricRegistered) {
-                          // Prompt registration first
-                          window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
-                            detail: { 
-                              title: 'Passkey Required',
-                              body: 'Please register a biometric passkey below before enabling the automatic app lock feature.',
-                              type: 'child_blocking'
-                            } 
-                          }));
-                          return;
-                        }
-                        
-                        const updatedVal = !state.biometricLockEnabled;
-                        onChange({
-                          ...state,
-                          biometricLockEnabled: updatedVal
-                        });
-
-                        setBiometricLogs(prev => [
-                          `[CONFIG] Biometric application lock ${updatedVal ? 'ENABLED' : 'DISABLED'}.`,
-                          ...prev
-                        ]);
-
-                        window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
-                          detail: { 
-                            title: updatedVal ? 'App Lock Shields Armed' : 'App Lock Disarmed',
-                            body: updatedVal 
-                              ? 'Your BlurBubble dashboard is now shielded by WebAuthn. Manual lock button is now available in the top menu.'
-                              : 'Biometric authorization bypassed. Anyone can now access this screen.',
-                            type: 'blocking'
-                          } 
-                        }));
-                      }}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        state.biometricLockEnabled ? 'bg-rose-500' : 'bg-slate-800'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                          state.biometricLockEnabled ? 'translate-x-4' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status & Enrollment Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Enrollment Card */}
-                <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider border-b border-slate-950 pb-2 flex items-center gap-1.5">
-                      <Key className="w-4 h-4 text-rose-400" />
-                      WebAuthn Passkey Setup
-                    </h4>
-                    
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      Enroll this device's secure hardware enclave (Touch ID, Face ID, Windows Hello, or Android Biometrics) to generate a unique public/private key pair.
-                    </p>
-
-                    {state.biometricRegistered ? (
-                      <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3.5 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span className="text-xs font-bold text-emerald-400 font-sans">Passkey Registered &amp; Ready</span>
-                        </div>
-                        <div className="text-[10px] text-slate-300 space-y-1 font-mono">
-                          <div><span className="text-slate-500">Name:</span> {state.biometricRelyingParty || 'My Biometric Key'}</div>
-                          <div><span className="text-slate-500">Created:</span> {state.biometricEnrollmentDate}</div>
-                          <div><span className="text-slate-500">Cred ID:</span> <span className="text-rose-300">{state.biometricCredentialId?.substring(0, 20)}...</span></div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-3.5 text-center text-slate-500 text-xs">
-                        No passkey enrolled. Enroll below to establish your secure bystander identity.
-                      </div>
-                    )}
-
-                    <div className="space-y-2.5">
-                      <label className="block text-[10px] text-slate-400 uppercase font-mono font-bold">Passkey Nickname</label>
-                      <input
-                        type="text"
-                        value={customPasskeyName}
-                        onChange={(e) => setCustomPasskeyName(e.target.value)}
-                        placeholder="e.g. iPhone Face ID / MacBook Touch ID"
-                        className="w-full bg-slate-950 border border-slate-850 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500/60 font-sans"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-950 flex flex-wrap gap-2.5">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        setIsRegisteringBiometric(true);
-                        setBiometricStep(0);
-                        const timestamp = new Date().toLocaleTimeString();
-                        
-                        setBiometricLogs(prev => [
-                          `[${timestamp}] Starting credential registration flow...`,
-                          `[${timestamp}] navigator.credentials.create() triggered with ES256 params.`,
-                          ...prev
-                        ]);
-
-                        try {
-                          // Standard WebAuthn creation challenge parameters
-                          const challenge = new Uint8Array(32);
-                          window.crypto.getRandomValues(challenge);
-                          const userId = new Uint8Array(16);
-                          window.crypto.getRandomValues(userId);
-
-                          const rpId = window.location.hostname || "localhost";
-
-                          const options: CredentialCreationOptions = {
-                            publicKey: {
-                              challenge: challenge,
-                              rp: {
-                                name: "BlurBubble Shield Protocol",
-                                id: rpId
-                              },
-                              user: {
-                                id: userId,
-                                name: "blur_citizen_" + Math.floor(Math.random() * 10000),
-                                displayName: "BlurBubble Authorized Citizen"
-                              },
-                              pubKeyCredParams: [
-                                { type: "public-key", alg: -7 },  // ES256 (ECDSA)
-                                { type: "public-key", alg: -257 } // RS256 (RSA)
-                              ],
-                              authenticatorSelection: {
-                                userVerification: "required",
-                                residentKey: "preferred"
-                              },
-                              timeout: 10000
-                            }
-                          };
-
-                          setBiometricStep(1); // Device prompt
-                          setBiometricLogs(prev => [
-                            `[${new Date().toLocaleTimeString()}] Invoking browser secure hardware enclave dialog...`,
-                            ...prev
-                          ]);
-
-                          // Real WebAuthn call
-                          const credential = await navigator.credentials.create(options) as PublicKeyCredential;
-                          
-                          if (credential) {
-                            setBiometricStep(2); // signature / verification
-                            const credIdBase64 = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
-                            
-                            const regDate = new Date().toLocaleString();
-                            onChange({
-                              ...state,
-                              biometricRegistered: true,
-                              biometricRelyingParty: customPasskeyName.trim() || 'My Biometric Key',
-                              biometricEnrollmentDate: regDate,
-                              biometricCredentialId: credIdBase64
-                            });
-
-                            setBiometricStep(3); // success
-                            setBiometricLogs(prev => [
-                              `[${new Date().toLocaleTimeString()}] Success! Decrypted WebAuthn signature received.`,
-                              `[INFO] Public Key Credential ID: ${credIdBase64}`,
-                              `[INFO] ClientDataJSON digest verified. Algorithm verified as ES256.`,
-                              ...prev
-                            ]);
-
-                            window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
-                              detail: { 
-                                title: 'Passkey Enrolled!',
-                                body: `"${customPasskeyName}" has been established as your secure hardware anchor. App lock can now be safely enabled.`,
-                                type: 'blocking'
-                              } 
-                            }));
-                          }
-                        } catch (err: any) {
-                          console.warn("Direct WebAuthn credentials.create failed:", err);
-                          setBiometricLogs(prev => [
-                            `[WARN] Hardware enrollment failed or was cancelled. Details: ${err.message}`,
-                            `[INFO] Launching isolated virtual zero-knowledge simulator...`,
-                            ...prev
-                          ]);
-
-                          // Trigger high-fidelity simulator
-                          setBiometricStep(1); // Showing user feedback
-                          setTimeout(() => {
-                            setBiometricStep(2); // Simulating local attestation keys
-                            setBiometricLogs(prev => [
-                              `[SIMULATOR] Generating ephemeral elliptic curve keypair locally...`,
-                              `[SIMULATOR] SECP256R1 parameters configured with public key G-factor verification.`,
-                              ...prev
-                            ]);
-                            
-                            setTimeout(() => {
-                              const mockCredId = "virtual_ecc_" + Math.random().toString(16).substring(2, 10) + "_" + Date.now();
-                              const regDate = new Date().toLocaleString();
-                              
-                              onChange({
-                                ...state,
-                                biometricRegistered: true,
-                                biometricRelyingParty: customPasskeyName.trim() || 'My Biometric Key (Simulated)',
-                                biometricEnrollmentDate: regDate,
-                                biometricCredentialId: mockCredId
-                              });
-
-                              setBiometricStep(3); // success
-                              setBiometricLogs(prev => [
-                                `[SIMULATOR] [SUCCESS] Signed attestation statement received!`,
-                                `[SIMULATOR] Virtual Credential Anchor: ${mockCredId}`,
-                                `[SIMULATOR] Simulated hardware token successfully bound to localStorage key.`,
-                                ...prev
-                              ]);
-
-                              window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
-                                detail: { 
-                                  title: 'Passkey Created (Simulated)',
-                                  body: `Direct hardware access is restricted inside iframe context. Ephemeral hardware credentials established successfully in client-side state.`,
-                                  type: 'blocking'
-                                } 
-                              }));
-                            }, 1200);
-                          }, 1000);
-                        } finally {
-                          setIsRegisteringBiometric(false);
-                        }
-                      }}
-                      className="flex-1 bg-slate-950 text-white hover:text-rose-400 border border-slate-900 hover:border-rose-500/40 text-xs py-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5"
-                    >
-                      <Fingerprint className="w-3.5 h-3.5" />
-                      {state.biometricRegistered ? 'Re-enroll Passkey' : 'Enroll Passkey'}
-                    </button>
-
-                    {state.biometricRegistered && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onChange({
-                            ...state,
-                            biometricRegistered: false,
-                            biometricLockEnabled: false,
-                            biometricEnrollmentDate: undefined,
-                            biometricCredentialId: undefined,
-                            biometricRelyingParty: undefined
-                          });
-
-                          setBiometricLogs(prev => [
-                            `[CONFIG] Cleared current WebAuthn credentials from secure store. App lock disabled.`,
-                            ...prev
-                          ]);
-
-                          window.dispatchEvent(new CustomEvent('trigger-test-alert', { 
-                            detail: { 
-                              title: 'Passkey Revoked',
-                              body: 'All local cryptographic credentials have been purged. Your shield dashboard is no longer restricted.',
-                              type: 'child_blocking'
-                            } 
-                          }));
-                        }}
-                        className="px-3 bg-slate-950 hover:bg-rose-500/10 border border-slate-900 hover:border-rose-500/30 text-slate-500 hover:text-rose-400 text-xs py-2 rounded-lg font-bold transition"
-                      >
-                        Purge Keys
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cryptographic Log Card */}
-                <div className="bg-slate-950/70 border border-slate-900 rounded-xl p-5 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase font-mono tracking-widest flex items-center justify-between border-b border-slate-900 pb-2">
-                      <span>Cryptographic Handshake Logs</span>
-                      <span className="text-[9px] bg-slate-900 px-1.5 py-0.5 rounded text-rose-400 font-bold">WEBAUTHN v2</span>
-                    </h4>
-
-                    {/* Step Visualizer */}
-                    <div className="grid grid-cols-4 gap-1 pb-1">
-                      <div className={`h-1.5 rounded-full transition ${biometricStep >= 0 ? 'bg-rose-500 animate-pulse' : 'bg-slate-900'}`} title="1. Challenge" />
-                      <div className={`h-1.5 rounded-full transition ${biometricStep >= 1 ? 'bg-rose-500 animate-pulse' : 'bg-slate-900'}`} title="2. Device Enclave" />
-                      <div className={`h-1.5 rounded-full transition ${biometricStep >= 2 ? 'bg-rose-500 animate-pulse' : 'bg-slate-900'}`} title="3. Attestation Signature" />
-                      <div className={`h-1.5 rounded-full transition ${biometricStep >= 3 ? 'bg-emerald-500' : 'bg-slate-900'}`} title="4. Final Verified" />
-                    </div>
-
-                    <div className="bg-black/40 rounded-lg p-3 border border-slate-950 text-[10px] font-mono text-slate-400 h-[175px] overflow-y-auto space-y-1.5 scrollbar-thin">
-                      {biometricLogs.map((logStr, idx) => {
-                        let isSuccess = logStr.includes('[SUCCESS]') || logStr.includes('[CONFIG]');
-                        let isSim = logStr.includes('[SIMULATOR]');
-                        let isWarn = logStr.includes('[WARN]');
-                        return (
-                          <div 
-                            key={idx} 
-                            className={`leading-normal border-l-2 pl-1.5 py-0.2 ${
-                              isSuccess ? 'text-emerald-400 border-emerald-500' : 
-                              isWarn ? 'text-rose-400 border-rose-500 font-bold' : 
-                              isSim ? 'text-amber-400 border-amber-500' : 
-                              'text-slate-400 border-slate-800'
-                            }`}
-                          >
-                            {logStr}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-slate-900 mt-3 font-sans">
-                    <span>WebAuthn Supported: {window.PublicKeyCredential ? 'YES (Device Compatible)' : 'NO (User Agent Ignored)'}</span>
-                    <button
-                      type="button"
-                      onClick={() => setBiometricLogs(["System logs cleared. Listening for cryptographic triggers."])}
-                      className="text-slate-500 hover:text-white"
-                    >
-                      Clear Logs
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Technical Specifications of the Cryptographic Protection */}
-              <div className="bg-slate-900/20 border border-slate-850 rounded-xl p-5 space-y-4">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-sans border-b border-slate-950 pb-2">
-                  Zero-Trust Protection Specifications
-                </h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className="space-y-1 bg-slate-950/40 p-3.5 rounded-xl border border-slate-900">
-                    <span className="font-bold text-white block">ECC Secp256k1 Signature</span>
-                    <p className="text-slate-400 text-[11px] leading-relaxed">
-                      Every unlock challenge requires hardware-locked elliptic curve cryptographic signatures that cannot be intercepted by background processes.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1 bg-slate-950/40 p-3.5 rounded-xl border border-slate-900">
-                    <span className="font-bold text-white block">No Key Storage on Server</span>
-                    <p className="text-slate-400 text-[11px] leading-relaxed">
-                      Your biometric identifiers are strictly isolated in your phone's Secure Enclave. Only the public key attestation is ever accessed.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1 bg-slate-950/40 p-3.5 rounded-xl border border-slate-900">
-                    <span className="font-bold text-white block">IFrame Context Awareness</span>
-                    <p className="text-slate-400 text-[11px] leading-relaxed">
-                      Complies strictly with cross-origin credential frame sandboxes, auto-falling back to local zero-knowledge cryptography when frame policies are missing.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-            </motion.div>
-          )}
-
-          {/* Tab 13: Privacy Governance Hierarchy */}
-          {activeTab === 'hierarchy' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {/* Header block with visual layout */}
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold bg-violet-500/10 border border-violet-500/30 text-violet-400 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                        Rule Engine v3
-                      </span>
-                      <span className="text-slate-500 text-[11px]">‚Ä¢</span>
-                      <span className="text-slate-400 text-xs">Authored Rules: 6 Layers</span>
-                    </div>
-                    <h3 className="text-lg font-bold text-white font-sans">Privacy Governance Hierarchy</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
-                      Configure the precedence chain of your bystander privacy policies. When automated triggers, geo-fenced perimeters, family whitelists, or time-based schedules conflict, the policy ranked highest in the stack will govern your opt-out beacon.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-slate-400 font-medium">Hierarchy System:</span>
-                    <button
-                      type="button"
-                      id="hierarchy-system-toggle"
-                      onClick={() => onChange({ ...state, hierarchyRulesEnabled: !(state.hierarchyRulesEnabled !== false) })}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        (state.hierarchyRulesEnabled !== false) ? 'bg-violet-500' : 'bg-slate-800'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                          (state.hierarchyRulesEnabled !== false) ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Total Lockdown Mode Section */}
-              <div className={`p-6 rounded-2xl border transition-all ${
-                state.totalLockdownMode 
-                  ? 'bg-rose-950/20 border-rose-500/40 shadow-lg shadow-rose-950/20' 
-                  : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'
-              }`}>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                  <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center border transition-all ${
-                      state.totalLockdownMode 
-                        ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 animate-pulse' 
-                        : 'bg-slate-950/50 border-slate-800 text-slate-500'
-                    }`}>
-                      <ShieldAlert className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-white">Total Lockdown Mode</h4>
-                        {state.totalLockdownMode && (
-                          <span className="text-[9px] font-bold bg-rose-500/25 border border-rose-500/50 text-rose-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-mono animate-pulse">
-                            Armed
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-                        Instantly overrides all whitelists, trust circles, schedules, or family exemptions. Restricts your opt-out signal to maximum, absolute shielding. Safe for high-privacy environments or volatile public scenarios.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-4">
-                    <button
-                      type="button"
-                      id="total-lockdown-toggle"
-                      onClick={() => {
-                        const newLockdown = !state.totalLockdownMode;
-                        onChange({ 
-                          ...state, 
-                          totalLockdownMode: newLockdown 
-                        });
-                        window.dispatchEvent(new CustomEvent('trigger-test-alert', {
-                          detail: {
-                            title: newLockdown ? 'TOTAL LOCKDOWN ACTIVATED' : 'TOTAL LOCKDOWN DEACTIVATED',
-                            body: newLockdown 
-                              ? 'All whitelists, overrides, and sharing keys suspended. Strict Censor Mode active.'
-                              : 'Normal governance hierarchy restored.',
-                            type: newLockdown ? 'error' : 'success'
-                          }
-                        }));
-                      }}
-                      className={`px-5 py-2.5 rounded-xl text-xs font-bold font-mono tracking-wider transition ${
-                        state.totalLockdownMode
-                          ? 'bg-rose-500 text-white hover:bg-rose-600 shadow-md shadow-rose-500/10'
-                          : 'bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-rose-400 hover:text-rose-300'
-                      }`}
-                    >
-                      {state.totalLockdownMode ? 'DISABLE LOCKDOWN' : 'ACTIVATE LOCKDOWN'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Hierarchy Stack Panel */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
-                {/* List of Rules - Reorderable Stack (7 Cols) */}
-                <div className="lg:col-span-7 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
-                        Rule Precedence Chain
-                      </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Order rules from top to bottom. Higher elements override lower elements.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onChange({
-                        ...state,
-                        governanceHierarchy: ['lockdown', 'strict_rules', 'perimeter_shields', 'allow_list', 'wifi_triggers', 'smart_schedules']
-                      })}
-                      className="text-[10px] text-violet-400 hover:text-violet-300 flex items-center gap-1 transition"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Reset to Defaults
-                    </button>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {(state.governanceHierarchy || ['lockdown', 'strict_rules', 'perimeter_shields', 'allow_list', 'wifi_triggers', 'smart_schedules']).map((ruleId, index, arr) => {
-                      const ruleInfo = HIERARCHY_DETAILS[ruleId] || {
-                        title: ruleId,
-                        desc: "No description available.",
-                        icon: "Layers",
-                        badgeColor: "text-slate-400 bg-slate-500/10 border-slate-500/30"
-                      };
-                      
-                      const isLockedOut = state.totalLockdownMode && ruleId !== 'lockdown';
-                      
-                      const moveUp = () => {
-                        if (index === 0) return;
-                        const newArr = [...arr];
-                        const temp = newArr[index];
-                        newArr[index] = newArr[index - 1];
-                        newArr[index - 1] = temp;
-                        onChange({ ...state, governanceHierarchy: newArr });
-                      };
-
-                      const moveDown = () => {
-                        if (index === arr.length - 1) return;
-                        const newArr = [...arr];
-                        const temp = newArr[index];
-                        newArr[index] = newArr[index + 1];
-                        newArr[index + 1] = temp;
-                        onChange({ ...state, governanceHierarchy: newArr });
-                      };
-
-                      return (
-                        <div 
-                          key={ruleId}
-                          className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                            isLockedOut
-                              ? 'bg-slate-950/25 border-slate-900 opacity-50'
-                              : ruleId === 'lockdown' && state.totalLockdownMode
-                                ? 'bg-rose-950/20 border-rose-500/30'
-                                : 'bg-slate-950/40 border-slate-800/80 hover:border-slate-850'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3.5 flex-1 min-w-0 pr-4">
-                            {/* Visual Priority Rank Indicator */}
-                            <div className="flex flex-col items-center justify-center w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 shrink-0">
-                              <span className="text-[10px] text-slate-500 uppercase font-mono font-bold leading-none">Rank</span>
-                              <span className={`text-xs font-bold leading-none mt-0.5 ${
-                                index === 0 ? 'text-violet-400' : 'text-slate-300'
-                              }`}>
-                                {index + 1}
-                              </span>
-                            </div>
-
-                            {/* Icon & Rule Content */}
-                            <div className="shrink-0">
-                              {getIcon(ruleId)}
-                            </div>
-
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-xs text-white truncate font-sans">
-                                  {ruleInfo.title}
-                                </span>
-                                {isLockedOut && (
-                                  <span className="text-[8px] bg-rose-500/10 border border-rose-500/20 text-rose-400 px-1 py-0.1 rounded uppercase font-bold tracking-wide font-mono shrink-0">
-                                    Muted by Lockdown
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[10.5px] text-slate-400 leading-normal">
-                                {ruleInfo.desc}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Control arrows */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={moveUp}
-                              disabled={index === 0 || isLockedOut}
-                              className={`p-1.5 rounded-lg border transition ${
-                                index === 0 || isLockedOut
-                                  ? 'border-slate-900 text-slate-700 cursor-not-allowed'
-                                  : 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
-                              }`}
-                              title="Move Up"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={moveDown}
-                              disabled={index === arr.length - 1 || isLockedOut}
-                              className={`p-1.5 rounded-lg border transition ${
-                                index === arr.length - 1 || isLockedOut
-                                  ? 'border-slate-900 text-slate-700 cursor-not-allowed'
-                                  : 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900'
-                              }`}
-                              title="Move Down"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Conflict Simulation & Sandbox (5 Cols) */}
-                <div className="lg:col-span-5 space-y-4">
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
-                      Policy Resolution Sandbox
-                    </h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Select a conflict scenario to see how your active hierarchy resolves it in real-time.
-                    </p>
-                  </div>
-
-                  {/* Scenarios Buttons List */}
-                  <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 space-y-2">
-                    {[
-                      { id: 'scen-1', title: "Dad's Vlog Exception vs. Strict Shield", desc: "Evaluate whitelists against active manual broadcasts." },
-                      { id: 'scen-2', title: "School Perimeter vs. Corporate WiFi Off", desc: "Evaluate geo-fences against SSID automation parameters." },
-                      { id: 'scen-3', title: "Escrow Key Warrant vs. System State", desc: "Evaluate court-ordered security handshakes." }
-                    ].map((scen) => {
-                      const isActive = selectedScenario === scen.id;
-                      return (
-                        <button
-                          key={scen.id}
-                          type="button"
-                          onClick={() => setSelectedScenario(scen.id)}
-                          className={`w-full text-left p-3 rounded-lg border transition ${
-                            isActive
-                              ? 'bg-violet-950/20 border-violet-500/30 shadow-sm'
-                              : 'bg-slate-900/20 border-slate-900 hover:border-slate-800'
-                          }`}
-                        >
-                          <span className={`text-xs font-bold block ${isActive ? 'text-violet-400' : 'text-slate-300'}`}>
-                            {scen.title}
-                          </span>
-                          <span className="text-[10px] text-slate-400 mt-0.5 block leading-normal">
-                            {scen.desc}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Terminal Simulation Logs */}
-                  <div className="bg-black/80 rounded-xl border border-slate-900 p-4 space-y-3 shadow-inner">
-                    <div className="flex items-center justify-between border-b border-slate-900 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-pulse" />
-                        <span className="text-[9.5px] font-bold text-slate-400 font-mono tracking-wider">RESOLVER_CORE_EXEC</span>
-                      </div>
-                      <span className="text-[9px] bg-slate-900 px-1.5 py-0.5 rounded text-violet-400 font-mono uppercase">
-                        Dynamic Sim
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5 font-mono text-[10.5px] h-[180px] overflow-y-auto scrollbar-thin text-slate-300 leading-normal">
-                      {((scenId: string, hierarchyArr: string[], isLockdownActive: boolean) => {
-                        const logs: string[] = [];
-                        const timestamp = new Date().toLocaleTimeString();
-                        logs.push(`[${timestamp}] üî¨ INITIALIZING PRIVACY RESOLVER...`);
-                        
-                        if (isLockdownActive) {
-                          logs.push(`[${timestamp}] ‚ö†Ô∏è SYSTEM ALERT: TOTAL LOCKDOWN MODE IS ARMED.`);
-                          logs.push(`[${timestamp}] üõ°Ô∏è [RESOLUTION] Override requests are strictly BLOCKED.`);
-                          logs.push(`[${timestamp}] üö´ Outcome: Maximum opt-out enforced. Whitelist suspended.`);
-                          return logs;
-                        }
-
-                        if (scenId === 'scen-1') {
-                          logs.push(`[${timestamp}] ‚ÑπÔ∏è Scenario: Dad's Vlog vs. Emergency Strict Shield`);
-                          logs.push(`[${timestamp}] üì° Active Rule: Strict Restrictions (Censor Active)`);
-                          logs.push(`[${timestamp}] üìπ Observer: Dad's Camera (@family_vlogs Allowed)`);
-                          
-                          const rankStrict = hierarchyArr.indexOf('strict_rules');
-                          const rankAllow = hierarchyArr.indexOf('allow_list');
-                          
-                          logs.push(`[${timestamp}] üîç Checking hierarchy precedence:`);
-                          logs.push(`    - 'Strict Restrictions' rank: #${rankStrict !== -1 ? rankStrict + 1 : 2}`);
-                          logs.push(`    - 'Allow List Exceptions' rank: #${rankAllow !== -1 ? rankAllow + 1 : 4}`);
-                          
-                          if (rankStrict < rankAllow) {
-                            logs.push(`[${timestamp}] ‚öñÔ∏è Precedence won: 'Strict Restrictions' overrides whitelists.`);
-                            logs.push(`[${timestamp}] üîí [RESOLUTION] Dad's camera is strictly BLURRED.`);
-                            logs.push(`[${timestamp}] üõ°Ô∏è Outcome: Privacy prioritized over family exception.`);
-                          } else {
-                            logs.push(`[${timestamp}] ‚öñÔ∏è Precedence won: 'Allow List' overrides strict rules.`);
-                            logs.push(`[${timestamp}] üîì [RESOLUTION] Dad's camera is allowed bypass.`);
-                            logs.push(`[${timestamp}] üëÅÔ∏è Outcome: Whitelist bypass granted.`);
-                          }
-                        } else if (scenId === 'scen-2') {
-                          logs.push(`[${timestamp}] ‚ÑπÔ∏è Scenario: Perimeter Zone vs. WiFi Rules`);
-                          logs.push(`[${timestamp}] üìç Location: School perimeter (Beacons Enforcing Opt-Out)`);
-                          logs.push(`[${timestamp}] üì∂ WiFi Trigger: Corporate WiFi (Broadcasting Censor Off)`);
-                          
-                          const rankPerimeter = hierarchyArr.indexOf('perimeter_shields');
-                          const rankWifi = hierarchyArr.indexOf('wifi_triggers');
-                          
-                          logs.push(`[${timestamp}] üîç Checking hierarchy precedence:`);
-                          logs.push(`    - 'Perimeter Zones' rank: #${rankPerimeter !== -1 ? rankPerimeter + 1 : 3}`);
-                          logs.push(`    - 'WiFi Automation' rank: #${rankWifi !== -1 ? rankWifi + 1 : 5}`);
-                          
-                          if (rankPerimeter < rankWifi) {
-                            logs.push(`[${timestamp}] ‚öñÔ∏è Precedence won: 'Perimeter Zones' overrides WiFi Rules.`);
-                            logs.push(`[${timestamp}] üîí [RESOLUTION] Local opt-out beacon enforces STRICT_BLUR.`);
-                            logs.push(`[${timestamp}] üõ°Ô∏è Outcome: Physical geo-fence remains active.`);
-                          } else {
-                            logs.push(`[${timestamp}] ‚öñÔ∏è Precedence won: 'WiFi Automation' overrides geo-fences.`);
-                            logs.push(`[${timestamp}] üîì [RESOLUTION] Broadcast disabled via WiFi profile trigger.`);
-                            logs.push(`[${timestamp}] üëÅÔ∏è Outcome: Perimeter shield bypassed.`);
-                          }
-                        } else if (scenId === 'scen-3') {
-                          logs.push(`[${timestamp}] ‚ÑπÔ∏è Scenario: LEA Key Escrow Warrant Override`);
-                          logs.push(`[${timestamp}] üìú Request: Public key attestation lookup warrant`);
-                          logs.push(`[${timestamp}] üîç Checking lockdown status:`);
-                          logs.push(`    - Total Lockdown is currently OFF.`);
-                          logs.push(`[${timestamp}] üîì [RESOLUTION] Warrant remains queryable by court key.`);
-                          logs.push(`[${timestamp}] üìú Outcome: Warrant processed via multi-sig protocol.`);
-                        }
-
-                        return logs;
-                      })(selectedScenario, state.governanceHierarchy || ['lockdown', 'strict_rules', 'perimeter_shields', 'allow_list', 'wifi_triggers', 'smart_schedules'], !!state.totalLockdownMode).map((log, idx) => (
-                        <div key={idx} className={
-                          log.includes('‚ö†Ô∏è') || log.includes('üö´') || log.includes('Precedence won')
-                            ? 'text-rose-400 font-semibold'
-                            : log.includes('üõ°Ô∏è') || log.includes('[RESOLUTION]')
-                              ? 'text-emerald-400 font-bold'
-                              : log.includes('üîç')
-                                ? 'text-violet-300'
-                                : 'text-slate-400'
-                        }>
-                          {log}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="border-t border-slate-900 pt-2 flex items-center justify-between text-[9.5px] text-slate-500">
-                      <span>Status: ACTIVE RESOLUTION</span>
-                      <span className="text-violet-400">Order Refreshed</span>
-                    </div>
-                  </div>
-
-                </div>
-
-              </div>
-            </motion.div>
-          )}
-
-          {/* Fullscreen Wallet Overlay for Presenting to Authorities */}
-          <AnimatePresence>
-            {isPresenting && (
-              <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-slate-950/98 z-50 flex items-center justify-center p-4 backdrop-blur-xl"
-              >
-                <div className="w-full max-w-sm bg-slate-900 border-2 border-emerald-500 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between shadow-[0_0_40px_rgba(16,185,129,0.15)] h-[620px]">
-                  {/* Close Button */}
-                  <button
-                    type="button"
-                    onClick={() => setIsPresenting(false)}
-                    className="absolute top-4 right-4 bg-slate-950 border border-slate-800 text-slate-400 hover:text-white px-3 py-1 rounded-full text-xs font-bold"
-                  >
-                    Close [√ó]
-                  </button>
-
-                  {/* Header section */}
-                  <div className="space-y-4 pt-4">
-                    <div className="flex items-center gap-2">
-                      <Scale className="w-5 h-5 text-emerald-400" />
-                      <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest font-mono">Mobile Digital ID</span>
-                    </div>
-                    
-                    <div className="border-b border-slate-800 pb-3">
-                      <h2 className="text-lg font-black text-white uppercase tracking-tight font-sans">
-                        Privacy Declaration Card
-                      </h2>
-                      <span className="text-[10px] font-mono text-slate-500 block uppercase mt-0.5">
-                        AUTHORIZED OPT-OUT SIGNAL ACTIVE
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Content details */}
-                  <div className="space-y-4 flex-1 py-4 justify-center flex flex-col">
-                    {/* Big QR Code */}
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="bg-white p-3.5 rounded-2xl border-4 border-emerald-500 shadow-xl shadow-emerald-500/5">
-                        <svg className="w-40 h-40 text-slate-900" viewBox="0 0 25 25">
-                          <rect width="25" height="25" fill="#FFFFFF"/>
-                          <path d="M0 0h7v1H1v5H0V0zm1 1h5v5H1V1zm1 1h3v3H2V2zm16-2h7v7h-1V1h-6V0zm1 1h5v5h-5V1zm1 1h3v3h-3V2zM0 18h7v7H0v-7zm1 1h5v5H1v-5zm1 1h3v3H2v-3zm18-2h1v1h-1v-1zm1 1h1v1h-1v-1zm1-1h1v1h-1v-1zm2 1h1v1h-1v-1zm-4 2h1v1h-1v-1zm1 1h1v1h-1v-1zm2-1h1v1h-1v-1zm0 2h1v1h-1v-1zm2-1h1v1h-1v-1zm0 2h1v1h-1v-1zm-8-3h1v1h-1v-1zm1-1h1v1h-1v-1zm2 1h1v1h-1v-1zm1-1h1v1h-1v-1zm-4 4h1v1h-1v-1zm2 0h1v1h-1v-1zm2 0h1v1h-1v-1zm-6-2h1v1h-1v-1zm2 0h1v1h-1v-1zm2-2h1v1h-1v-1zm-3-1h1v1h-1v-1zm2 0h1v1h-1v-1zm0-3h1v1h-1v-1zm1 1h1v1h-1v-1zm1-1h1v1h-1v-1zm-4 9h1v1h-1v-1zm1-2h1v1h-1v-1zm1 1h1v1h-1v-1zm2-5h1v1h-1v-1zm1-2h1v1h-1v-1z" fill="#000000"/>
-                        </svg>
-                      </div>
-                      <span className="text-[10px] text-emerald-400 font-bold font-mono uppercase tracking-widest animate-pulse">
-                        ID: {declarationDocId}
-                      </span>
-                    </div>
-
-                    {/* Micro list */}
-                    <div className="space-y-2 text-xs bg-slate-950/60 p-4 border border-slate-850 rounded-xl font-sans mt-2">
-                      <div className="flex justify-between border-b border-slate-900 pb-1">
-                        <span className="text-slate-500">DECLARANT:</span>
-                        <span className="text-white font-bold">{declarantName}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-slate-900 pb-1">
-                        <span className="text-slate-500">JURISDICTION:</span>
-                        <span className="text-white font-semibold font-mono">{declarationJurisdiction}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">HARDWARE STATUS:</span>
-                        <span className="text-emerald-400 font-bold">ALL COMPLIANT</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Footer section */}
-                  <div className="space-y-3 pt-2">
-                    <p className="text-[9px] text-center text-slate-500 leading-snug font-mono">
-                      ASSERTED RIGHTS: CCPA ¬ß 1798.120 / GDPR Art. 21 / FCC Part 15 compliant broadcast. Handshake signature: verified.
-                    </p>
-                    
-                    <div className="h-1 bg-gradient-to-r from-emerald-500/0 via-emerald-500 to-emerald-500/0" />
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Smart Exception Modal */}
-          <AnimatePresence>
-            {editingAllowedItem && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 backdrop-blur-md"
-              >
-                <motion.div
-                  initial={{ scale: 0.95, y: 15 }}
-                  animate={{ scale: 1, y: 0 }}
-                  exit={{ scale: 0.95, y: 15 }}
-                  className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden shadow-2xl space-y-5"
-                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
-                  
-                  {/* Modal Header */}
-                  <div className="flex items-start justify-between border-b border-slate-800 pb-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        <Sliders className="w-4 h-4 text-blue-400" />
-                        <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider font-mono">
-                          Smart Exemption Settings
-                        </span>
-                      </div>
-                      <h4 className="text-md font-bold text-white font-sans">
-                        {editingAllowedItem.name}
-                      </h4>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingAllowedItem(null)}
-                      className="text-slate-400 hover:text-white text-sm bg-slate-950/80 border border-slate-800 px-2.5 py-1 rounded-lg font-mono transition"
-                    >
-                      [Close]
-                    </button>
-                  </div>
-
-                  {/* Body Content */}
-                  <div className="space-y-4 text-xs">
-                    <p className="text-[11px] text-slate-400 leading-normal">
-                      Establish conditional parameters and guardrails on this whitelist bypass to prevent accidental open-recording scenarios or unwanted exposure.
-                    </p>
-
-                    {/* Time Constraint Toggle */}
-                    <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-amber-400" />
-                          <div>
-                            <span className="font-bold text-white block">Time-Window Constraint</span>
-                            <span className="text-[10px] text-slate-500 font-medium">Only allow recording bypass within specific hours</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setEditingAllowedItem({
-                            ...editingAllowedItem,
-                            timeConstraintEnabled: !editingAllowedItem.timeConstraintEnabled
-                          })}
-                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            editingAllowedItem.timeConstraintEnabled ? 'bg-amber-500' : 'bg-slate-800'
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                              editingAllowedItem.timeConstraintEnabled ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {editingAllowedItem.timeConstraintEnabled && (
-                        <div className="grid grid-cols-2 gap-3 pt-2">
-                          <div>
-                            <label className="block text-[9px] text-slate-500 uppercase font-bold mb-1">Start Time</label>
-                            <input
-                              type="time"
-                              value={editingAllowedItem.timeStart || '09:00'}
-                              onChange={(e) => setEditingAllowedItem({
-                                ...editingAllowedItem,
-                                timeStart: e.target.value
-                              })}
-                              className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] text-slate-500 uppercase font-bold mb-1">End Time</label>
-                            <input
-                              type="time"
-                              value={editingAllowedItem.timeEnd || '17:00'}
-                              onChange={(e) => setEditingAllowedItem({
-                                ...editingAllowedItem,
-                                timeEnd: e.target.value
-                              })}
-                              className="w-full bg-slate-905 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Identity Constraint Toggle */}
-                    <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-purple-400" />
-                          <div>
-                            <span className="font-bold text-white block">Identity Verification Lock</span>
-                            <span className="text-[10px] text-slate-500 font-medium">Only allow if a specific registered identity is present</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setEditingAllowedItem({
-                            ...editingAllowedItem,
-                            identityConstraintEnabled: !editingAllowedItem.identityConstraintEnabled
-                          })}
-                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            editingAllowedItem.identityConstraintEnabled ? 'bg-purple-500' : 'bg-slate-800'
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                              editingAllowedItem.identityConstraintEnabled ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {editingAllowedItem.identityConstraintEnabled && (
-                        <div className="pt-2">
-                          <label className="block text-[9px] text-slate-500 uppercase font-bold mb-1">Verify Against Family Member</label>
-                          <select
-                            value={editingAllowedItem.allowedIdentityId || 'fam-1'}
-                            onChange={(e) => setEditingAllowedItem({
-                              ...editingAllowedItem,
-                              allowedIdentityId: e.target.value
-                            })}
-                            className="w-full bg-slate-905 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none"
-                          >
-                            {familyMembers.map((member: any) => (
-                              <option key={member.id} value={member.id}>
-                                {member.name} ({member.relation})
-                              </option>
-                            ))}
-                          </select>
-                          <p className="text-[10px] text-slate-500 mt-1.5 leading-normal">
-                            Note: Secure peer-to-peer verification checks will continuously ping the chosen family member's active node beacon. If they are not nearby, bypass is auto-revoked.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Save Controls */}
-                  <div className="flex items-center gap-3 pt-3 border-t border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setEditingAllowedItem(null)}
-                      className="flex-1 bg-slate-950 border border-slate-800 text-slate-400 hover:text-white font-bold py-2 rounded-xl transition text-center"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAllowedList(prev => prev.map(item => item.id === editingAllowedItem.id ? editingAllowedItem : item));
-                        setEditingAllowedItem(null);
-                        
-                        window.dispatchEvent(new CustomEvent('trigger-test-alert', {
-                          detail: {
-                            title: 'CONSTRAINTS UPDATED',
-                            body: `Smart parameters configured successfully for ${editingAllowedItem.name}.`,
-                            type: 'success'
-                          }
-                        }));
-                      }}
-                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold py-2 rounded-xl transition text-center"
-                    >
-                      Save Parameters
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-        </div>
-      </div>
-
-      {/* Dynamic Sidebar: Info Logs OR Social Customizer */}
-      {(state.showAuditLogs || (state.privacyLevel === 'none' && state.isBroadcasting)) && (
-        <div className="lg:col-span-5 space-y-6">
-          <AnimatePresence mode="wait">
-            {state.privacyLevel === 'none' && state.isBroadcasting ? (
-              <motion.div
-                key="social-card"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-md space-y-4"
-              >
-                <div className="flex items-center gap-2 mb-2 text-emerald-400">
-                  <Sparkle className="w-5 h-5 fill-emerald-400 animate-spin" style={{ animationDuration: '10s' }} />
-                  <h3 className="text-base font-semibold text-white">Opt-In Social Discovery</h3>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  By disabling privacy shields, your beacon shifts into "Social Discovery" mode. Nearby AI Glasses wearers will see your virtual AR nameplate, helping you connect.
-                </p>
-
-                <div className="space-y-3 pt-2">
-                  <div>
-                    <label className="block text-xs text-slate-500 uppercase tracking-wider mb-1 font-semibold">
-                      Discovery Handle
-                    </label>
-                    <input
-                      id="social-handle-input"
-                      type="text"
-                      value={tempUsername}
-                      onChange={(e) => setTempUsername(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-emerald-500/60"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-slate-500 uppercase tracking-wider mb-1 font-semibold">
-                      Virtual Bio Nameplate
-                    </label>
-                    <textarea
-                      id="social-bio-input"
-                      rows={2}
-                      value={tempBio}
-                      onChange={(e) => setTempBio(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/60 resize-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-slate-500 uppercase tracking-wider mb-1 font-semibold">
-                      Interests / Tags
-                    </label>
-                    <input
-                      id="social-tags-input"
-                      type="text"
-                      value={tempInterests}
-                      onChange={(e) => setTempInterests(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/60"
-                      placeholder="e.g. Design, Tech, Foodie"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">Comma-separated tags</span>
-                  </div>
-
-                  <button
-                    id="save-profile-btn"
-                    onClick={handleProfileSave}
-                    className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs py-2 rounded-lg font-semibold transition"
-                  >
-                    Save &amp; Broadcast Profile
-                  </button>
-                </div>
-
-                {/* Demo Card Preview */}
-                <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4.5 space-y-3">
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block">
-                    AR HUD Nameplate Preview:
-                  </span>
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                      <User className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white font-mono">{state.socialProfile?.username || '@your_handle'}</h4>
-                      <p className="text-xs text-slate-400 mt-0.5 leading-normal">{state.socialProfile?.bio}</p>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {state.socialProfile?.interests.map((interest) => (
-                          <span key={interest} className="text-[9px] bg-emerald-950/40 border border-emerald-900/60 text-emerald-400 px-1.5 py-0.5 rounded">
-                            {interest}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="logs-card"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md"
-              >
-                {/* OS Window Title Bar */}
-                <div className="bg-slate-900 border-b border-slate-850/80 px-4 py-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1.5 shrink-0">
-                      <span 
-                        className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-600 transition-colors cursor-pointer" 
-                        onClick={() => onChange({ ...state, showAuditLogs: false })} 
-                        title="Close Window" 
-                      />
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                    </div>
-                    <span className="text-[10px] font-extrabold text-slate-400 tracking-wider font-mono uppercase pl-2">Privacy Audit Log</span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {logs.length > 0 && (
-                      <button
-                        id="clear-logs-btn"
-                        type="button"
-                        onClick={onClearLogs}
-                        className="text-[10px] text-slate-500 hover:text-white uppercase tracking-wider font-bold transition mr-1"
-                      >
-                        Clear
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onChange({ ...state, showAuditLogs: false })}
-                      className="text-slate-400 hover:text-rose-400 transition-colors text-xs font-bold font-mono px-1.5 py-0.5 rounded bg-slate-950/65 border border-slate-800"
-                      title="Close Window"
-                    >
-                      ‚úï
-                    </button>
-                  </div>
-                </div>
-
-                {/* Tab switcher for Logs vs Email summary */}
-                <div className="flex border-b border-slate-800 bg-slate-950/40">
-                  <button
-                    id="logs-ledger-tab-btn"
-                    type="button"
-                    onClick={() => setLogsActiveTab('ledger')}
-                    className={`flex-1 py-3 text-[10px] font-mono font-bold uppercase tracking-wider border-b-2 transition-all duration-150 cursor-pointer text-center select-none ${
-                      logsActiveTab === 'ledger'
-                        ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
-                        : 'border-transparent text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    üì° Audit Ledger ({logs.length})
-                  </button>
-                  <button
-                    id="logs-email-tab-btn"
-                    type="button"
-                    onClick={() => setLogsActiveTab('email')}
-                    className={`flex-1 py-3 text-[10px] font-mono font-bold uppercase tracking-wider border-b-2 transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 select-none ${
-                      logsActiveTab === 'email'
-                        ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
-                        : 'border-transparent text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    <Mail className="w-3 h-3" />
-                    üìß Daily Summary Email
-                  </button>
-                </div>
-
-                {/* Window Content */}
-                <div className="p-5 space-y-4 bg-slate-900/30">
-                  {logsActiveTab === 'ledger' ? (
-                    <>
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800/40 pb-3">
-                        <p className="text-xs text-slate-400 leading-normal max-w-[280px] sm:max-w-xs">
-                          Real-time validation log demonstrating nearby smart glasses identifying your Opt-Out beacon and applying shields.
-                        </p>
-                        {logs.length > 0 && (
-                          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                            <button
-                              id="export-csv-btn"
-                              type="button"
-                              onClick={() => handleExportLogs('csv')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-800 bg-slate-950/80 hover:bg-slate-900 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/20 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer shadow-sm active:scale-95 select-none"
-                              title="Export logs as CSV spreadsheet"
-                            >
-                              <Download className="w-3 h-3 text-emerald-400" />
-                              <span>Export CSV</span>
-                            </button>
-                            <button
-                              id="export-pdf-btn"
-                              type="button"
-                              onClick={() => handleExportLogs('pdf')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-800 bg-slate-950/80 hover:bg-slate-900 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/20 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer shadow-sm active:scale-95 select-none"
-                              title="Export logs as PDF document"
-                            >
-                              <Download className="w-3 h-3 text-emerald-400" />
-                              <span>Export PDF</span>
-                            </button>
-                            <button
-                              id="export-json-btn"
-                              type="button"
-                              onClick={() => handleExportLogs('json')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-800 bg-slate-950/80 hover:bg-slate-900 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/20 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer shadow-sm active:scale-95 select-none"
-                              title="Export logs as cryptographically signed JSON ledger"
-                            >
-                              <Sparkles className="w-3 h-3 text-emerald-400" />
-                              <span>Export Signed JSON</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                        {logs.length === 0 ? (
-                          <div className="border border-dashed border-slate-800 rounded-xl p-8 text-center text-slate-500 space-y-2">
-                            <AlertCircle className="w-6 h-6 mx-auto text-slate-600" />
-                            <p className="text-xs">No active handshakes detected yet.</p>
-                            <p className="text-[10px] text-slate-600">
-                              Toggle glasses mode or wait to observe active simulations.
-                            </p>
-                          </div>
-                        ) : (
-                          logs.map((log) => {
-                            const isProximityAlert = log.distance < 2;
-                            return (
-                              <div 
-                                key={log.id} 
-                                className={`bg-slate-950/55 rounded-xl p-3 space-y-1.5 text-xs border transition-all ${
-                                  isProximityAlert 
-                                    ? 'border-red-500/80 bg-red-950/15 shadow-[0_0_10px_rgba(239,68,68,0.15)] animate-pulse' 
-                                    : 'border-slate-800/80'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between text-[10px]">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-slate-500 font-mono">{log.timestamp}</span>
-                                    {isProximityAlert && (
-                                      <span className="text-[8px] font-mono bg-red-500/10 text-red-400 border border-red-500/20 px-1 py-0.2 rounded uppercase tracking-wider font-extrabold animate-bounce">
-                                        ‚ö†Ô∏è PROXIMITY CRITICAL
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className={`px-1.5 py-0.5 rounded-full uppercase font-bold text-[8px] ${
-                                    log.action === 'censored' 
-                                      ? 'bg-red-950/40 text-red-400 border border-red-900/40' 
-                                      : log.action === 'discovered' 
-                                      ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/40' 
-                                      : log.action === 'erased' 
-                                      ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-500/20' 
-                                      : 'bg-slate-800 text-slate-400'
-                                  }`}>
-                                    {log.action}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center text-white font-medium">
-                                  <span>{log.deviceModel}</span>
-                                  <span className={`font-mono text-[10px] ${isProximityAlert ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
-                                    {log.distance.toFixed(1)}m away
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-1.5 text-[10px] text-slate-500 pt-1 border-t border-slate-900">
-                                  <div>
-                                    <span className="block text-[8px] uppercase tracking-wider text-slate-600">Shield</span>
-                                    <span className="text-slate-400 font-semibold">{log.shieldApplied}</span>
-                                  </div>
-                                  <div>
-                                    <span className="block text-[8px] uppercase tracking-wider text-slate-600">Verified ID</span>
-                                    <span className="text-slate-400 font-mono">{log.rotatedId.substring(0, 8)}...</span>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    /* Daily Summary Email Generator tab */
-                    <div className="space-y-4 text-left">
-                      <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="relative flex h-2 w-2">
-                              {isAutoReportEnabled ? (
-                                <>
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                </>
-                              ) : (
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-600"></span>
-                              )}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-300 font-mono uppercase tracking-wider">
-                              {isAutoReportEnabled ? 'Secure Report Daemon Active' : 'Report Daemon Suspended'}
-                            </span>
-                          </div>
-                          
-                          <label className="relative inline-flex items-center cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={isAutoReportEnabled}
-                              onChange={(e) => setIsAutoReportEnabled(e.target.checked)}
-                              className="sr-only peer"
-                            />
-                            <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-slate-950"></div>
-                          </label>
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-normal">
-                          Configures a localized daily cron task using RFC-9402 protocols to automatically compile your privacy protection history and securely deliver the telemetry to your address.
-                        </p>
-                      </div>
-
-                      {/* Settings form */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Recipient Address</label>
-                          <input
-                            type="email"
-                            required
-                            value={emailRecipient}
-                            onChange={(e) => setEmailRecipient(e.target.value)}
-                            placeholder="user@example.com"
-                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition font-normal"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Auto-Dispatch Hour</label>
-                          <div className="relative">
-                            <input
-                              type="time"
-                              required
-                              value={emailReportTime}
-                              onChange={(e) => setEmailReportTime(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition font-normal"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Telemetry Verbosity</label>
-                          <select
-                            value={emailReportType}
-                            onChange={(e) => setEmailReportType(e.target.value as 'standard' | 'forensic')}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition"
-                          >
-                            <option value="standard">üìä Standard Analytics</option>
-                            <option value="forensic">üî¨ Forensic RF-Level</option>
-                          </select>
-                        </div>
-
-                        <div className="space-y-1">
-                          <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Next Scheduled Dispatch</span>
-                          <span className="text-xs text-slate-300 font-mono font-bold py-1.5 px-1 bg-slate-950 border border-slate-800/80 rounded-lg flex items-center gap-1.5 justify-center">
-                            <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                            {isAutoReportEnabled ? `Today at ${emailReportTime}` : 'Deactivated'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Summary Metrics */}
-                      <div className="bg-slate-950/70 border border-slate-850 rounded-xl p-3 grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <div className="text-lg font-extrabold text-red-400 font-mono">
-                            {logs.filter(l => l.action === 'censored').length}
-                          </div>
-                          <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Censors</div>
-                        </div>
-                        <div className="border-x border-slate-850">
-                          <div className="text-lg font-extrabold text-emerald-400 font-mono">
-                            {logs.filter(l => l.action === 'discovered' || l.action === 'erased').length}
-                          </div>
-                          <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Detections</div>
-                        </div>
-                        <div>
-                          <div className="text-lg font-extrabold text-blue-400 font-mono">
-                            {logs.length > 0 ? (logs.reduce((acc, c) => acc + c.distance, 0) / logs.length).toFixed(1) : '0.0'}m
-                          </div>
-                          <div className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Avg Range</div>
-                        </div>
-                      </div>
-
-                      {/* Mock Email Preview Card */}
-                      <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden text-xs">
-                        {/* Header metadata */}
-                        <div className="bg-slate-900 px-3 py-2 border-b border-slate-800 text-[10px] text-slate-400 font-mono space-y-1">
-                          <div>
-                            <span className="text-slate-500 font-bold uppercase">To:</span> {emailRecipient}
-                          </div>
-                          <div>
-                            <span className="text-slate-500 font-bold uppercase">Subject:</span> BlurBubble‚Ñ¢ Daily Security Audit Compliance Report
-                          </div>
-                        </div>
-                        
-                        {/* Preview content container */}
-                        <div className="p-4 max-h-[160px] overflow-y-auto bg-slate-950 font-sans space-y-3 select-text">
-                          <div className="text-[10px] text-emerald-400 font-bold font-mono uppercase border-b border-slate-900 pb-1">
-                            üõ°Ô∏è BlurBubble‚Ñ¢ Privacy Shield Notification
-                          </div>
-                          <p className="text-[11px] text-slate-300 leading-relaxed font-normal">
-                            Hello, <strong>{emailRecipient.split('@')[0]}</strong>. Below is your automated localized daily privacy summary from your active BlurBubble‚Ñ¢ Shield Node.
-                          </p>
-
-                          {emailReportType === 'forensic' && (
-                            <div className="border-l-2 border-indigo-500 bg-indigo-500/5 p-2 rounded text-[10px] text-indigo-300">
-                              <strong>Forensic RF Analysis:</strong> Temporal rotation keys were cycled {Math.floor(logs.length / 3) + 1} times to prevent longitudinal profiling. Local privacy index remains 100%.
-                            </div>
-                          )}
-
-                          {/* Simplified preview table */}
-                          <div className="space-y-1.5 font-mono text-[9px] text-slate-400 border-t border-slate-900 pt-2">
-                            <div className="grid grid-cols-3 text-slate-500 font-bold uppercase">
-                              <span>Incident Time</span>
-                              <span>Target Device</span>
-                              <span className="text-right">Action</span>
-                            </div>
-                            {logs.slice(0, 3).map((log, index) => (
-                              <div key={index} className="grid grid-cols-3 border-b border-slate-900 pb-1">
-                                <span className="text-slate-500">{log.timestamp}</span>
-                                <span className="text-slate-300 font-bold truncate">{log.deviceModel}</span>
-                                <span className={`text-right font-bold ${log.action === 'censored' ? 'text-red-400' : 'text-emerald-400'}`}>
-                                  {log.action.toUpperCase()}
-                                </span>
-                              </div>
-                            ))}
-                            {logs.length > 3 && (
-                              <div className="text-[8px] text-slate-500 text-center font-bold">
-                                + {logs.length - 3} more records included in final HTML report payload
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Feedback simulation banner */}
-                      {reportSimulationSuccess && (
-                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-semibold flex items-center gap-2 animate-bounce">
-                          <Check className="w-4 h-4 shrink-0" />
-                          <span>Simulation Successful! secure daily report draft successfully generated and dispatched to {emailRecipient}.</span>
-                        </div>
-                      )}
-
-                      {/* Action buttons */}
-                      <div className="flex gap-2">
-                        <button
-                          id="copy-email-html-btn"
-                          type="button"
-                          onClick={() => {
-                            const html = generateDailySummaryEmailHtml(emailRecipient, emailReportTime, emailReportType);
-                            navigator.clipboard.writeText(html);
-                            // Change text temporarily to copy confirmation
-                            const btn = document.getElementById('copy-email-html-btn');
-                            if (btn) {
-                              const originalHtml = btn.innerHTML;
-                              btn.innerHTML = `<svg class="w-3.5 h-3.5 text-emerald-400 animate-pulse" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Copied HTML!`;
-                              setTimeout(() => {
-                                btn.innerHTML = originalHtml;
-                              }, 2000);
-                            }
-                          }}
-                          className="flex-1 py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
-                          title="Copy raw HTML code of compliant summary email to paste in custom mail clients"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy HTML Payload</span>
-                        </button>
-
-                        <button
-                          id="simulate-send-email-btn"
-                          type="button"
-                          onClick={handleSimulateSendReport}
-                          disabled={isSendingReportSimulation}
-                          className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-950 text-slate-950 font-extrabold rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-lg shadow-emerald-500/10"
-                          title="Simulate instant dispatch over BlurBubble encrypted broadcast channels"
-                        >
-                          {isSendingReportSimulation ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Broadcasting...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Send className="w-3.5 h-3.5" />
-                              <span>Simulate Send</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {/* Interactive Information Overlay Modal (Universal User Guide) */}
-      <AnimatePresence>
-        {helpTopic && HELP_TOPICS[helpTopic] && (() => {
-          const topic = HELP_TOPICS[helpTopic];
-          return (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
-              onClick={() => setHelpTopic(null)}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-                className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Modal Header */}
-                <div className="p-6 border-b border-slate-800 bg-slate-950/50 flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
-                      {topic.category} Guide
-                    </span>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2 mt-1">
-                      <HelpCircle className="w-4 h-4 text-blue-400 animate-pulse" />
-                      {topic.title}
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setHelpTopic(null)}
-                    className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white transition text-xs"
-                    title="Close help guide"
-                  >
-                    ‚úï
-                  </button>
-                </div>
-
-                {/* Modal Body */}
-                <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
-                  {/* Summary Section */}
-                  <div className="space-y-2">
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Overview</h4>
-                    <p className="text-xs text-slate-300 leading-relaxed font-medium bg-slate-950/40 p-3.5 border border-slate-800/60 rounded-xl">
-                      {topic.summary}
-                    </p>
-                  </div>
-
-                  {/* Under the Hood Section */}
-                  <div className="space-y-2">
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">How It Works</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      {topic.whatItDoes}
-                    </p>
-                  </div>
-
-                  {/* How To Use Section */}
-                  <div className="space-y-2">
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Operation &amp; Usage Instructions</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      {topic.howToUse}
-                    </p>
-                  </div>
-
-                  {/* Key Benefits */}
-                  <div className="space-y-3">
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Key Privacy Protections</h4>
-                    <div className="space-y-2">
-                      {topic.benefits.map((benefit, index) => (
-                        <div key={index} className="flex items-start gap-2 text-xs text-slate-300">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                          <span>{benefit}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setHelpTopic(null)}
-                    className="w-full sm:w-auto px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-slate-950 font-bold transition text-xs shadow-lg shadow-blue-500/10"
-                  >
-                    Acknowledge &amp; Close
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          );
-        })()}
-      </AnimatePresence>
-
-      {/* Create New Schedule Modal */}
-      <AnimatePresence>
-        {isScheduleModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
-            onClick={() => setIsScheduleModalOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-slate-800 bg-slate-950/50 flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                    Advanced Automation
-                  </span>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2 mt-1">
-                    <Clock className="w-4 h-4 text-emerald-400 animate-pulse" />
-                    Create New Schedule Slot
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsScheduleModalOpen(false)}
-                  className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white transition text-xs"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleAddScheduleSlot(e);
-                  setIsScheduleModalOpen(false);
-                }}
-                className="p-6 space-y-4 max-h-[70vh] overflow-y-auto"
-              >
-                <div className="space-y-4 text-xs">
-                  {/* Name */}
-                  <div>
-                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Schedule Label / Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Morning Commute, Dinner Shield"
-                      value={newSlotLabel}
-                      onChange={(e) => setNewSlotLabel(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                    />
-                  </div>
-
-                  {/* Times Grid */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Start Time (24h)</label>
-                      <input
-                        type="time"
-                        required
-                        value={newSlotStartTime}
-                        onChange={(e) => setNewSlotStartTime(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">End Time (24h)</label>
-                      <input
-                        type="time"
-                        required
-                        value={newSlotEndTime}
-                        onChange={(e) => setNewSlotEndTime(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Broadcast Setting */}
-                  <div>
-                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Broadcast Transmit State</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setNewSlotBroadcastEnabled(true)}
-                        className={`py-2 px-3 rounded-lg border text-center transition font-bold ${
-                          newSlotBroadcastEnabled
-                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
-                            : 'bg-slate-950 border-slate-850 text-slate-500 hover:text-slate-300'
-                        }`}
-                      >
-                        Beacon ON (Broadcasting)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNewSlotBroadcastEnabled(false)}
-                        className={`py-2 px-3 rounded-lg border text-center transition font-bold ${
-                          !newSlotBroadcastEnabled
-                            ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
-                            : 'bg-slate-950 border-slate-850 text-slate-500 hover:text-slate-300'
-                        }`}
-                      >
-                        Beacon OFF (Battery Saver)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Specific Privacy settings / overrides */}
-                  <div>
-                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Privacy Settings Override</label>
-                    <select
-                      value={newSlotPrivacyLevel}
-                      onChange={(e) => setNewSlotPrivacyLevel(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/60 font-sans"
-                    >
-                      <option value="default">Default Behavior (Inherit Global State)</option>
-                      <option value="strict_blur">Strict Blur (Full anonymization face-blurring)</option>
-                      <option value="pixelate">Pixelate (Heavy pixelation of bystander feeds)</option>
-                      <option value="emoji">Emoji Overlay (Dynamic comical covers)</option>
-                      <option value="black_bar">Black Bar (Solid visual censorship bar)</option>
-                      <option value="magic_removal">AI Magic Removal (Erase face completely)</option>
-                      <option value="none">None (Allow filming/registration)</option>
-                    </select>
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      Choose whether matching this schedule automatically overrides your default privacy filter choice.
-                    </p>
-                  </div>
-
-                  {/* Icon profile */}
-                  <div>
-                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Visual Profile Icon</label>
-                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
-                      {(['briefcase', 'baby', 'beer', 'home', 'school', 'car', 'users', 'shield'] as const).map(ic => {
-                        const isSel = newSlotIcon === ic;
-                        return (
-                          <button
-                            key={ic}
-                            type="button"
-                            onClick={() => setNewSlotIcon(ic)}
-                            className={`p-2.5 rounded-lg border transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                              isSel 
-                                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-bold' 
-                                : 'bg-slate-950 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900'
-                            }`}
-                            title={ic}
-                          >
-                            {renderSlotIcon(ic, "w-4 h-4")}
-                            <span className="text-[8px] uppercase tracking-tighter opacity-80 mt-0.5">{ic}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Days */}
-                  <div>
-                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Specific Broadcast Days</label>
-                    <div className="flex flex-wrap gap-1">
-                      {daysOfWeek.map(day => {
-                        const isSelected = newSlotDays.includes(day);
-                        return (
-                          <button
-                            key={day}
-                            type="button"
-                            onClick={() => {
-                              if (isSelected) {
-                                setNewSlotDays(newSlotDays.filter(d => d !== day));
-                              } else {
-                                setNewSlotDays([...newSlotDays, day]);
-                              }
-                            }}
-                            className={`flex-1 min-w-[40px] py-2 text-[10px] font-bold uppercase rounded-lg border transition cursor-pointer text-center ${
-                              isSelected 
-                                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-bold' 
-                                : 'bg-slate-950 border-slate-850 text-slate-500 hover:text-slate-300'
-                            }`}
-                          >
-                            {day}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row justify-end gap-2 bg-slate-900">
-                  <button
-                    type="button"
-                    onClick={() => setIsScheduleModalOpen(false)}
-                    className="px-5 py-2 rounded-xl bg-slate-950 border border-slate-850 hover:bg-slate-900 text-slate-400 hover:text-white transition text-xs font-bold font-mono uppercase tracking-wider cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold transition text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/15"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Save Schedule Rule
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
+                          xúÏ}[sIvÊªE››«,ºI-iA
+—º¿ ÿÚLGU®J 5*T’TH°eΩ˘…1û	_"v√/≥ˆ√ÓÏÆ_±·˝;ÛÏü∞Ádf]QóJÄ›	TeÂÂ\æìy.Ñº’"ö©zﬁï:¢/7|˙ﬁWﬁ{§o[æ“≥MùÙL[{GÿÁû©˙TŸ´V7^’4{Ï˘ÜFN®™Ÿ÷ãlË’üê‹Î≈én‹Ω˙ìÇ;>Ï¸îtÌ¡¿§§so¯⁄ê¸tÁcQãΩ±Ô€V¡Ñ˙Àçûo)=÷K≈gÕ+™Ë¸F·≥˛ƒÅ	·/)æ”µM∏”cù.æSuU—ÜT{Gıó<Ês;ËÕ¯√©Ó;√4,µgRΩh¯ÑÿV›4¥w/?T6…ÀW‰C·ÕÏˆ°jhÂŸﬁﬁfÔﬁ"/?&?)Ì ˘∏˘Á%Ø5˙§b[5]ø∞õ•ùƒnÚ{+Â∑¢”;C£ó∂NÕcÚ‰Ê¢€ÆuÆØöı€Z˝˙¶”Ö_NÎ’ì-â∆TÕ7lÎòîè˙g‰…hÏS˝	Å∑ˆ\[’5’Ûo56ø∫‘Àº°AMΩÊ8¶ÅS-ıŒpPoj›F˚≤÷˛ˆ∂s”i5ÆNß¨+7ú¥Økßı|zu.’1›ÄæX=&Uô€]{Æ7ıÿÎïÁ’=XÇnÛª∆ì“6 I®ò>	∑o]
+Ã∏£ƒ∞L√¢Jﬂ§Ô…P9ÿ>$˜ ¸ÙÜÆaΩS™DªûÌ*émX∞0 ±•S]ÈèMìÙlWáœ¯?äÔ™?óZ>aøHEäfõ∂Î}Ï™ÏoêöÑ™UK±«>XmÏ√o¨#ñmQÚU≈KIo†–uUSW´UN°!∫è‡É‚π|[4ôEÚùp]R2Ç¯bàπUËLù«ß@¨◊9Ceü-˛d3€∑›Qj)Çë=?¨¬‚©∫}O`∞Ç—Z‰/BÈåKŒ9{Î«{ÂÄMy¸ìí9/õuBvä+WQ˘˜’õ˚µ3 æﬂ≠:Ôà+˝ò9ì™:Œ≠À†öEùjåﬂÉ’T«∫ìDÜ∆`®Ù]˙´1µ¥	©Ï>ﬂﬁ{˜˙«MÇ7ÿ‰>òVÚéNºÌÇë8yo-∆/‡À¯(„>yäFáˇ◊∑?§‡ﬂSjÖ‹¸"»¨Z›9™«WˆÄ(Gæ≤[0Ÿ‡Í˚Á8µ_çlÀéO2+;uAõ–çW Ω±W≠“o˘6˝„¢:Ôï]Ëº3Q™è`ßbVòCÏÏV˘–ÇœêÇTÀ·@ù±È—§hÇôçO≈”"I¸RD|Â∏
+ªÅ¯ ˚r}vˆ$üã◊°Ä«ä(1/¢2ãö‰‡ò‘ÌÃñf®&È™èTÍ◊ó≠ZWÈ÷Œ;õπp8E‹ YïÉPLæıõ]ìˆ„jä0F¿®∞¶ò`†bSπ§¡ÁŸ•Ä‘•z√Ú°UÍm˜>®PÑ•t€jj›ÕmìZH^ë*…ùÁ$%Å\GJLßØ}A/˜C‡„'˘Ì•à,÷ö–âá’f^—••äFïâ≤W$fïHÖÚ∂º5\J`˚¬V† ª)›3pƒ!“W≤‡®&SÚÄk ‰‹√4Îª<π*a¥∆ÿÎRuê•“uπW-¿ròÆî[Òoæ…ó ˙‹…Ω,‘ﬁÖyÛ|¢ö&oúºúµ7ef	¡ÿ—— *j~§:ºqnzÉŸºlÏ®É7K_ôi√OøÒ8Ï’RŸÁ†Õ.Ìz≥v!ÃÚ€ÀZ´’hœdùGÛµx+<—v¨∑ÄÍﬂ6⁄∑◊≠ÓÌıM˜ˆÊäuú›˜ÒªK¯ë≠ÔV∏≠ˇº~±6ΩhzWG‡mÆ-ˆÖ[ÏèπTkC?uéÚ}S§î‘óY/™•ìÆx∆¿RM¯¿#6òŒ∏é „Ü¿§kS9M˝π!˛≤mÃ;ê∑s;	W˜oó`K·ò\;æ°Å¡”lìN8©\4Nï÷ÕEß±¥;
+Ü{jxÓÿ¡ˆÇõı~¡RÓ¸BuJ˜≤ñs	v“ú±Z[Üª[ ã˚¯ß÷/O´≥®m©¨`0õu0õÌ€∆e≥€ù—˛-‰©G9ïŒy◊ÛÉ™5¬QÄBπe
+•}{⁄` Ø÷∂q÷=ü∆µ‹˙˙ëŒ°s»bmÕ>¬˘sû
+]õ£…ãü;3©Cò}°£z7ç¡ò¬@¿vâÊ¨	ò¶‘Úê?ú·ƒC4`N÷&Èrö§R‚ÊÛú9›Dê	⁄®yuæ$ßÕOè…C93»3rY´£ô®\ÉD™¿
+ Â˙¶ª¥ˆ·Ω—7û]™t˙º∂≥üYÒD7u–ä~©•òΩ∞K`+∆XeµÃD6£Àa)f.Ó„€äôØ≠≈lä[*{ÒMÛ¨˘Ï(Ô∂]ª:Ωæl˛b.ã1ó∑≈fÃ}[r4∑ßÕNÌ‰BXã”#≠uõ◊W¬Çª}”Ïæ∆£UPMèm=¶z	*{m>.ÿ|Ã•êµ˘dæf]õê…Î$ÇÅâ–ÌëÒ#Ãb‰!4BÅ@ˇ	}ÚN3¸D”W<µÔÄ©º–É÷áúKjQJJ†œoSÊvî´In¿-ÖU˘ÏòÄ6'5êW»B§Û´15ﬁVj7ÌF!)ùø∏i\‘_/≠m©äÆãûØçÀÏgñƒ∏l´>RfVÊ¨ÈÿïiFY-„2ò◊Â∞/≥W˘Ñ–fæ7äûÕ&æ•21È|+§Û¢fsYÌqfs_75§Ñ•9ım`bænv∑W◊ÕŒ£PÊtamh.<^6óF÷ñÊcÑ Ê+€µ©ôºö÷/©v&µ4w‚`∏Cá®·QÀ÷Ci}õXTu{ O¢qÿΩ∂0ó‘¬î=üﬂƒÃÔ©PO¬´uåÃ£crÛÊÑú
+›K:ö´é†ª.©¿ÁJßﬁÆ]Ç¶o/≠ç9æÔù˚æ64≥üYCÛµlôùY¥ÆK`l"”Ñ˝Z-Kfv9åÃÇ%~|K≥‡Â°πYDÉKes5¢M÷≠]’∑°Ãû√‰,·∫G±;Kﬁâcáî¥<Ò´nÛ≤q{}v{v—<›Ωm5⁄›õˆ	‹»&g≤[k{ÛqÏÕ⁄Xùè`tñiﬁµÂôºZ‘ı«nœ#cfBπ7täGïƒ7FT±˚¿xÃe÷E1ÈEû≥#Csm~eÀKh¿cì˝µ∂Aó”ùI}~C¥§ªB}a2√«∑D•ø»"„©[_Ïål∆(âœ7?∆càZÌìs€FXÕ¬´[Æqßj“Vu’MAÏïEü¬C^Ì˘(]aæ|IûX∑#h„÷≈gü`ÿ{%ŸÀ®O ‹A´ÊÀàñö·Oc¯	TÒÒc@âÔwŸ˜ÏÎCÔÈüΩ‡√qâaÒQAk∆è‘BÊ°kAÀ¡o–	Ü7Òé<ÒÆÆk‘≠©¯¯M¸Ô)s*{rÇá¥'÷°√·°bK∂l\´≥ç˜ `A9Y>ÊF£`j^¿Dßñ Z6Ì4ˆÃL9éÂ5s!"-˜±¶çÂ¥¬ã√ßùß’≤çDplÎ Q %ã>ÏìP£WRﬂ¥Ôï°°Îôõ&Èw´=œ6¡vºP õÌ¿œ{ÂÈ ?¯ë“á)‰gé]e;4#7≤S¶≤˜Ÿº—1˚› 	øÇ ‹“Ÿ&©7=[NOŸœ y˚Uyp·≈p
+(x£ò˙é6‚HÓŒø›8öJ^ú¡Kﬁ’mã≈+«ﬁxØ‡Zî®ÏÃÈÊW«°⁄Xê»7Í»˘Û$£’aE1y"`Ú±@x.G_˜s¶(ºÓfÄ◊pBã¥˚ûÍπ≥“¿⁄≥ÅFlóXÿÿÄZîƒ¢öÔ–⁄6È#)%=√ˆáò“$#òV¯Sh˘ÆÌRX$û˛…§–=‰ŸbπLTò»√]!ì‘öDKNN6˛Õ¡æ˘ #}rº7°&rÒa|√6†ÿw{ñâèpÇ@ÓMHŒ´ q¨X:2êês÷ N=L&◊\™fé6áÂÃ¬‘(9ﬂ®ÆÖÓïu’M´^—ÿ¥ÏåM»a˛\ÌFÚ”1^Ë˙åUqÚ¶åØh~wûW”î[¬ŸŸKÚ#ÿ‰ÿxıá˙oˇÒÔøÕá±/Ú, €$&$⁄Ê"i‘CRÿx’±è‰îm–ëcd¯åè–åaÌdø§;§@):Ì∑ÄtP]ûË◊ú ´ Ç◊â«π€"v¯“ˆm‹´≈‰yu|¿æé´Íç`Æù!(‡=õX∂ √Éñ=vÚ©4€∫…ïº„Ç’T]Wù¿◊åÕ…6iCg\4XÅ≈ÅÅ’Åe≥2”∏h≥ÖF√õÄüAq‡©+/ó—`U‹±Oª `0‘ƒª∏Áƒvëz†Ñ‡ÂY_ld~òÅ∫˜6à^s<≤@‚Np#§*\C'¯’•ßÏsp˝π«Hxì‰0€ûyÒß5ÇazR,Ëœ)mõ ;í`ÁÄøïÙAÒaILÌäà€¯Æ™°z`€#nL6Bã¸√-ëZ∞#Ë¶≤oƒ÷WûZ=»Ÿ…õÍl`¨kWËΩ¶’wÅ[uR9ªhúìfûîÓ«‘GÏ¨4⁄ZUA•lLp;_®`ñy•ÙÏS˛ÙsØö:ˆ*8MùÅ≤ßß6éûVSP%oá£p£`+ã´òáújñ·‘πôNKpk…ª–ƒDzS)âX˜Ÿ±È~†Mc®µ ßWÛ‘Vó Á®[<•«û%,[˘|•ø„ûqÛãÁ*pU«–∑ƒŒ*(a£áy	Ù8Je ﬁã¨áë(>œ™ÁÙ`,j4«ev>>Lö'àÙë@F<Áq˛F≠‹ïlWÀÛ ü◊‚Å∞8¢åÿ:?ñ:oÕ<OÕêA·9jñ|˙Xí†8!'C∏ΩÓ÷ñlÒ¶L¸à$<¯í<Ñ Ë~ÈQ ‘npúÿÒ '%odatÏ3˛I∏ú<ÊÒ◊á¸ue•u$Ωõ|†S|‰ÅZ∫ù2F/–çúú>É≤fÊ±º´“Z]6∂§Í∫1°◊˝˛ïu1Øäö>•>s“µE∫¿>•z“wÌQÃfE€¥^Ô~ˆ#Œ€BB≠-v¡=t3†®⁄=µOâj˘ÜLs+T]~‘ä[µÙ=Xæ`$´éüø∑$?YüOe3…°x¡¢?\ggä¢Pkg™“€ôXkÓ¸µ]2›]C∂æ0~L÷êé£‚…à∆Íˆg—ﬂ(l†S¢Ok˝˝EÍÔ∫3^†Úû"‰∫KeXxÇ“Ú™Ë3–Ÿû∞±mO3Ã`KöÖ’∏lJÙ|B3Ÿ`*û€’=d<{œ~œus`^◊öƒ4Ë´„éµb(πÈ¯|ZöèÖMÏ√5t¶∞â¬a3E—
+iËÃ¨5t˛⁄.ôÜæ0Nkm≤J.©7DBÀµ˘Ÿ4¥iË™ã=:3m[_kË/RC_®4ß§ÀiyU44ﬂ˜X÷©„	?‚’£QÒçp‘√ÅA…ΩãÕ¥«:ŒÉÿ‚ÜÔU~‡,BfyË…
+€—L>(#XÊá+ËLY*ËlI¥B
+:s kùø∂K¶†k17´ñÒû¬O€lÊ˝Û9lÁ®;Q?÷ä˘ãRÃ'∂øH”9üÄWEô)<á¢EÃR ≤Ó˙ˇ∞‘?Gx¶
+–⁄0›Å9Õ∂ƒ…ù°Sõmñ3Ö≠Ÿ.˙R¢€◊∫˚¡ÏXtÏ≤¸{€}∑¬Í9&$`@gHú»~ŒG+§ù≥˙øVŒπ+ªd∫˘îjˆ¨_’U_%«∂˚üI/ÎÿïÃHí0gÎZ1Yä˘∆[¨¡ú¢_ÚÄKJ^R<r_,O17tYFXGùòpSø"4Çí—ÿÙåh±xﬁ`"¯Ÿ¥∑Ö˙π?ˆ∞QåÚ≈D˙rWÿ’’–L\<\7gJùP9gÀ§“ŒôX´Á¸µ˝˙y¶ØfàXfÉEˇ3∏ˇüÜA˘Ü\†#Ol @_¬%5gœ<O…d≈!dD"ﬁp™©º±]†˘∫=¬¬ûa¢W±ÎX6˛¯TÛ¶)ò5Ä‡BÊ—Õ/ÿ:x)ΩúâX®ìsó6Fsπ¨Ä°9ﬂÕë¡a„’Mß—&ßçÔöı©øn‘ø-“fEHyŒ|q†o ∆˛–àÍ8MÊ06âª†;Ã&¶—ß?ã´D¿í_b\∫Êãÿ&2ÑoÔ1lÀÂy¥Epœ6π†˛4Á—˛˜ì—Oah™£≤’2®wú3GŒå¡+{dá¢`@m@%Ú∆Ü': ^®ge£≠cK:sësÚÂ>ou»9µ˚‘“yÌê_‡b∂\€Á•…Dd≥‹E‰_ldv=Œ’Ø˛_
+¬%ß`„’UUÁ≈œIÁ¶’∫nwß•C}ò˝z«¬+Ps≠ÂpJµƒx*#>nyƒHµäÓ≠§Süúå¸ÂEÖÂn6Á]j.sSπr¶ﬁ›©3wg®Å§"ﬂÖÎTk5D2&Ö¨A¡Ã	Ë¨¬§≠“ÉYRz~·#3•˝√Ï{ñzgQmsZ•Âi¯¶© ]U∑»!¸ø¸y≥˛˘ÜoR¿∆ëN'∏‡RπÓêr‡Q·Bç∂1ßœàç{åRÉhÇy8t¸…˛¯!äñ{'º”∞˙ˆ'»çG(ÆïÕ„ß^†3’0gY†ª¿'ªÌ ¥]‰lvü
+Óﬁq@`Æ∏ô‰û' ¯kRma.√òÙC3ûÒ”˘µÜË‡ú˙|/#ÔVRu§ÓÙMh#3 Ç˜q)<Ω+ê/∏äD}∑—Èí÷ÎÎ´9π˘≈/
+ƒr±±[Æ≠ytD•0å<#è5µL*[˜’4{Ã¯Ì˛Ôí‘∏>;Aî–˚ˆ#Ñ 5\Ù:_ÛR‡Ò@8xO¡7È™P÷ßÉohÔƒSﬂ∂˝!ìËë§â#F'ik»ò∞M560 ™>tÌ›"} ?mó\ÉlS
+	ß≤/ñ%Z‰]?JÓ¡n™>ÈS¯ÌÚ§…%]“,&Û‘ƒsŒ‰&d«´,◊bQÁjﬂ’öò∞òı°“æ›¨#{Óê∆ÂÕE~}hŒ≈ñdAÉv™>√¡‚gÜ©zÆy4‚N≥M.–M≤4·ËÇÿ‰Ç{2Ó°–åVÍVä.ò%q≥â4;’U¯MÄõÿâ=OyF.\£˙ıe´v’ºæ"ÁçZõ\_]¸¸aƒ?”W˘ÉÃdÑ–Iõj,<g€úø‡yπ∞∫úHï∂ﬁ&ˇî€‰ÁzG’˜ºO>uﬁÇøbL”Ç7«{x≠gs\E¿p¯∑H+ó¡eYVI2'a˛h/ íZ∑[´õ;æ9wÊSf«TŸ>∑¬}÷9ÀÀhﬂ§SkñàqJR4ùc/l“T'3hø0[ßay≥u¬(æ«\Ì™´pw®∂‚€∑,ıŸ÷üV˜™Owü›Ó:Ô∑b˘ÒÒÔÕ≠åßz6r£¬«ı|Ô?“„›ßŒ˚[¸ÒCê,U™ëÕ ØÇÍ⁄;≠{ f÷âñ˚G»ª\¸H+¥WÌF˝˙Í∂^ªºmûìŒÂŸ≥™Tnpx≤ÉŸgè™-≤≥C˙éwLˆKï@W|§˜†À˚`a≤à«YÃü)2ÀüEÒg÷≤À©p…0«"
+Œ¢ÁC<√±»M’≈†™S4¿åó~x;ÕL\
+Lˇ˝aıÎ€ÉÍ◊?§ù÷¬B®VJ\.ÊÛ.«à§Pﬁ≠∆e˜a:c{I{«Û•dKw&ô~4ù~3Ïí‘ﬁqÿj‹N:®N%.jJ‘Rí°ÒÎë
+ùPoãX∂÷Ê»˚√¢Ïxxï∞»{ë9ywG‰¯Ce‘Ñ˙Û®ÃÁ.MüÅ‹^*ÂrÓ~!8!'}UñN¶ò˚ÌÒz ˜’€ÍÌÓ!»Ù?Ì˜˚?0´P™N’*vª‘AmJ¿r@ {Çˆà/?Ç‹+ªòT;ò3{66$»CˆQÉœ-Û∏Æá^D˝ŒÍ/ä„˝ÑH¸!ÏÚŒºxÕô§Ø§,å9Ü˘h2ó÷ΩH˙†^–d$bñ¯yZËd&'m¢ç]ÚFΩÅs]
+ıÿ£˘z*Ø}˙z∏GdáhP5#T®Æf“-w–S+{˚[ªœûomU∑w7o´_'‡·≥Í◊ eSí„ï,ê3Ÿí‡Òß£‹k9ı`ñß¿,#]â¨ $?Ø&¥§Ñ;sÓXÓqïËú(|e¸Ä)xÒS˘ÑÒ‚ΩeRRj≥£æÄ©T»<}w8⁄˝b…:X√º“€ò·´Ú3y¸!ÄÒß‰„ÊˆHu*ï€-b∞˝‚ÆÜ›}G'/?ST¡¥!˛L≠KbÕí$·˘ìï°‡ÉÄ=99&oø˙`êü‚ë˜«ë˜ãRîRœfâ_ÚbV9·>|ëæ¡IìªHî≈x-{„ æØUŒÍEﬁ˛Yõ ·ﬁ…·TïÜWıZ∑÷È∂Ø[ØõurYÎ∂õIZ◊ÕŒıUÛÍ\&ˆ ∑?G≈6ÏY≠ﬁ¨]êÊi„™€<k6⁄§~›nﬂ¥$¸±ÿK%ËdÆgÀÌŸV»ÎõSÇ€	àÌÌeöˇüÆpm¡… ;ÑÌ∂kıoÅ.H∑÷>otIß[Îﬁtf?G_)øÅ«¥]„, Åƒ*˘–ÁØ˛™0?i¯u6≤øŒ‘Cõ2ño∫∆F“Óñ±rßŒ˝äÊ¸ÅÑÂÎrq›ÈﬁrjZÒe9mú]4Í]‰év~”æælv∞ ´Ãí\\◊ømúﬁ^_·æ€’u˚≤vQ‘!uï˚=3dˆ3≥êe™ fµ*EBîJΩ¢pö‚≤c»_Äm∞áì Ú(–ß˜ ·◊Rk<gV„‰[c|p[ÍÕ≤åÛ8úë”ıË∫‘≥«Sa^∏P-yÌ‚Ç
+PÍÁçÖ ∏y¶öudÔòtX*ÑÆ:¿–©Îœ©P©P∂ﬂêöP6ÊÊüﬁiL◊≥Û°ùyÍÿÂ∞ìØ8«	ÒQ˛	q÷	ÿÇÀøeWú)®◊î∫zH‡ÚXÈˆﬁXìÇ&“ÃÄJ,BôìNåT2â;ª[ë˚{π„{ ∂eÂâ£XÂÚIæèì5˚"Jñè˝•é}Ê£±œ¸dπw¯›dÛ}=J|Bg˛±€|…HèeÕFŒ¢GÆrŸqÍπ´}nch6Fü∑¯DbI 0siÊÍÊ9”Ê	µÈ(4òèú¥¢R{5ﬂW5z˚ bw{T≈ºß["’ %ÊößZ⁄–G~<ÎJ:óZOXƒö
+ØŸ"w™9FÖEzgé≈Ω¬¢`–
+¸Ó∏ıÒÏ~◊«öœ>5Ó0zﬁÜQo[§oò#$F˛^èj†ÀâK5√¡îÎ◊µœª≈L≠òé¡âë≠S”cµ¸"?&E°á–%>û¿£ÂTkÑ`du;ÑßΩ°˙;kXX®KÑaµK∂Ç–|ñUc¡
+dîWiÌÕéÁêe\å…r@√oc¨Ò„¶Æ?aùsxî±ñ1TM„ùéΩœ(.ò_T¨¶Î‰äﬁ£d!gX®=£¶+‡n[ùqod¯/?‡XM
+¬3sÂé˜‹¨Ú_ iáÀÂò{¬a˝‘Üá-D%Ãªêù∞0'ål≥ùcJÀ©çÙX9µ˝"%ìèKLµGı;c©2¶CDu≈SJj‘√LM )∞pƒ±…;Ï9Ô7,gúÕœbõ‘ÅbA+
+ª1/:Ä+Ïhﬁé	Î<Ñ~R˜Â›lìÛ∞4'ê∞$@ á≠„˚ºvPT d±Ë= /œ2ä*Wh†ßÆ¬ß*Ä∂Y~ãm÷`ÓnTâaUF‰X<2¶Œ"W‡	[{«ˆÿ«:Ê
+!> >ÌÀÏf¶.…GºüéÖã¯éÄµ]X◊bj d[BéH
+øSäJµ2TrÇví$|Ùã"ï\”…fEm≈ƒmÑÍw„’˛Óˇï◊%‘a˛∫ì@IáÃ
++‹‚ä˘≈oHÚ=By„[~Û{l#TÙ5P∫;‰\mµ Ë®/©§Cg}Qol∞öø¯¶ﬂ˛KL\ÿZ`3¥ùædåø£äFÊôﬁ‡|ÀﬂˇÜááÖ„‘øCæS«&kúcìSX<,°9„K πF`≥ˆ˜q˜Î–∂$ï0–üYñ;gÍ»0'õ≥.è·ä˜¸ÌoD’˚ö·≤ˆ€T{0à˝∏ùµÒÅ
+ s‰◊ø&u‰ç$ù≥/¯`‚Ôöı,"€˛á„çÒÑ0RÈbÏa(û:ò≥_'-¸~÷∑º£ì€æ›cåÚw¨¸qêÒ[:—Ü™a¥Í7˙báã≥eï„@¿¿0§:cƒÂJ  òùEö∑¯#s
+tÒÙ£L©CªuÈ»Üê\ˇ◊_ìK¸å4\ñUªÕø"ï¶V<à¡∆»Î£É}VÆ‡9En—búÒHágAiÖ±cê⁄uØ?ˆ∏¯ùô∑1á*L76˛ª&G â·Ûƒ™(p+ˆ=9ÖÖôcfmf·óÎÙˇÑNj ∆U'Ï,Qç∑üª™34¥YõÔ~w€S],Â˝øG° ≈œ…	æ¶éTÎr¢ñÕÀÇ#Ô„‹-!‰UU◊‰◊úÃ˛{ÃDÃ˙>ìç$C†Û]˜3‚£S∂!0ﬁ^ÒNO @f„'sæ[Ê8//aŒ~⁄ﬂ—û–£®ø3V-{ØÁ≈⁄ÁŸ√qã˘L_âJ·a∂ù,+º0Ωc®)ÚÃáôVr"°‡<1%ß,7ëH∞zzq´ûÍ@•òqhõ˚‰|ú>ÙN„J-¸≤§C˘Ôf@¿!@EßhÃﬂ6Ù‹ìë¯[ ˘\Ï•§∑‡ß=ˆÁ=ñ√ç,¯h™©≥ìﬁŸÇCúüe˘K&ªxTM8ÊÓ0πeŒÉªO∑vè∑v˜ûsÔ¡ÿ˚1˝!˛ìîE'M«ºõû®≤u)JÛÎåÙz‰Wêïu6]\xî1“££¯ΩÙ(#/ú.˜MÒî∞˘€T9M†óˆsêcœ„b4ïä÷‡t%LA£Fñ<‹+;Œ°√|jãÁˆ›œXÓí4ëÂ˛ÿf≥Û∏–8{Ç]B˚_Y|îölÅ)‚È¯∑YüÊõx¸o3Î„ëM&ö¯ıØgmBÿC‚˘¸ªô«l*-¸ÎÃs¿7Ç¯˝¨œ{¢Åﬂ˛£¥ËK|> Úÿñ|/„/∆›Vô∞∏¸YÓµJu√œf	7’¢Õ·¯Uæ˝øÑ9ı¨h7~emÈ6≠»⁄u…V—&	N3˘˘Fõ‚û74Z·”µEíΩïl¯[:9µÔ≠∞ø2©óxf'∫|ƒ…±ÅˇdS∂geâé≤ﬂfp‹frFõz≈∞.’da§‡ 9. ¥£üEv4	R'UÛåhëî†‘ú÷&™%ºTò2RÅèîÔwèX2â‡	ı∂Xzoπ´5:˛îÛ†DÚk~…ß¿Ê◊LiËÇ+Mú%ânö]ÒqKñjg%±¸3}mÏÇ—≠à8TNJÿ$åPˆ7#4X@ÖŒˆRfVYÊ¥ólj	+$*˜dµ‡ï„ \‡≠¬˙Æ∞Q±§Ü6øJı	ø>Î&≥"r^ÍÏN§éTjÑ}Rñ⁄≠úuXQv≥r∂,Ú´H^•J†»Û>/è˘a˛∂"⁄KÒ‘
+{©B+\b%CËZ:éE8¸Ÿ@e¥˘•ı&JVî$àüﬁØ-ôUâπ<a…&'«|R{¸ØnZ˛«Ø0ø•Éé:≤iEíE“Tó°/±{#fClÚ_–;jn˚ˆ6WáÊ*õ€.e~ï'∑O∂»íÁ56€TïÒí¥C%ŒŸr(}ü0ó6jÈh“≥ﬂ%b%lÑ¬Éï‡2t0€q«÷c+°|Ï.=¿K†ÛÙ¬ï=6ÖÕ9\çé\D·åµ&Ä:Q=“äΩ≠î2ëdáN#…›º√0û¸G˛PÊ† c&^•\]xH?ü);g»i1q;Ñô≥πË‡%8mô≥!qÃí8aô≥©ÿëJxä2gS<…ïq ¥Rt
+›S,T‰ê>gk^Ωπ[ñ≠SX_&k8îGöX^æ0MúÖ≤ä‘ƒc¢D≥•±â-€RÖ#ï9±8mnŒ…ì\dP(}é‰‡öµ·≈GáèY©&Ω~“æÆù÷kÖb[ó7≈Ÿ„Ä∏‡¶πwö‰,\F˘ûzGÉs»T⁄,ñq&ß<x;('8Œ4”'üôtπ?ˇâhòÓ0b∆9e óÕô∞y;∞:Ã„ÙÅ±>§ √ß≠@ô‰bG‰Äbπ°WæK3˝ÚÕÄOK¡Â˚:sÔÈ<`?ßt/Géc"—;-Ss≈oV™«O¬ \å‡¡¸9DfüDÆ¯°»+«:∂0ñ)L!st¿T˛`Œ)k'ﬁ“ g#å¯è∂fbÑAr°‚ °ËD¿ªSF%´–ã`òïD¥d…Ω,Ûê‚1ä‰Ã €8ø	ì“í◊‘tÔ√Ã…˚£≠¢å#1«ÚÛ<Mï[-Làﬂ›é˙ªCZò~©√í±UòW(Q^·W≈âﬂWUf&b∏;óìﬂånÁU}ÿH+%OÏÏê6EGfqœèâ⁄«E¿›Ù°->Åßª∆àÇe]ëSNÈ°UD≈1ÓfîKÄM<±ù‹X2®è[t@µ.…ﬁ¶S¿0}˜çπVÃñ(mvœºJÀs&“V>√Æ :ûHßóÌµ≥ø˘CYy∫ögJÖ…od&]≥pqâèGÀr±-Íï◊ºÔªÙWcjaﬁXÁqÇ˜î:aYõ0
+Úâ‘#Úm“G	ìÌ"…ØBŸ˝Vﬂ§{)œú®ˆÒW
+ºc“ŸÓ‰22@P‘l˝u≥›¬§Xˆ•—ﬁﬁﬁŒˇ¯7q! ΩI%±õO>ñß»(5:QnÔmìñã¡(ÿ˛	{‰7S3u‰û
+~¬õ˚ˆ/£¯∆∞YüXˆ=yI,zON±ZWâÿ‚œ¯ K;æãœŸ˜€æ›Â√RU6∑=«4¸
+Ó©_˝°∏µ0Çßçïw+-Â#-˜:Ω¨bìœ≠~;"Õ“v7N±¸.WZÁzc#—)kQ}CD˛|√8îÕÜX‚cD∂}Ô}a”˜@À0Ì∫tÏk√&3Æ‡÷«ûoè¯ﬂO|˛vÖ’àSqnülëe[K:ıU√<.ø1,’µÒüø˚ßﬂ^wòºn\¥HÌ¢—ÓZ‰äR›cLÒìç≠Ú&{∂éŸ„19¥Ê ìÒ∫],Ç◊Úò|ùoìKªgÄ ‰Q6l®"˜ÑOıÌ∑ÂeΩDQ/÷¸-sfNXeñdÒãÄlÒÆYU;h1u‘ÉuO{∑Gü)	¯'” -qßT(I¡M ƒ˘"≤U”ù†ê»0È°BÛQ|bˆ»ÿ ä-ıÊúJ≠Õ´ÃfzÕßÁgñÑî\uÅ˙Ø”˙°í4GPOHTïíRGbüµ>4\LŒHÆ‚Ç¶H˘‰*Ÿí¥à36é„®x˙èx£„ë…sq‰ê}YrÍtü‚y-ãíè∆ÛZÇÏ`«o<^†l'#¬!¡ˆ6i^ëV˚˙º›Ët
+-‚‚uœ›-ò'ŸPVvÕÃõÛS6ƒlû4HÑH¥m0«X¬w‚¿“5OYﬁà.c¿∫Ö9≠HKµ®)«Ê2	}ˆX¬aTÛ}9≤ ∫/.≠Ov1ò¿U¶WöìA¬◊V≤pÕΩrÙ}îÚêOŸ'r˛Òâ∫zyƒ«è'VÀ .$')ãH∏hhi9‚Ö§d\≥|CÈä{…•
+*Á}aÌ… ÍØŒO[m¨âd¯†‚ˆèD•˙u´U#µOc’’1◊ÎÊ≈Èm∑v~€y›l¿ØùF˝¶›ÿÃ»¨R2çÖ°ª†=)ëüZéÑùãò‚Ì∏–A5·}lëóñA '›≈+áW≈B$!«≈Äß5&—Pr?z‰¢q÷ÕY“ºg «Ev(ô°#¨îOò-ŸÃ^A´È"v∆æ•Ä7nˆ+ãDæDô#&Ó•ÖQsQeπÏíπ	ù±&ºÎ¡øQ‚›¨ú≈©ÛœÃä∑q—É∂ÃıgÄı€ç´ÓÌÄãFª’n^ÂQLæ,ï/≤W\πWP{'…≥T`ëRπ¨’CØ¢ŸÙ¨'‰˜å¢-ìx≈\1+√}dÿñ¶Ôé-ç9Â%àÌ[éeößŸ ¨DMIÿ4|HH-©¨ÿE2Ìw£9&q!yJj4±/[ˆ=òà$L‹Q©˝dTºîÛïºÇQ˝1àÜp·C0\5˛≤{˚7çõ∆Áñ`ﬂÇ’Æâ™èlqœ`P‘u¿¶Ù*
+bæM)Î _$@˘LB¿ÇWÆî‡öﬁ∂éI¨g¨≈†ëJÁuMŸ;|Z≤√¿hx˛1Ó?&pJp¥ˆIêÛq&^a5BC]Yêñ—Ô„ÊVôî¬0≥Àå‚|ÄÛ,Í\ıBK8§!ï9'≈5≥	ïÿsmØÃø#™{J˚&OuZU∏∂òOì)À,Vπ ã'õ,<>ë9:	èMÑ*ﬂm∫›¡∂º››X∆Îóè›à[ibHÂ…}>ºÕr_-1´bròì∂úìÎtˇ
+vßD.s\ÔD÷Ë£Éjí&ä”!î∏NÌÓ$ù•ï!cïp¨ù7ç€≈k7Œõùn˚Á¡y‚˛Èü√súñk˜@>±„÷®ˆmékë√K>H ÀÇ&*ÜåA0a¢ôâH^ÏÊöæº∆≥Ü‡_ÖÖÉ¢rAÏ^ñ$dÕñÆ@ìP·S~•—WOì⁄=q #î»jÆ‰¢çY6>ImxáÒÄ%[ôÔÀÛ‹x%÷áùáÕ]|}æ¿C«ïä‚
+ªƒ¬¸Zé]2;A4π9∑x¯÷’~^hõl@õò;^X¯!Â>ä◊:1É%Ø9[∑Ç/≥ã}à≈åΩ÷,´%H!nŸXŒ"ûÔ‰w˛·Øˇﬂ¸˚o……VIló·ô$«¡ûj7–¿4s'‰y5 ≈[$ÃµÆxàPÒ… [7Ä`≤&ñ8€egÍ<Û7Í’F™∏ˆﬁe{û‚R π‘“∞ùâ=v„	À1´˘6È¡tˆ(ÖÊ	¶D”vB∆≥p°-ñ›€D_ü¿√CTﬁoÊ$ÑπÀôÖâØ–ç€êÜï6ÂLgÙ&Y9ΩãœçíÕR†bˇãﬂbñ◊6ÃÔ¿‚pÊTı’"ù‚bX8˙À®FëôMJ¸Ö.aEÇå‡|oîm›tFË@!Ì’ãq:+VÏΩU¯ÔÄCæEtÑa~nVò«ÆpÚkÏYÌqÈI≥œπ)*ÄÈ◊πÅ;∂à=6È9Õ* äO]›"XÉæ7M∞ß0X`g`√Dg˚#ÂobeÃQ`Ë#,À›¡lr’4'€ËÊ€\xl"m¯®ù=≠Û‹∞¯<ﬁa!ˇ”3√Ï™÷Ñ¿¨P›£.|˜¿L¸◊ ¡Ó˜Ó_JŒñW™GréQ∑dz˛ù£,µùááÒDoˆ9ƒb≤˜Ûî∆Áb±„B	ßÏzÏÁ fÍ£¶Â˘ÓXÛ≥âi NM1⁄)."B;¸ì0ÉaÇÚaíæ»ﬁ∆åù¯
+≈›9ˆ0öeußÉ Ó ñÛÔﬁ¬ŒÇ¿éÕ<L<Ã˚1˘	œÜòÛ=˘òâ.
+‚G≥úrvmKÏÏ‚éÂ %nk«ÀÕHVñ…uQõ/<4À∆Œ≤Ø3œ˛äGCl\’N.ß§¬&6ôy}⁄Ï∞O3åË¸ƒ£ô¢¨¯˝ôæL/Ú1√¬®’ÚÍì∞Újî‡Éè]§Ñu`!¢≥¡™¨pJãÁ;AÃstúü ≤8≈¬Sã∑X]êâ••JÿÎÀ2“Ö¢Øºf	^râÎ¶kó\PõT.'‹´¿ı1ûªµ,”]N—í‡—Y“€≠DÍrºr˜∞ãÕ⁄OK¶ı°m√W-◊Ó#Dgÿ±úZKSµÑ‰Í`É%iÒJíÎ∆úÙƒû˝"	™p&ôÓcË˚éwº≥¶Á ŸÿÚÄ◊Ω·∂fèv¯íÏÄÆ>‹ﬂ›WûËzø∫wÙTÔÔ˝Ï˛ÂÓaıÅ/Q˚®˛7}P=ök;ﬂ¸Í%ÇËˇ¸›ﬂ˝·°…¶öÏ $ô£’ßœû<{v¥W›S4U?:–˙á˝]]™ãø'ój@œè’√ËﬁÛÍnıhˇŸ30Oûk{œ{{œ˜˜´R=¸ü‰åéΩèá’ΩÍ—”ΩΩ˝√ÍÆÚå™O©¶?{æˇÙH™èˇ=±–{Â],À3èsqŸ	 ö sπ¬ÑNN6º 2˙„ï)JÀ5Ê¿Ë˝4‹˛Dô¸Ò ]ÖŸ3˙„≈Ú`0◊¥8…dWÁ,;ù ÃÏèW'7Ä‰|yävπÿ˝ü*„0[¡¶ì˚≥œÂŒ§?6ŒÈ;∆Cé*<≈#•u¥Ÿ∂ST Øƒ…u˜ûª›sP‰zû(ë;C¢&ﬁO/Fá3ß◊/Œ{Tñ[(¸Â“Ûï≈∞§Z	˝◊∞æ56V£,ˆEÖ’Û¨¸Úó∆H¢ÿπÁjÇdò"ªqÕíx8ºT”±ì Ú¶%Ω(Ún≥2ì¿<0ËçÚvÿŸäK›ñm⁄≥≠)¡Ge)TJ3ô|–T”ËπÏËŸRDQ	v*£‚WÊVƒ‘ã–EäLb¬¡*;T"wÜ7f•ø‹¬HØÿÎÚúp∫RÕ»	%»h/}ﬁyPMë·,±r•˝¡‹»1ØÀ°Ú˝^*Î(Ñ«≥9Ôoˇt∑⁄{~¥˚I∆ûoœüòÏ†«∑ê’Øü‡AèTjﬁ≤{J≤ªÃë¶6Ã]Œ≤€@ã®%øb¸[~ÔX#˜˚YäÊJ¡ó·∫êÈsï§ÍWı⁄EÛ§]CGkŸ,”fÛÉç¬{$¬£ìÔëèá%Îzâ±‰ OlóOM9_tM„‘ho#Ø^íÍˆÛC–ø˘Ÿﬂ6@o§Äüa™„—∆«W*ô≠ˇîÏV´õ€æ}fºßz•∫˘Òk¢j⁄ ﬂD2qq^‡TtÉ\¬ﬁ+˝r÷˙0k$ÿC6Iˇl)˙Y¨Äu)7Ÿæ
+ÒaiŒ∏∏S‰¥ ¯	 LïSﬁ u@{’”o¨àéK•˙è7`[-◊`w•8OOpaj#,Îj≤‹#]Í˘ï'X;›Ω’Ü∆à>Ÿ"GáRI‹¬q∞®,ù¯{ﬁIÊ8‚WŒà—SDæ^◊É=B˘V˙AyTu√æCí,Ì Ü0[vßƒ€ŸDé}h∏5¯í‰õ[}lÜÊ¡^AUW{?#Ïî≥øER"ÔÖp{dXê´œ∑P∫>%∆?˚H∑G0æü¬«’˝MÚkÜûÃ0°$v ;”X√√€ôûJÕÛqb5fh©,'KÚ î“egÇ+ãÁ}tOÇèn5î_»ˆrÚCå÷}Ü€]Íè]ãTeüê±bÌ2û˛3`iπˆÂñ Ü∏{(3Hâ +”Á˙œÉ|ùÈÿ·XñîYÁcÔ*Ç≥RÛ3ù5z/≤¶“Ωg•Œ@îZñÌå_≤9œ“^SôNß:;gÚ3~ï£		ã§ÿ ¯y{ŸËº∆úA⁄¥¢˚¯ı[úõ –7
+ÛQ„%W§•ÃîO›+íÆœ
+¬
+Ø„âÃÎ4íOä˚ÿL6É%»[ŒÉF u&~Iπ—˚œƒØ≤E+›h ‹˘¸Æ—nû5ßí)’e	x
+˘rB°<I-RË¥π‡ºπ•ÊeV2\ôsÒ∏ƒ:»å…˛2€…~Óÿmñ•÷$õyiÛP>ÚiÍËPéÂ⁄yAç ïÕ‹∂I≠áN¥ót37Ò{i ~˘ ∫Î?-»©˚¥Â˙ë„Œàçˆ2£ñèíYÖ“[Íb£ø
+∂Â›ô§…ãÊK≤Öîk>ùIa÷$,Ö[Ì≥∫Ú¸†∫GÍˆ»1’ wC)	L."Óºs2 ‘◊T’w¬”+Éπ£r£uë$`∆Æ™@Ëäo+.ã⁄à—:–»%|^ƒ—t˜1ÄT6>I@ŒËƒÆÏ8*—üît(Áß3GïÂx≠⁄·~n)¬(Så©†JD}Z»ÒN°4TÑ4<aQ=≈âC_Ï˜KòÂ@æõŒãàÇ0J≈=IÓ˘û“>µt/Ê/Œ¢ë0D»ı®¬úV¢®•JÀ5&‘€"u‹Øπ3Ë=L¿&s;aE^ Yù5g÷ª0§)ÃÙÿé¶◊&∏¨≤∏Êï	ü®ö$Íg:´«'≥pá˜!Í≥<Â|»„2j.Ug7Å˙*Z§≈%f
+ÆÇØX≥»Ó1©ÈH™ãK√™më+€–≠‰ó<¨¶‰úqz»π!!πÈí…˘“NâŒÍah]~÷6k@åƒŸK±ﬂã§<{–©∆Ä9™˚Œ§y~G≥J˙‡ö¶•–ímA∑%N]ÂŒ÷äÇ\KR $=p„aªëIﬂ8Ÿxu¶ﬁøÉY⁄›ﬁì=Ö*UiÚAC)Q/±≤úg1πÙù·a¬¯-¬JÈ)å‰â™#πéòÙo9=ÓÅm∆•4Fπ∫∑ÚŒu«‹áÒ±<“BqcqQwõ•õ◊‘1L¶i€å◊WsÏ“bAæà√∫yÇ’@U"mÉ¡±Whp<®2l^Rüx<8n»–„¿—Kçò&‰4ˆ˘@íçQèÍH≥˚√‹]±œ%∞é?÷‚ÜÿπäçÀÒ¡î∑ !ñ5MaxXÊf«Ü%ØÇÕÆT¶ñ˘≈íW~áÁ‹Tû’bæ=dπÙüh∏òqÆØíÅg◊gg⁄È]ÄA|Ì,◊Ï	··I*	s.‚@÷®ÎãC]7WãÖ\˘¥öà´·˘$êÊÈJ`Æp =¢~po¸Hı-rg∏˛∆!Ã\ƒJ"Ã[ªe¿•ÃbN”[‰O[≈òú&1Ç]	tºúDoµfÄZ:2ã‡ï(¡-®å∂X7úÛZHè)é6edH*ò†iëkÀúH=l¨≈£ÍZ∆ úüdeœﬁ2£¨ÃØaª§aV.”¨
+Œ⁄?é*ƒâ÷7WŸÓi}yHÎ‹ƒÙçãEZibƒ≥ö Kdµ«g+≥∫»#P}‡I3¸≠dﬁ6ñ!”¢¡hﬂÍ6¥Ï+–\+üæ≈hñj«¿ö∞ÜE09¥=ˆ{¨r†À≤·ˆxqêæùgŸwL:`≠ÙÇxŒçcß‰†b∫†ÀÌk»6úk∏ƒÂ!NnÉeıY∂„ÛÀ±Oı•ÅZb¢»B†÷Ù¨Ñ8+c¬ñdMwwç∞ÿ%ç∞≤9dU‡’¡1∆âcÜd€ùê:JR¿úRN©á—‚‹ÉÕ-/N∑ÜZ+	µŒìv±ƒb—÷âaè®Ôπ@-º hÎ§Ÿ™ëRØ∑j+µZ&ãåâ\EÜ™7ƒúï*Ê√≈B@Ä◊∞&ÙΩfé=‰kìÍÍnG)n2‹¢Á@äÿÄL–MP≥G#ùQ bM;öl1/œ¶Íí{⁄¥¶”˜ò…|ç∫f@]°HfπfÈBÉfπ`´% à2›">aGãΩ…“‡.F7E]9≥aØºi[jñ”È5có<+‡ô%Fcà≈nÆ†gÌNÌÇ¥ıÎˆ)÷∑hµØªË2tùô,.Lüˆ¢.r…iwXÍóù›Æ,dZd DYì¸Ï (”i4KV˛rl˙ `ñﬁ9⁄4mπ∂o.-°árŸªòÍ®ππ≈RË«˙ ¸cá˚n,0‚`ÏﬁQ√4ÒååW#÷®„≥¬ñ%sWñW·±`S„ΩO∑DG{(õπüéK˚cîGztb#∂ô Úlöë∑,/+¿;IÉÍËï≈˘3äÚ»Ω·ëDV◊ ®åô√˘Ç∞DÊã•ùÅ´Ó∞ Âÿ•›√‘óuu‰IÌŒ.£ÒPﬁf|à’¯8v„rXé(Aêxz˛≈Zè$ $Óº{RñÃIíüz„æ√§·ÄoßH[ª2ˆ‰cZîk£‹BÒ]Ô¡ X<”ŸàØìêz™„pë7∆‘WÅ¥I«d⁄tF¸ëÍΩ€I$¬«ìG$–ÖÁQöºíÖÖ†T/µ$%lIY+˝ÛŸìã∂(˘J!ˇÑ[î	áµ6Ws¬sÇ˝z‹s(“±¨I)oTŒjV&K>®Œì5/ÂÃ‘$ÖvezÚdÃ…œaP&e™øRO~:[ÚÒ¨I{R∆¢$\3è))kL mrï¬;ÙTÔ~Gæ!‹ÙC◊3E¿ÂkXˆ√≤Ôò¶\8"[Üf8@;úÆ82ã—÷
+„≤ìΩsfúí√z∑B∞Ï4ÿ°«\‚ãÒ·Ïçº°˙éo˛”∞B}Ä\ÚD{ìQ∏¶*7~Å.ÛÇu¿Œ.∞›wÃ‹•ò∞√ë8î£òﬁÙé≤zFkd62”4ˇ.‘.6ª»Xâm,Ï¬„Ü◊≈˝-˙∑.0√°,ëÖìb±h∫ñÖÖ=]„Øƒ5˛J∆  /^êÓµ=¢§iwI#<h]√Æ/v±Â^4ÍJQR•˝›π¢ûü]Á ’•ÂD[,#yc(g9aNõ+πbÒB&éÉÖ¯ë@æ¨‹ﬂﬂ*9πh0l≈GÀbàå¡ÿî:ÆÂ¡≈‹¬|ˆÿ◊m;®~ä{,ÎﬂÇ!c≥ü"a‚ëç·Dß
+k–5Ëb≥å|	g–0∏S"º~cZ˘Æ+Dπ∂ñq±qaJËŒ≥(Ë5=E!ÀòΩec”]^£≤ƒ5*ÀfûïÅg5 Rúú∫∂¶Ò©·aÆå5<˚≤·Y›/ù1
+
+2åq¢™ÛÓ\±∫≠}Ü9«Lñ&fÖ–YPí<:o®Ì·ëe¬›ïUñgtbŒ`.≥ﬁÿh∑E,È5˛HuX,7skç˚µË\|@+ˆ»˘	¶f3L# ‘∫£¶ÌîFxØ—YVR∆LåΩb‚tÃ9µ˚òÑ?Ó˝*‹^…%,˝í°3>E«∞(lñ9AQ>ùÃÈ[vÑñŸÎ/§~êñÀCÀÇ”ÊæA∆£∂÷$o'§ﬁÆΩπh¥…7§›Ë∂Ø˘∞…i≠[#¯Æ_≠ùk?≠s-¨ò”K˜ÑŸß= =ky∫ ¬Yﬂ⁄{ëUñcŸ#{Ï·‰’]ıﬁÑqÿÃ`dâΩ˜J&Òs9Ÿ∂xÓŸÿ…aœˆEÓY”ÚÜ9sX‹KdXÃsÏw VÓÿ∂!S.ök8¯Kh§°ncë°õ1±j9¸¥cLè;x`z∏”÷É”t>{I];ü/ ›ˆ⁄°Pƒy´ã∑∂^ø\Îu±Ö_IÍI%V◊dumî&€˛{üªûØêŸöpƒúäŒ≤ú
+^î˜°Ÿ⁄=ÒÇ’CI[ÚìÉwÜÜp…rwo	ØZ!>y˙ÿ@xÆ≠’9¨’Å„√$u»fhÙLáÅX˚∆r8‘ÚÓY2õFå¥¯„Ñ‘,Ö∆jzˆñ›LMıwm†&Æ‘∂Y”¥yù€6Ú
+^^cØ5ˆö{•ÈG¯eØ.˙:ß#0ÈqÍôeøB‡ÎîB”.;4 ì–l¬(Ó∞î®ö2µlû√∂4níSvƒ˜6ÙÚJµ°0eY’î P„C—¯ÖœRs∑∆`Û`0∂2¡¬Ñ.Ébj˘ﬂ±3É&‚dR3M˚~È¢õ¯P∞@Àb˝i3Ê)Bbs∏Ùhl∫œkDñ∏fAdŸL¥2®¨f˘C◊v¿ûôÙ÷AËkt63:ãË®n™cËÂ,÷ﬁí41¡+Öœ,ÉEëÉ∆F\≈ q2T.;8^`Å§Ì‡HI$B”çÅ·«Û¯≈‚û\ ÉŸ˘	?D`HÓ‚‚˝DÇÄ˝50õ«ï#X§PùƒyJ˚bı A∑®ãÒMK ¬a,é%g'r‡HN⁄≤É∞dw◊¯+qÕ‚≤1≈++ΩÍˆƒ?ú^„≠/o=Fn~í$üzAù¨,YRº8fpO‡¬[ùqè%Íá¡éTwΩ6ÆlQ6yÉ‹CÀπ˚å Â)˘çÒU≥–ˇ6U…qç;tâ≈ æm˚¡nÿÿ'v?,`â≥»”L3O‚R«fµ]c},9_\9„)∆R◊éè#|’cá˝Q<y √ÿ∑··•ÿ0[.$¶ix<i;>–œ¬¢Ã”SEõOM‚≤É±©ØÒX‚ö%˙<ãÉVí5[U˙òºCkçÕæ\lˆH…¸	iSﬂµU¶‚‘D:0C©t–C”ﬁ"'0_ﬂQ◊ËXAÒ÷Q‘[Â`uñ˚^$∆_©Hı≈$˝°ØmAΩ•XÖ≤qjì+ƒ ‘4…ÂÑ4≠æΩ¡∂… ìQ¶çt Ûˇ«s
+ÌTˇå8∂3∆¨ˇµìè™Æ6∑1«⁄±-”∞(ÈÂÿú+⁄êÇµ´.L6‹πÜ{sU«æBû≥%¢=h≈∞∆Ãs<t∫>r5b®p\=>.≈√Å-
+Ù•',™îôû…eá|ÈØ_‚öÒe1—  æ∆∆á W« Ôà,Ôk‘˜Â¢>æƒ5ì∫ã~˘$µ∫êÆÊ˙Ü¯‰êú®´Ëö÷&–‰aˇÌ>Òá4∂HQ 5|∫W›;ÿŸ}zÙ|3^”.Èƒ•#î+æ1¢±¿®ÄD∑ÇõDnn@⁄ê}éPø¬Wa.¢Åe¨œHÁÑnt\3`˘8c5,µg—ÇÊâV∫Êéƒ›#5:VTC3Q·•,‘≤¶'kôs∑ÏÄ-´”k–ñ∏f myÏ≥2¿≠iÇIl∑ƒ#˚,ÿuX√∑/æù´w‘\8p+#©’Öo®:«¨XmãZ™ÈOV¬u]c0¿]x/Ñ√ÅõcïØv∑™–.L±Ë¿4–ìmã|u~äæhÆ# ±;√Ê@oì‡,π©«∏ÇxŒHOS-ã7fò∆m<^ˆóUG6¯÷n◊35‡≤ò
+bkÅLßú≤]”Ÿs√—(=,
+∆eLQà‚≤¶oŸA\Fü◊.qÕÄ·r¯ge \˚¨Æ`xÙd
+JÚ\˛0øk¯ˆÂ¬∑:^u~5V›≈{≈’Í∏VŸYW
+¿qá)¿nÑQ≈ÖFP\EëùÃ›Mõƒ›„ÿπß®ü§Ûmh„˘æ£"°ﬁƒCrLï ”]€âÌœ!ú[ìŒUYΩØ!KE”6QÒï ÅË≤51%*\ª(¥ñ7O Ÿ˛?   ˇˇÏΩÎrŸï.¯*[ú≤⁄HÄ§D—%ï!í‡‚Õ XÍjµBJI"- âŒD±hFÙèÈâ'<}˜ƒƒq˚Ñè;&‚Ùœ>?NÑÁÔyîzÅˆ#ÃZkÔù7‰æ$ eªQ%»Àæ≠˚Zﬂ2,‰w]oS¸?î∑‘OÂMGSﬂnÈÙ†%u¿ŸSœŸÓ–˜ﬂœß¨Îçy√zvËú†Ó∫√¶ï];’0°J.áKyWÖM•<nY®Y˜ãÁh#~»dßfhıÓ|4ÁJÖ3Ò0Õ¶2ùè@¯ÿhzqdµ„b77∑í>»‡‡Ä)¡ÎhØY¨JœAïÒØÿƒuêççv‘=Ö∞(í¿"Ñå¿ßÿE˝jJÇ3É-ô†ñÅNCö/“º∏’RØBPHì cTxlÜï‡."¥Q`ÛIgP·+R	£Õ5›=B‚¶On‰=ìKd#]zêâófdΩYPÜÓ¨õÛûÚ,òªÎ?≤π=æÈ4/±üJy´Ëù7úèfÂ…|4*zÎ°ñ_ø±∏Õx˙Og†6∏”ê=aØm$"Ü◊iŒ˚¨∂µ¡∆·Â>[˚ˆWøe]<ﬁF…1Ø gt˝û}B+·¨c∑Ï2o˘ÙÇ”F¢˘9¸¡['a+¿u–‘÷ÿÌF¡!’wÂê~ˇõ_˛k}úë`ÇAΩÀae‡ç›I»Ã"‚ˇÅí7H)˙zπ◊Ó$_˚[F63’rG©ùÁõÿ+IIÁ‘äùK`ƒ∏£e∏‹&FOˇ'˚È‹ºˇœ¸®Û8•:¥Ï¿œ$OÑÀì©]Ù‘i†|Íç[◊xGÃ…‡ÉÁ^-π5{â˛Ûø˝˚Ô˛ûµ>8£9ë!œ›`±ñ/≤jA£‡∆e©õ13˘XåCy≥b!2©Ç’”∏\∆?7Äı}¥‰;D≈=80˙≤-≥∑Âp|}UÆÆ/Xx±~¬ëºÜuƒﬂ7ÿª◊ü›L‹+LÉwÀÎ’ôO4È‚¿ª Ò&óÂı€7`ê–˚a?oﬂŸp"P…7Xã˝ê’÷ŸÄblXÊ-\c√ã/k˛¢÷∂lFeqV€‹d.÷b28åŒ6úe§>LgB]ÊfÆMk·ë;„h/T«!ø^[≥+ﬁ8Ûf#óãÎ˚∏l‡„§ZU†·êN¿Î7(,,H j°ºVVÁ9¨ßFPùŒ√ay-Nã2à÷¨ˆ-~Wé?>˜U‡äC≤Úñ¢ØSYêπÔå‹¢“j˜∂Br®ä;ÿB·‘˜BAÓ`ÒÖÏ‘˚Ë¬ˇÂıK.B◊GaD/—Oˇd>;G”éΩ‰ºæË˚nﬂø>Â‡¿qÓ+J÷öπ##,.<EûüG•È©7&É7Ùo≈≥µIU)1HË°;∏¥›¯µcˇ‹πÿ§\Ω¨gÍ•ç~ÈHÂ‚EË≈ﬂµ≠Õ}µr>Ê-µe)n—7,∂`À}U¶®ÏoËûQn7ë‹Wæà[.âûX=ÁÚr	r»‡√Êøå√_ßãÌøhˆ,ˇe˘†ùÖó2ÖÚëB8DN”ÿSÖa∂zUqìH_Ê#ô¢â|>◊e◊l¥)pG†ñ«@kßãÅ:˝[TßE)ƒÅÁ\N¸‰bÙ0πﬁg%¨5¸ƒNSïcK¬X4ÀÓQ£”;}yr‹bÌ„^´”lùˆﬁ { ∑J≥¢>Ô,áZ(Ï"pPa
+Á}∞√ã9’ÛÅi2F±Yµ€B?}.Sª√tâ˘Òû;o¢∏ÊåçÁØ:«HŒs¬˘#ò7S∏éM"M}‰ÙﬂWŒùÄaT{‰\ﬂÀtÛ8Ï]∑ôΩ<9jEõã≠…zÎêïÈ˚¡9V]Ú¡‰!πMõ˛ÜòÒ5HπóY+¯¸&ﬁhu⁄ç√hÀE◊Õãôﬂ∏Åh©¬ﬂ $∞∑Ò<s$—IÔ|~éÒUXëN´€Î¥õΩ÷¡ΩÃ=H˛Ûü´AF„/3†M—Á9Ï˜´¯Ï§«Z—<<Î∂Oéﬂà∂Y@bÓ°‡,ùcá‹(Çï%DªEèZAƒmÓc9≈¬]Êﬂ9˘≤’aç≥ﬁ…Q£Gk–≈sBˆG\ö{Ef>ÆZìdizÏÁ±ú∑’ƒçÜö›ÏÛß/,∫&HaÙb€Æ
+rå∫ÑªQ?èÿOòvüp-DIèåëpO÷=-EÆyóï†?lºJëWÛOg¡	‹ÇÖ˙ı+o6\HƒΩfWN0°∂Í˜≥ jK˜.´g
+ùù∂«M3-Dˆ¡ÓGbVzyª”Àª˛zÓ‹+3P†aÙ9	Q⁄âéfE›L
+è¸"Á¸∆NSƒ’N©†#wr	õ˝îmŸ.s⁄#ÙNËéíˆˆŸg79/∏eáŒ5Ú\ûÂ˚ŒŒÎòÒZΩ˚z!Í%óŒ&HNRıÓ'xbÎ#0úá…‹ï§œ\åàM£F{å◊hÖpSŒ|~Ê{ìÚ⁄[[ø≠bÃ˜üdØ D¬öà±≈ÄﬁﬁS¸Ç.¬wéxp°3[’jAnô;
+›•∂iÌ˜ø˘’ø≤WçŒq˚¯≈~Äs*ñØıqÍ√l≠‹{˚≤÷ ›å” åÇr8Zò2bR
+9-,Œb 3°‡úo;˝æ?'p¥	kÉπ„\ÇFø¡˛ÇˆCZÍˆ§*~´Ωœ~<uÊ£∑·l*k’jz6\´(˝äò]bO¨≈ÍºÓ¬çåß91à[VÅíªiÎìWÖB/Äu⁄ƒBõÇuBCÌ¢£ÉÊÂE∂?Ñ±ó6ÿûïüÉ’Y¯ﬁoM€∫òu≈„ˇ”èòPr]©H∫
+]Ï^ôêq:Z*Sﬂ£Ï
+ã|¨ºX∂≈Ç~±LN‘ñﬂƒüU—Ù¡‚e<ãR;·"âZ|Ú0˝vL¿f;Ø*Ø∑ﬁnΩ≠’ßﬂóÁNy˜ÒFm{k£æÛpc´∫Ω˛∆ÙfSrñ)9#7M n≠€>:;çÈ¯E˜·ì•›f„òı¿∂Z3§©[$eôÛÂ1#JîÒ˙Ï¯¸Ÿ|ˇ˚¨ºT ëEÛ÷¬πÆ˘®∂iÆOª¢Nã9¿◊>≤f,&`”¨sOÈ≤õãÖﬁÌ˜Ï±TVU•Vj©åÔà•–∑HC@Åï°7X•˙ŒQ™6/a<û!cíÑì∫óK†ªÎo¨rp)ëcÙ‰ÊÏà¡l∏öêë˚‚è»K‹¯Ó≥‹çzg˜ºò!„#sU√©÷l`ÃO[EÜÂ∫÷@Ü–£@0ËF(ˇ±[7InZab›æÑö_úAL)óØP>%àH…VÍ†Í}¨+;{ÒøÆ`VFñ%p>!Kw‰|ç‘»”33;”r¨¢ÊQH_?◊hæÔ›Î'7ﬁmRÄáTΩ	AÒáÂ5©A≠≠£¿X»jé5eN?O˘√ˇH¬do≠≤äaL6)¬,j›êãnst˜*æ◊<Y˘ï˙âTbÊr˜Y\h3$Q¡
+ôü≥ô2è8'Éx∑Í°∂:√ò/ú},–X,eeÊW2O9˚ä¬^ÚiDaõ;Y"„W¬ª∑SiÀòÍú.p«˚Ù{‡_-»c.¨¡x
+fx›BﬁØ:˘y≠!/A9sR	›±óMRŒœEÆÎ≤øÚÆüñµ; hw“…«ÜtcL+¶|C0Œìgı™
+†s¯˙ÕÅ◊•Á$≥%W»%Ø*„A!¯ Có;/–q9 –£WÓyr‡∞å@XòÂ_°ãoÄOlÃ˘É*˘¡ÿ¿	áÁæÄ˘Né8—…—xp⁄ÿ|qp⁄¡¨ ‹ÃO∆¡áàa)"_ÁXÑ‰oq…À&“Ω	ú!o0ß}ÿ¥
+n¢4?Ü,ƒø‘oiròµÏ î∑åY»(FB§ÃW¢˝`÷◊·h€•9gíåaE∏ø©ÁúÉΩãØ*iiöÿõ[ô 8mπfl“d¿;+[™ô®O!6‹Lˆ@ˆÌˇÒ)7Jg*ô¿‚«Ÿœ2´˘˘f¨#'/M+^§hÅÑÿŸWê?(^Õë?∞g£y÷.˛Aºˇ…ì'LÏÍ¢ûï–÷ìJ≤ú‘õ]s59©G_†∫ö«{.QS¯É9we6q3Â^ép“à·,ÿ ûùX«ÀaRfcQöd™Dr§C8ŒeÇwc˝¥ëG◊ºÏà\≈'~óû∫òW©:Ä6º=√“≈ÅˆrÁıjË`V˜Ë*Dá}j'zíúV‘^≥˘t‰;Ë‡v8°ob”¡¿ˆ^àq⁄/ÿ	LR¿
+Œ	,˚ïñü(>ë∏ƒ¬E-Bü0nÑ„êïGﬁ{ó}Ìœ{ÛswÉıº˜=ˇ=gÊëv]Œ˛zé1{ê?◊ô˙‹s\Ë(4'/Ú>ˆ0ıƒu¢‹eÜ≈øîV(ŒÆÜ˛à˘CÆ@X∞_PÌVîÙÏF'v#°H]ŒT£}‰ﬁ.ÿÚØ=˝ˆ◊ø)ÆØ]é¸ÛDIÙ»π
+’Óµ¯ˆo˛≈pI—!u∞c.˘90;?∏ÙA¥OÄ¬1˚ÙÉ9π∏Ëûä5ëU!kLAM¯‡*Î·sâ3ﬂf@yp=q∆ÿ√#
+≥xñÎlÀ§À¿0¸ÍŸ!*P°„?wËºl[∞¬∑}®‰∂õ{`2V∂ìLóñQ∞OΩÆ+Wûˇdi8qãÅ‡ÜEwSÚy€—¨Ì‘7ˆv∑∆Ö∂ˆètM·w–*aUª∞+Y‘Hl.¨Îúnÿ¡˛¨ ’¸ë.-fºt∏Z…¬:c0úÚWˆÂäß∞z·ç`nÂ™ˆ3¬ àî¿Åá©æ‚,≠KÔ€ôÕùÚö∑"^›kú‡ü–ÜræCZZ†>¡Ev4ÖA∞‘ûjvFœ&ä'éØ‰{·]
+Ø5;u&n^˚¿%˜V•…Á9Är5˘ï∏õÚÑ%ü¬:\A≈˚⁄”DÎ°Ús˜1\¢ˆ„ÿà£ -uÌÿ3ä05ÛA—Ω%îxëﬁ ¥aÙä{Xµˇ•Á™¬˘°∂ò5NtxƒÆö
+Ø%À7˝ÕnéEG;ƒúˆÆpïx©ø˛M ~õPObÿ§ª‡û§«¢Œ‰∏3ò…nI˝$~…^⁄}≥¯T˛˘£-:J~P<ˇﬂdfèH⁄Ñ@¬ G'«ÌﬁIß}¸Ç£ëú6Œ∫≠É\@µGÂ¶œæWÉ2(‹µ¥¬]Á<ƒÄ§§qœ+›Ö#Á<<ÀÂÖZÑ≈G0>ñ„sç"*ˇú‰IÃ*z∏Ú’<uDÎ©‰4KàßpÿØ+¸µk•Å®Ë∂∂ºKÌsîòG@œÓ>0¢kI’›‘ n¯˙•;´“ÛÌúòWQ‹9éäô$–z˙(Âbqø?˜˝˘ô9e›˜b~ÓS>øX¨5òÍ˚—5!dÒåA±èÂ,1w~ø˛˘&ø…˙©«√á‡?—_Çv\LãßÃ≈‚∆
+ÙüØ=ÌDµ ›|:é^∆¨Ús¨c4=‘:R]¥∂>øÌ‘˛£ªqb~R|¨cSWtZÜÙˇ4O'\DÄ4´êpu§h!RËM*W]ã•º≥»BHÊ’üäU±ì\#5%´(ﬁº†≤lG⁄,òO02dN ü?·2'õ ïWÙ+Wz@ChéÂW([ÚÓ$“†£<üå¢$‹ò‹Â“·∆ƒﬁù5VÈF∏T‚"˘$/d09¸o–≈≠uãzá∏uˆ„n©6NÖ7VöÛÑöHeÂ·>;;}—i¥ØåfG‰¿mú∂	YÎRÿG>Æ˝™¬ ªÒÁ¬∆Cæù XÑåwÁ‰Oú∑,…@%ƒ3hYÇ µ´˝r~Æ;GˆÜƒë3q.1:ﬁwÙ‘^O·Ó»I’ƒ Àı§œΩÏC'∆!⁄‚∂CvŸ—G‘ÉsR8Ä_∆+%¿R´ªÈ@îÁ$Tå|+T˙îÒñª¶œÆ)≥F$€7Kπù;i≠ëæ®ªæ@E‘ø òy±œ˘XFVmˆﬁ L‚(âd&g:’Äì⁄_/|)Jêﬂ=¡“–îÎ"*x(Â'JÀßD>√úgÙÂwÜg4¶Sâr»‚Úø*º`BôßE+™‰ÿî∂ÖÔ6
+ËÕ;ûÃñÑêÊG961Zü¶˝ 9GÕuôúlûÂ≥êK¸TDz+ ò˚È}÷^+_eEd”Î∂p3¥â…GYi†~Ñ:][£∑|bgì¸A*?Ù/}ˆCˆïPë´>√“N◊≠ÅÛ%=©Éá‰™≤:Ì^ ¢L¿N…“€ úTI$m 4gLÎÌ‰5VπKc"+ºÑkOi¶∏–Ωÿ
+<[}ëÃûE( ¸åZ1@gÍâSi9Lª,u{Îd¡aﬁUÜ˝ ΩGy/AÌ∞:ñ»≥Çmà$S^Fò›#OÊJHwõ	o0ì+û∞úe9ç¸w√·§#>ºg‰>37?X9‹f∆UÀ˝æ\õâVÊÇ‘Rùíß“;ù‰§J´w“ö%-ˇ±∑¸'◊s´v‘nÁ∏u£ª‚‘Y◊Æ¬óõ%∞Ëçoo¸sÁb®î¶∆[b˝'q  8ê‘±/ÿ|¯y):ìå5§Gj¨_∞%ú¢ÚY‚·”·‘Õ…ñÜí‡µ)•Œ|cÜ¸ÍiÚì˙l^ÂU&∑.m€ç/¢äÚü¥Bö“F£ à4Ìê‡˜”˙ı¢9„È PŸûÕ{Ãàfù!Ω≈∏â?•EjLF(x; xÌAºæ;'ÍòòπO
+d0*Òz‚¢–Ìu—∑∫‚{´Äî5‹››\ê∞®V›ºª¢‡Â0¬$’¬Hh≤L::ª·ÏfBqAúªíÇ\/	rI:˝Èáìˇ‘JõÀ’#cŸ1 £˙.˝öãKòßIX∞©ÖıKÎÂπ+òŒˇ°UÀ*≤ŸÇ),Æ=âÁõÏ‘AÙâ‹Ò≈$◊q/7J·˘îyÏ`›ÇõÿhÌ¶kåz}‚ÀXPÙg¿ÛUe§Ç◊Ã%Ÿû12ß"oÿ°æúŒé?˛2¨ Ø7åŒ%)sXOGŒı%1Á≥©"]ËN…`)∑?∫—§„õW5™\Û,5ì≤ØpùwßN1T˝&Ï:Lhc6>h^Ú|ƒ¡;±	©®sâ&eMÈuœpÁyK•°]πçÒöÕ∞¥@Ü*#˚Î¶|⁄È‘˝æ3ùÕ7â„—5D·ßn_ºÔ}"≈_∆™å¯≠á≈Ì„:≈°Á‘1^èÄX&ò¬âejP]1xae*]»Âé^»ësr87⁄a{:sı
+kw¢ﬁˆ∞±8";C–≥0–œh˘úº*æï4+bà~≥Íû¥Æíqz,Vé…D–¥S-m÷8ÅÒ 
+¨õΩïúh§˙‚å4Ã;◊⁄–¡PäÇ†BÑÁ¬Æn’ﬁK˘ŸVıÒc%ä Q	†ú˝á5QõŒükªP5öW&ﬁNΩâ°⁄6ÓÔ¡+∏û`+h1I´zﬁ:ÏÇzN%±.˝»µQ-∫¬|“€^πﬁƒ“˘(Tf¿—√§ndl{,‡öèÖ∑6›ƒ1ùtÛ–6ÈF8A5ZUzb*£”sYYY(ï˙9ËH ∫öº€7l?èŸøBÁˇ±í_¿îØúÎïJÆ Cb%Ø˙ßŒ•à¯®}*EvÉúÒÙG™M*ûVëß;≠=mp4∞òò~-ã7"0æÑËQPÔDòè®;a/[!0É#CRÓÂqáCô»çôﬂ¢IN¨…Z«s??Áµ+IŒ∞ˆv◊sº›ü(K£◊9ÎˆZ¨ı≠£SD'Ì≤÷qñ¯ wˆ≈≥4^z0'L‰ÔÛ"B?¿Ù≤ZäŒÌÜØºpÓåºoùß’‘.YÊv‰ô““|T≠Y,éŒ˚Ta¡M¯ú„uRü©;weÓb"P„Í∆+.˜·˙ûå´Óƒ=?2*‡"ØÔar Oû⁄`Wíµ†ã‰åˆ	Çœ6ÿ|RA=-xÛb˜£€üìû0î”⁄∑∑9¨ÚÅpü∞êhÊñÿ2f ∂i“˜à™ 0ía€YfÅ_pF°Œ∑Õxc
+	iÌi≠ 8,yÑOTœ6ŸOŒ⁄MÑ>ˇÀì„ñ!ÈR„[$Ù∏∆yËèÊ≥ƒÒ˚ˆo˛Öùíè§àVz‹%ßŸ∏÷©\Á¢)∫ÿN/wΩ Oö∞¨ß/øÓ∂ÈóVß}‘Íµ:›;Æ2èÒ7◊ú¥ÏV/aw˚Cﬂ≠˜ñ< zZ8ﬂâd≈ÇkûÜ®‡Kæ]eMêj'GÏy„®}¯µP`ßßÏ’ÀvØuÿÓˆÓz¿πK∏ıëÇ¢ì¶|6!béXÒÅ;Y_j•ı†Z“¡(‚:œxEõÜ¶Ÿ’”ÂZ©∞§‰ÎIõ%±…\£’z8b∏‡”._"≈¡÷øK)G	F«"˛•Ú Ïãw
+¿ÜCÚùqºoQùSôë|<¶êE¸ôˇD;•∆ßUıèT∆*T˙˛	¶oıﬂ˛˝wØ=wÔ¯Mﬁﬁ¡={‡#úªB&%
+ãc´"&ü0zÄˆñâ€ËßˆÕ?ô8û≈ï1/fãı‹ÒSçy%v¯"ççB≤2–âÍÉæÅ÷Q51@K„U˚;Ñ˝@=—Ö*-ïA!¶°u•ÿúÒ’oS∞LñÙ”+Ôí~!O_áÑÑπüù#úyâB¬W∂ª@ÅÕ∑&Ü•Èkâ •À∑/ﬁ2ƒîs§í"·^b¥˘ªÏ÷ä∑!iÊRÃsÇn>ü–»ù—}->≠†7a/ØœÅ^6£"º±? í– SüàÊ¸öPÇ>»àgDDÁ.Íı]5Qp#’˝Tä–G†Ù•wBÂ#,
+e¶∂lì\¢ç2íW$ÿÿ∞:å.Î–bÂ1Mﬁ©éJr‹Mπ1\E:‡nMòÃd:ç≈¿ÍtÎ·µ°˛ TVÅ∫F\ﬂ™-?‡‡∞p=ñ(w`FCÊmG.æºî]≤∫F=ÊöSÊÅÄîó‹$ˆ¥ñéÆ§¸§Á›∏”ú√àõIT]˚ÛŸ¸‹•Z¬ﬂˇÊóˇÂP,^6Ûﬁœ¸˜‚™ø˚üä´<	s&˜; ¥Ä_˛á11rEπÒEÚŸ%Úu)ê÷néâg≥⁄£¨p˘6èzä nY9Ω1’ôÜ‹£	‹£º~´µV‚ı≥KW_pÁSo.8∏˜m–9Z#xŒøê˚Î*ê•ù1_y2˛l;rßÏ≤(O4S˚ós
+Cc15ëN™X]˝RS≈®+wF|˚´ˇ∂à·8ŸdK~ä˝lƒÇ(jÁÇˇJ‡!?pÄúÿ‡@Ç¥Lh›ã€Óƒ~K{(≈C‚!mw¥ø“@ﬁE∆ù≥Øw€øé˚¡Ø≤Ÿ˘OÅÆÜØ’¡Kttx!6£ëç†0ìÙ∞◊êwÅ
+Ç6ãıÜ®±äêÒù2ßÔÁ?g	ﬁ8ª^∏b›îŒnJ◊J¢d(∫Ó≥mÚq/˙‡‚¬⁄
+«¸∏hŒiSv£ŸãR˝í§ù:Ÿ–P¬∑≥õÒÌPá4IVÅ%ËQ¡3Õi•Lt˛˝øâeN¨AóD8ñ•≠«˚[[%Ï €ö–ë-’—wÊ•±“-å¨ÎFO#+Ÿ¶È<òé‹¸}J|'7J|ÙivÍ˜ø˘«ˇ7⁄™
+àπxRån2(_†D∏@âDJaÕ»>nÌ¡˙§Ó—ˆ=w¿"Xπ„√3fÊ‹ﬂm‰]56Â„u©¥K‰é‰ZÿòpÏ^-X⁄ã;∂2¥≥mR∂rÇ⁄`Ò∂ÀÖ,uuz®6FÒÊ˘lËﬁ7.Õ^ÿËò ¡ÌÛ;òÁ)¨Æm}Œ‰}ÇqEz,‰zxÓd0∫f¯0ó7ôŒ’`\\ƒ∑´U!–,˙Ó^ÔO÷(fˆ®¡ÿ)Ö¨I–F‡Æâ{%tF≤póT6èS˜Æ≥Kë°ƒÏí)À¢v©Ú∏ıƒOu†"Äûá;¬ª-Ï∏|¯≤ª.Ôˇ#›yçbü@NüµßËÒëàı"ΩtS≤µ¬∞j‹GÑ˝ªˇ)–ÔŸ©Œ‡ëg°LàÉ|f‰Q¢±˛.“ãéÂ&U‘çä?óß©—Cˇè]¿JFYlúù≥≥≥ˆ¡Ω¬ø}*™ìíjSŒÁıÈô˘è/97˚1`Â§π-K’tÛ)IeÊK·€≠U¢≈^∞ÚÉ¥ ÆŒowÅ¶˝ ≥ü‚´uÅi§ÍIÀÅí‡^R0üh:{É}V]øRb?§ø’âU^ﬂPﬁÄ,iü•¨æZ˙gìwHâ°æ+vÙ&Ô£Pﬂ$
+0ÔV3†\3}üQWa˝]dÿÓK≥V-òπ˚“»5M3«5ég¡8É∑ÅYW©)K;T'E·.åª?ãC§n⁄º®ñJvs&£ºZ—ASçó„7ŒÚ5ê\l–P%’$Â7≤JB‘s#*rÜõœä~»b£( ∫í:D.á*áúÈ íAJp arÓ\÷ﬁ¥√{èÏÕU§&ˇëîl d∂x’y:JUf_9#oÄÖõrVU¿YÀ+A»ù•,Mrÿœ-Ø∑d<áyÊÀÚ^(Èärd2â;πDdTı Ñ{L¶7ÕÖÛ/Â…±œﬁårìd÷&ö¸<õì}“;\WV⁄ûô‹}ê~Öµìz±Œ8J}\'xØ+£ê“tîèπ2ø/ Ø◊^c∑„ˆÒã7ëÇ•¨*4sr?K›˘Ï~vÍı'p"Î[ıá%Ãb˘1˜¸qM€ê´ô∫&∂	cÎÅàM¨lZ≈DÖÃ⁄ÎFõ5zÕóo8Ã◊òúYâãhÒŒ|ƒ∫≥9·ˇì’fÏÒ„jÌ{®\†8Ìª˙Y›n0†éuP‰˝MØ˘≤’¸Ú˚È‹Æ©≤ò%EdƒÄ18ÿSÓaœëì>`•‘~ï0AÏ*·;ƒ¨/\„Ñ˜V8·M4u±∞ª∆Q|‘˝ÿwπ¸Í'¬ZÓGú|¯.5âwöGsùUÏ¨–[ì)5‰®.;qBçìH‡πÈ”¨
+WªÔZ◊ŒZ€ÛÉ¡>’rL._øÅAæé∂∑≈˘#n0∑¢≈!åãZÅ·∆eÜ∫øˆF7Xm¶¡¬\ÚCQ¶“ﬁærc ‚Pøﬂü’ÿœÄõÄRÀ {¯ˇ”£uSÃò÷M>s”ü¿3Ù≥ï˜Ω¶l£ó∏»Ã∆ô÷´·t‰Å:πøb˙’Ò⁄Cêxì;‰ø'±Zˆ-ÜØ£ÉUùŒ√a˘c‡ΩˆQã5OéªΩN£}‹ÉÛ≈∑≤*:‡¢Í)x?ª7U÷#ÛùΩ“ÒØˆŸg7π´à!∫≈Ø`‚∑’w∆ô··KÔÔÁåo.[˙õßóŸ|Û~xB8£ey’>>8y≈æjü6∞Êg_Æ?¨ò¥<üÖ®vP≥ Æ’¿π¶æ·»ü=0œÏñπ†1.=ÿ_ˇmj§]f˜yªuç‘„}ΩIbàCX¶–b’ıq2Àëg∆Ω¶8ußØ é}ô4>bó â¿`FQ¶˘öa‘∑z ø,”d4ò&∆iö˚Æxú(€ˆLæ|1˙âß9ıà◊[û≠"ÎˆAÎ∏◊Ó}Õæju⁄œ€M:ø	‚&ã‹∂\Og˛e‡Lá.eÍxx¥π'ñÚè'óº•)wr¬<5èï3ü"Üa{¨[ívÍÓ$V7"¡6Ï†¥<Iï4;_üˆN^tß/€M÷}Ÿ¯≤ı≤qt"≤:B∑è1Ëc>wÿ€X·%ñÃ˘‚P ÂÂƒ!Ñ,n‹Ãæu›çÚ9õ ›fˆºqvÿ€≈ç6RÃ8¡¿#Ùs¥î∞à€ø`∫hmx’˝Ò≈qçπB˜Ω7•'|‰§®/«]ôÇ•ÇøDÉ◊i√∫ÖMπV_°™<Ç• .„åærÉñs<akk&ï4Øh…D\ŸóºÜç:h7{0õ≠√÷¡ˆÌ˝–œIÛÀ÷{ˆ5;Å+:∞Ø@bÏg“Nó/›î≈Dy5D≤ŸU5TB`sfìü—Ÿ}†ù¢8àÒLıu@+ò˘ÔÛœˇòú˙Y∑’aG'8˜Dï’}$',@#‹»9U€T£≤E\†zŒ€.€Õ›∆Œ¯TF?§‰√Ï∏N”4ù—¬Ü” ¨ìÂmâOiM|*{‚æÙnñ9Ô≤Zµ¥ 	·†?Döëä6:CÁAH–‹@›CanÃ|ÖΩZâyÊ¶d3”˜qKNÛ˚ﬂg+R<ø;™ßZ{{∞îˆ∂p0∫ZYÈZyj◊GÒ∏\\`˜˛w⁄¬ﬁHÃ…ºiÛ.í6Bºê∞˘-™~	y”=jtz	s
+ıÙƒ[oA…Ì”ÅC	¶¬Pùä+8%8àòH˙¢B)zL´i©*j„‰i†∞ü6∫]¥ceÜÑ∆≈ëX>LË|‰ˇJ∫©fåèØ5ñ,p«mà¶œQ•?rùÄ<dQ◊Z˜
++'¡<˙ôÕëé∆Óÿ<7‘À[˝Ò–}g©t&KØtjCÍ’{pÎ\/U|_ß1ır3\„Z!¸¡Du”É®2≠√P·a8òö‚$ºØT¥ÉÑ2à˙JŒ†$º/xïPÚDò‰+–ó÷L`|⁄A•SNsq¬oÇ∏`¬X“5ÿ¶¡€æ3˛ìâ%ÌUw≈ívøã±$!˚≥8åî‹*
+#M‡€D(…8Õ⁄÷bû9‚ıWˇ Z«œO:M?«˛§íà.^S+∞>πó UgŒ{‘—	⁄:ò\ lq*∂Ù–¯¨7é1ö™_åªÛÚ⁄ﬁîó«˘ã˝`“ÈvﬂiNﬁG:…Œ±1ò≥§XyﬁwJ¨"'{^´#wr9Çaµ•Æ“÷eÎıUUu˘†mYÃ>sÌ]Œ¢ dﬁÛµ)åÇ¡«$>¡<†ÍM˙£˘¿À%ÆÇAÒ≈bGÉ¯HaÅ{˙>A‚â∞ﬁ‚.	—ºK⁄84]#^M*±™VyìY?˜√Ãßò¨u÷9$ò`D¿¢Ç†Wﬁ ù©cÌÚ≥¶@—À∆éÈl˚,/Â’Án[˜“Ââ€"Ë…!^q]A¯G˘˘öÓÏày¨‰É´q”Á{{É'k!˘WÊ¡®B◊V`«ﬂ®πóKŒf”psÛÍÍ™*J™}ºyÖ¢ÓãOêÖ*ÁéS„Å≥`T8o\ﬁ∏¢úqÛ1∆úÒQÂ1X…¢=úm⁄∏¯(ìöË<®±∫iªhõÆ√:çœm‘4r/fXëÁÛ|µe”÷-HO,/–ÌUe'èﬁÈ¶Uí ßΩ.Î}}¡íæ\)¶†®£øﬁLGô#m™rJûÍÿπû8⁄EÀúVp∫?<ÿ≈40˚Ú&c5è]IS¡«Ë´ò
+>Ï =Î¡¬~ƒá˝‚ÿ+˜≥ÚwÇ* ∫˛â∫ä•Çµ¿SYÛÖ´∆„ÄD#¸Ö$xB–**Á≥	“L˛Yy-ãE´U:n˜¶'L∂?7÷ØÃﬁ[óØ§
+RRî≠æV1æ¶•æ2vta‰¿I∂™{{0≤#g6¨bóèu=?ÄèkÍáÑ¢EYI∫]≈&p˝x
+óˇd´xÏ_-S"W<aâÛ˝†ÿ:~f* âÄ;‘sp—
+HQ÷±≠.Îê<t¡î’ö∞
+Xr†)÷ïÌÜ@«Ãeß°-_é¸sg54úr!†•6sì7A ﬂK¢ÁëÙıÆ»Ó¢‹áõº,úüprPéOÿkù©ò`∫€ß˚í‘¨Û¥Í˜{ıG◊€è˜%v´¶“Ã0\ˆ¸cz˛èé·øΩÚÉ—`ìú[õè∑Í{€èvÍèãº.FòÀæ1˙Ü^:›l˙{è∑9ÉΩz}≥§	ëh¢è|Ì˚C‘û§6·5q¡ãëÔÂ,CL^'ú+Î∆∑,'1äÀå§‘‡3ã1¸úµE›Ω¥‰‚∂πNx‰äè«µ\Ò±µß{N	RLÜh§»ùÂ∫∂îŒ—"“#AYl«´oóùu~™ÑÜeß±D’†dø˚˛‘È{≥kWˆÚfëek í5»º+l≤’Ωr] ˙C]ZtŸr›Å¶…ñ
+ﬂVá3¨õã÷Ï÷é]ñ¡Ω ÈJ3†Èx>2P·ZÕ≈ÕU¯îU»ªµ,
+j>4~÷ªlŸ˚#kø&¡ÖËõ! ÈX˚UeHxÁjüŸÿ'Lj|áçkH™}+…_ó.ËT[ <gÙ‰ÊÜ]yÉŸK∑øWRáXò|pÚé⁄ñ·ûò¬Ò∂¡ú∑π‹guıMKÄÕò0Û“Í.≈ﬁ¡í“Î¶⁄ fÌcv⁄9y—iuª‘}£q‹8¸˙/ÒõØZÕﬁIáıZGßáç^ã[[]ˆ™›{…Z/ZÏ†’mv⁄ßpUWeN´|] 5µ'ù˜w2}¸àÇ}!e¶†⁄â˛íêQ2´ŸπÆ´d∂≈ÕÕsòÂCeëY—q√˘h&A¨˚E≤ïïodPS*Kjƒ[Âå5≤âGcÑhˆ^ä£B≥˜j‹ÍmÏQ	-Rô‹jj©˜“u…Ì…ÖØÅ—,‹Òe9xlkDk}Î\P3ÊÙ¬E9à”◊(Ò¶Ò%(g3†¥éYÂ‚<€PFrAnYàEπVPüé©o∏têAGø5]Ã]¿O÷ﬁûèú…˚5”ÂÅ;z≤6Ò1ø¶4’˛¬70ﬁò]EÆûf·ïc»e§• údˇ≤èy6éÃ˝˘ºª˘Î˙˝é˜≈@<Ü⁄¡QQ≈RÍ∑e”π;ÙÆÚÎÃAºy'⁄‚dÛZívë‘ÃK”7ò!°%À£$}Œ˚}7u]~e'a,Å‹Ö zn˝É˜≥„ä≥_lF5πzòı´Â‡©§Ù”∞J∞mÚÒqõñúÊEõT’`àˇ‹òˆg€q«@B∂I!Å;(ioëdOÂ4/zÃÌ@ÊÀëÓ°AG54Ó“BK£ <B"nxßéÁM≤g˛GQû#˙Qå˙&5ﬁc'kpÿ$≥¿.™Zxc◊^G"6cb'%n°2∞/p{¿Æ®Ô§√sâ…de‰.ø„FŒPôaR»NœEqãEyRˇ˝| Ü†Í∞¶ÕùÙÕª(|Öª8ƒˇ•üòQ=€g]⁄4îi§eÅ¯c$5√˝úÛ,0:ñ”èY∏π≈Sµ¥\`LQæ@6A£yà¢%ÕmÜVZ‡v{[i‰Ô]=?EhG6†–aì!¢∆N^Ÿè/˛—¥<h;QoæÔ⁄…⁄°¶:KÏ—ﬂ£"/±E∆m8§T‰<ÿ5¿∏zN¥ò\R„ô&Q◊bÖ0Vxá<Çø˚~,(5M)´d¥ ÛäZ(°∆ArI…~È÷°†mî›¥ÙB~!êµhw¿sg¢t0»àá ÃØÃ®~
+∏B§¡GH8S{^%]œÓdêï4”s`xÖâ∂ß¬˘∆s≤ˆÙHdMS"≈>ª)œ0XïäX∞`Æ¯zuÊ?˜>∫Érm˝ˆ{ü¢èMÈ˚a=¥0µT•”EˆΩµÙÿw™7Ë{®%Ó≥ÔûëG·¬öÓ∏=w√ôp.E+≥Lœåå∫∏√±˚ò1w2π3/	—ß8≤˛mìâÌiãrÍ8€€aÅw9ƒádÎ•BAﬂ`0¶Ã«ŸùπSV€g\Ω_bÄÈììR
+ìé⁄o*5sc≤<?˝E?v≤&mZwb&rô‚[…‹öç◊ƒurì≈±kc-b>ñΩ∆ämikIf∞>àkCæcª{ÛNπΩπ˚iøÅfIè?Ì˘Á?øõÛC˛§ıÖË§Fá“Ó)\£ài<ÕÕœ@≠¢æ‰âNyò‹~ó÷VSèaª∞À¨eLR˜Bª€˚ÅŸqAÍ#à«–mÍÁ;EôK˙"”√à,å»*`ã≈#∫;Øÿ˛ÉÚä? 7∏˚f*25Ôïù>Æì7πºv¥≥œæ"(Ñ>á€˛nî˙˘Nq£ª”˛Œü+Ì/EzÕë´ÌØˇ∂Â›È3ı"Â˛tÓÅ—9p√~‡M#àÜpÃƒ0&®2)€6°7y¸≥\U&pbJÿ⁄3œªàZ∆ﬂ¨y¨Å"`N^Ï{"œÑ€3Cª‘ªìd—˚µ;´* £ï£Hh§8éñxÃÿGòiMüÄk®Ù˛‘	fÎF›ÃY¿ÑVÄ8»¨]À‘∑ º¢›¢S«ÿÂ<àì∞¿ü¸U¡8d£CoèGF@vÀÃ«ƒ_å≠Qˆ5©ûM?<∞W©Î_dåˆ	wœ/ã&ªå‘È,Í·Zô-÷õKˆ{°ã’õ{`rÉ¿πòU8ÏU/|&ÖﬁÈV–∂˜Òbﬂ„.÷‹¡!ΩQFgÀ≥˜⁄∂í
+≤M≈≥iƒªÍ
+æLi~
+GAv8*‘ÍX«0pÖŸ!ë>üµÊÏi1lGÀ|¥-Ñ-öZ”âpËWxMß’i(“{ÒD,¶£SlLlÛ\Ò©ÏûL3¶ÒÄÑº¡du¸b#ëJü‡Å∑ ©C∫°_i:.øåŒT:ü#s∞í_nÁ‰Ñ‰∑)Yˆ¨ô“z§1/éú\^-?4uÿ÷¨°A≠‰HrŸıÂë\|ÀÃï€}⁄√ÿ‰≤úQÊúF2ºÆÔÎ,Z ºÄ“àƒq˘ó˜-Û«È¬Å0X8Q‰â“≥&£¡-¢µD}„æ÷µªK:/{a»˝Kß˙^ùaØDvπ;¥ãDlLäiÍäÑ¡˝#êõÃÛyÉª≥N7ƒÍ‚ÿn¬\uGY;b*ºH‘Kà•}∂≈nπ∞âZâËÍöÚj˜£7≥|pRm≈r2JŒC‚è‡w¯w¯”
+•›ÑcˆM≈&h5≠Ïÿ◊\YT™$ñ,Ï;#^∞∑ª¡p-v’ âµ∑’Ëû-ı-rãº&7ﬂ{¢Nπ¯Ev0¸!ÒC‡ÔaÂıﬁÓá·õ8-Ó∫‚Ã±uX'î;%IÊY*Ÿê:ﬂR76$j}√ù∆''S¨¡3¨ïÈË1JÃSNŒ"p»Q$º|æ9‹Y"Ò_õøˆÙ≈¡iá5:ΩvÛ∞≈jèDq»ŸóÏ‡¥¡Í[µ=ˆÏÎnØq|–Í∞Ê…—Èa–MéSVgß∫Ï(k#l'®êÃâSPrÜÔŒbùM¢Ï)Sw2M(®à,'}æ˝ıˇÕö#?tÔ*{,… ö≈n⁄ππÖ⁄MÕ‰Ûv,âA#äñk‰N^s3ê±Fô*Q∂∆B≤k8t`˜*¬í»›M%blâå-‡#ıù(Ÿ÷õºKü'7¬Ñf¥€†,¯≤Í
+ı$Eí¨Èú¶|oâfIõ”òÇ¥¥/√ä˘dÂ\˛"æ™·&ú£f£ıÂù<ﬁn∂áÏ†ut…ûü eût⁄«çbC∑OéZΩNª…Nû=?ÎÚ∂ö„•q+-œã,\ñ%ıNˆµ£2<^jâíërév*N6˝Òt‰9†¯∞ì©‡¨!;π∏@f[V®>QÖPuÊü·67aõÀÎXgv ˝a±{ˆÏ'≠foôïîZvTÛOCÀpÊ◊Lfx!í6Å‡∆ŒYvr~1E|änf\∫ …Fn,]§hπ€Í•FéﬁG-’¥ô3fWÅ7„]çp¸cÍ|‰~™ıÄj«◊‹ ¶ig	≈,>gÅ?π|öùMπÉW·”Ñﬂk%˘•T*ÔÎ
+∞ıùGÿyªúÅ~åÚKÃ¿#VÑ'4BeoÙg\ˆña©‚áV5©ho*◊J∑4=<õüc5Ë	¨Â…|∆≥1aˆËÍóP∆∞FÛâ'Ä" $¢∏¡E[yçx7Wo6D4Xgéå¬ícAè	…mË¬.Ãô ÿAÆ|@uZí∆í˚sS£%LË£∂Å‡ãædW0DÏf?„–ªÈ/ „pÏÕp‡”·uà›Æ¢Óÿ*8„j™d*1dâ|Æ≠Á†Ør38Æ∫OPÛ#ChˆVû3êÿèèaAÜVà[»¿µh 2¶≈∞Ñœ¯∫¯…‚  Êâ$0∑Ìü˜?©/ùph1VoP`®"òr #Vâ«'„X“vG∫˘Ã\	ﬁë#Í‡¿'|n2∫*uÅm¬Õ%xS?p±ót)î∏◊êﬁí(5[¿'Pó1†µ˘Ãa∑qºSÆ@ÇôƒYÔ∞√∆~ﬂ≈KOp8¨∂hD«£d∫(‹BºBD–0¯∆—‰yTöÇn8ıy…IC.MÒ©sü‰B≤Œ©œŒ~Óx#åo‚¥ßSò.é~¸i‡°ı"îª⁄¢^é‘'P€[ïÅs-;‚\y`FTﬂ+ƒ!ﬁòãf=º2πG	ÑEÓ¡ò_	*zƒ‡WOÅ‘ç⁄Õìå|„ë·>l∆åØ}ﬂ˚‡ç(≥OπÜ=ÄU[ü≈’çÌd~hû±o.öä=˝Ä`ìÖï<ÖøﬁÜÙó!˚§¢|ˆì9lqmÉeﬂ…d.f‰%¢≤´
+ªZ˜ë¿üâÛ¡ªDRÌèºÈπÔÉ*™^n∂©¸nA)Lπ‹1û-Ó˛ÿˇ´I$‘ÿgÖŸ_MP©oC	ÙWí(©=ˇ´	g·˚I›Ùè{:Ω¿ôE 
+r"cHg‰≥ÚZ”üzQëR!WY8è†p ÿh˘Ëªj`d4±¬≈@°∂ÒJÑXï€G/<,»µtyu˘,ÌY‚<Ø∆Ω¥TÑ˚]Vt-Åe·b∑£˚	oƒŒÏ|‘›˜9‡;⁄ËÑÍiÎ©é\TìÂú≥ùÍÓ>ÿ´ ∞x"˚
+°Ú*Ñ'
+L÷f>`GÛÖ¨~9>ÇÇ√Œ|‡˘o)ñNzÛïëeP#ßRÎ·£∆	µ'0è¡úÎñOS¿_ï£œ3®Ìj¢í–tn‰Y.Ú|‚#ÏAñ*>¬¨“ÃÛ“êS˘»W“UA€Œƒ∂ìÇ6˝dÇÏ÷.óõÜ'a≥cár÷öpÍÁåÔ’§«¥?∞a·8[a‰ùh≥ÉÑ≈Ï∞4Ö∏É∂1Û}'§^æ®ó£íà≠}©„7)o_∞P>Õí—∆ ıÅ u1D`:x,°DJW•ÒPÒ—HÚ@Î.èº˜∞ÑSïâ÷ ›ÿ
+A∏ÅxÏì—”:)Ü“ƒ ÖÛ:£ﬂ·¯«∏§» W¬ÖámW@ûê
+∑z™¿¬ãÄsõ∏Ó@∏o.ô.®—¢AH)ÉﬁtQ”Ã5®rÀ∫Vùå]oQıU‡Lu8⁄π¡òÖ‘ÿÿW˘ÌØ)|ì“m¬zôhdÀFŒU®A7£/æ˝õ1\RtHúvNiW§cËTXq@`pL?˝ò"Ø[N«Ñ\ê‹ß;SBï-Wo¬±&ÏôìáV`®X≠#ÓQ∂Ä5Ómπæ+êƒG˘8JÂÒÎ[˜-˜•”E88†‹°àØ>g—]>OC!%î#1ï`û{;uL!
+î/QqÌ?∆•Öﬂ˝ÄrùÖe±í•çñ≤´ªÉ	O¢A|„¥˝g±∆àw ÙÉï¨n_*ªºπzÛ	‰(«J¶Uïgqèêô∂v3ı%	’(Yo]B7F3ÃUÃˇ‰7,ºi»ıæs]ë®˝.ß0”ÓgüU[â*Î‡Æ˚®y]lékÖi1/Pêñw56∫\ÙZ¥fç{1æ3öè…œ:‹dÓ√"\2XgQqE◊ùÕßπ%	ŸÒ¿Î#0ç›ËlÂ@Ä|∆oÂbåø˚ã}·Æ
+
+k≈fñ≤o“ ÄEUò [⁄L[ZÖÃŒ_]£TÅ^ößñÃlÀ9Ò«"0/˙às-m#ÓîÊÊè`jx=Ω]ÎÉ58ï®ªÜy9r)q≠Bî_!+kTL}ŸL9∫ã´vàSß≈ïòÈQÆÓ¸≈™Gfã$èl≈
+¥!ê–UÂ1á†˚øØl±˛<˝†"“ho24í@J@su˙†MGË\2qÅÕVºIÌªúñj⁄ÚEoq2•‹•l5¶ÍQÒù·¥Z˘oﬁÂ‰…Á¥ÉNtv–ÇÎÀb≠pJ©S£KÜ5m∞3…^ ™•5îÅ*VíûLK˜±≤√˚d&>—VgÍ““’Ô¥éH]‰&oöJée`íV”»îO3m8∏m◊¬'ıúú&ì˛µ∂≠]ﬁÿ3rx;r¡%ìsQIK§,™–4˜vıŸ7Â◊%˛˚—uiîRl&ÉøÆ3¬0kÈˆ-°&*Îº¨'ßihK≥(≠a¢[¨|¨©
+ûWá%XqtgÂ≥ƒSu9E*sÚXu|.£mO¨åÈ›ãı›ôÑ√D]}\Éy$F,∑|ú¨é±)wGMJj4r„≤–Xî˜õSdS1æP/ûLÈçSV”ÔH'”;L«¬àAfyLÕ-uÎ`~ø9vú˚Ã¸># v’X*L∫\‰ô`]nªÙπ÷wPu∂QxóPwI…é·óÕhïb∫AÔ,Æıv›>&íúÄ‘A^ \V‘yI€EËÙ}4˙ò≈gPu‚µH˜
+˛√ﬂvb`\8”©!ÉÄ∑‡Ú¬Óı§èSx¬B˛-jc:mÛFxR’®√‚º5§æñ3Í3¡ñä«°ﬂ"%AÌöMDöÑ±—D˛“ﬁ•ÑÌÕ]$ƒìîûëµß|…`≥,z;ƒ„2_ïÛVç¡)•∆õ[‡ê&pãıêä;ô8b)&≥}Â!eâ–kù©'>∏•¶6Õ°€è9@Ù-<~&>±_.{°ô¶,ºÚ∞ÃôDÇkÿ¿	Y)gB·äÏ`‘ª`HÉ†2£≤UL›ZP∏¯€%ª(Û∑µ,+£—çÆ*{ﬂi≥X˛‡º]Í3Xﬁ,ñ?ÊM≥d'/h6o”ûPGÙ?ÄÈ,2´ù4îah≈åg˘cC)önt¸«Fπ¥c$7…9`Ëôãqv4K”@dë±öõUª«√Ÿ|˘«’]‚¯V2gµ“ïûö+4í’7†±’xyYtÛ.ñ|±±W‡<&}©™ZÄ“Ûü@/Î{˜ﬁ?t&†ø˜6ç“ÔœO˙)0˛ò¿]3ˆ;ˇ±@ÄÁ?7Ò4Õ§™é÷,^gˇ∂òî'#e©‘e)èsÚób]»ä,h1¢}>Ù/ÕKb(´Y™B˘àFp˝£®íÈÇÕõ◊dUﬁ@îtóórˆL*u±ΩÊnë∂µ‚“‰«Q~p¢™<€é.
+DªÊ∂5Ûj[∆ÿÇTw¥Mˇhz¬f.Ttª≠fΩH∑€Ùè1OªzI6ª∫ÔmfPVo—ıƒMˇ¨…f∂)WCt(mh¬‚ƒ⁄i'VQ˚6√˝Íﬁ—äß*üßwüΩB=îZÑvΩÒ\îÊtaM±/ŒüÉœ,áp¢◊ƒ;∫`3Ω«DPEkÈ‚©¡¸áSYº%Q•∏†´˚+g‰∞åEÈX]±OØı¡Õ±¥‰*∞‡4®©”4.Ê£;8ÙÚPEk9mZ2*Årõ$≥¿Üb2˛æ…≥éπÈÜ	õ!?ÛÿhÚärwer´;πƒ,eW,@Ø ê˛sG!+ª’À*œ¶ö9Ï™w·åΩ—µ|„:s.lD*∞CŸ¿Ω@¸¥˝<√"¬ÑbVg>WUó§ÈÒîı.5õ‹§‚º†¬Áuâ:ÎÅí
+$cí◊—»ørgîå^ûsW[ä$É]¸z–√ÚÎµ◊≤˜ÛôCNÂ†Rd∫≥“+ä,≤Á|Oõ^Äb≠)´’KÏ¸ö˝ò/ €#x,à≈µ7⁄°ËGâΩi¿º/€¥ÂLJ&ZºÜq‡ÔlÌu£Õ;VøúÖ'≥G.xÈîÉ$QmVääÎù{ºW}Ù=˜>2MÒvÉë¬%ü|ÆÕó≠ÊóoÿOÁnpMËª|œbŒú”AO1‹√û£(z¿J©,!~oíŒ—'âc1ÈΩOö«ƒF¥	€é9¸‡¬‡™ﬁdP.;q“ûSÂ(<≤o”s3îz¨úx€∫axrÄ¯Ëûﬂˆ±Nñ˝ıËÎh7Ñ ¡˝Ëé±zµı±ÔNETNÚ=ZÁÃp˜◊ﬁËlhÒ∑0£*f4q–„Yã;çÃÛî3ïíbπ˝Vﬂ2çOﬁ˘ö‡º^‚¬,®ã_a˙liÎÒ˛÷ViΩbﬁcπ¥_‚È
+«sÃ„5l^‚]Ódêˇ¶÷d@Ô©=∫€{åDG¢:ùá√Ú;∆*@®ΩˆQã5OéªΩN£}‹Éì¡7†*’N 7N‡‘£k÷∆… {¯ˇ”£ı*ÎQ#jˆäÍÀ±à6w-oY%Á+ò¸≠±–§w˙s∆∑/˝ÕSÜãmsÇÚ~æ˝’˚˜ﬂ˝=£•y’>>8y≈æjü<“æàÿ
+A‰˜˚‘©krC”A±™jÜ´6Ñ±Ñl&wÀ@gqÔ0ﬁ_ˇmj∞]i˜yªuê¨!ƒ£8◊∏Võ`≤—¨Áëô≈ö‚(G	Åª Tå8†?Å, Ø 5O¿æÎKû˘»2%â¸r∆ƒ¥πHø@¯úãÚ?C.&.P>\Hò›‰ÎÖDë&mx-Û‘#^o±äÊ€≠„^ª˜5˚™’i?os‹ØÂS¸EC?∏ûŒ¸À¿ôEQﬁ‘!8èÅ˚’ñsw‰£>éÖvH˘…)Û*+g>Â—2rªnM˜©˚S◊ì˛0'ﬁ7Ó†tz˙ivæ>ÌùºË4N_∂õ¨˚≤ÒeÎe„)àõ!wm<;l¡¨AQõƒ:)∂ ÃNû/™ˇ∑»I/'0Í¿%`"‹“æΩ›ï/p>ñª›Ïy„Ï∞áh¥°bN¿!¸ã™—è1-ˇÇŒ‰“µcd˜À Á6f›˜ﬁîÚ9˘^»YıÒ<ØÇKXiºK4|Ωz™_0P^kıkØ#X`=ŒË+7x˝•µ5≥J›G™ËÂÄ1rä0”[ˆEØa€⁄M`Ïﬂ˛◊_ %ù4øD¬ØŸ	|—ÅÕbc?Éı%¸˘∂Õ+'@¿.<õ≤ÕGÏà9øF‹‹˚§!'⁄A“|`òõ8èÒÖó·–˝‡éèAÃ≤Ÿ[Ñ∞`1Í)ˇ˛7ˇ¸è…9üu[vtÇìÓ“+x5Ibí≠è ÒH#Á·;ì¿,“D˚†•√©¢n!ñìµ≥>ùÅ√%˘µ:Æ¬tÕgr	≥hÖv«],èOk{|:Î„˛4tñ9ÔŒö7°^9ÆD∫*+-ëôØ0E@'±ô™9VaæóÎArfﬂˇ>[ô˙]RA’:‹É%u∏Ö—]–Õ¬H„ SŒ∏fÎ:üj◊≠¨êƒ‹lñ##qﬁIâS≤Ü$œoQLüÓQ£”KòZ®ª'ﬁ{·O3ó5î%<E‹	¬Û›À1úç∆≈≥÷˙T“≥“8<<yÖsAM˝¥—Ì¢i€‰Œ~‹Gj†Ç√BHëê¸Y˝ànBB"¡ÍÒö*˚öCâ$’Ö1Üÿ|ÇP#*èELë™QÈw]ˇ≠ïBô\ìBiˆÀ_8∞&Øiù+û +‘≥J%7h∆aSpòlìÈ
+É˘ÚU˚()ãTæõi}ïö%¡y‚ƒÉD—π*P¢ÊÃæ`kÿÀÎoêî∏k¶É±9åP∞}∂&]n¨t‡J¬ÔÜ◊ä8á,hMΩ¥Ee8c£≠‚Q&$&Ñ›˘å3EêD“h!⁄Ñ%9ˇ∑àC¸ßQz\›)Q⁄˝nFî0êtÏœ‚`RjÛ(öÑ∂âàí≈\k[ò…Ê»Û_˝+k??È4Q˚ìJ26FdÜ"«“¬†xåc‚ç„uEù8)>ˇàê€8mõVceb¶∂˜]3≈—ˇ»JWê@R™¿g.ÿﬁXz Ï#C°íˇ≠¶‰⁄IüsUf‡Vë ÎLöÍ∂©B˘q|:Oœf!Í—eì†"µëπ“Ú£±f9. É´ì’c7à™7ÈèÊ7,ó∏vñêæI2ln˙>¡7¶¢…õJÈôó…À8∏ª‰ )Ìñ,5U|º9&–q7	s÷9ÑÉ>ùœ»F†#/ÑÉü„∆áù\ÖAdYÄ»‡∫VÒ9VûºÚË§^"óO£¥Ëò(Ui<ÿßﬂˇJâIß~é>Uo%	l|éo!h°orFÎ] A÷rÈ!¿=<Gzß9Ëœºˇ"◊¢Á¡®BwÈsaπ˙å”÷_7¡Æa˛ndçR›Ü≥Ÿ4‹ﬂ‹ÙßÓ§ÚÃ©*H˛Móõ
+õ(¥œƒÑ‡F˜äC‡ËœÇëﬁ~M~àbTyW"gûPv´‹˚R•Wÿ∑Õf•€4éQ0UÉ˙ÚìÀe“ßÑ`ïb|°PéîAH¿iF≠Mß˛ºÎ:A®ÕHçœx‘∂j‰^ à=vØ™Wwµ…©+ƒÉómˆ˚Wïœ†WIæıâZõõIñc¥kV<K|vΩ¬Ô‘ÌdH›πM“A…É|RäX=|,H
+ÀàÓÛ`_¬5¡É÷û˛˛7˜_–˝(”9ÖÔ‚ÛM~}ÅG¢Ô—}+ªË…ˇ=0ºƒCC\®>Z?¯¿˙œIs®á›Ÿñ(¡ÄÀ¥F|ÓˇÛø„úÚ~FÚA|ΩÃò%ÚÚ[ÍºÑ/¯ÂíOÔF∞Ãm¸rÈ·#”"I¯˚ﬂ¸‚Ds…ë{Ég~ˆÁõúÊñ¬ã∑ôHk-·8≠µ‹-ŸZ‘Y%9bcb7Eã≤¢π
+Có◊◊~ÖŒ÷Ê· x@«Ì≥'«Ñ7 ;¡ôUJÏáxJ›Íƒø*Øoò4—{#ówÍoÜEÕ‹≥”ﬂª©∫}?†v¥{aº†≈´`È|Xˆ¯∏∂≠R‘ \z˝J˙Î£ApÀOÊ∞™«˛ï··dÎÚÄ	‹∑U€ﬂ⁄eˇ÷wµÿh6éÕ≈˛€Ø˘NS.
+~ˆFÔ∏⁄‹dç¡Ä®4TŸËR=_‰–'4à ª∏¨?ÅßÇ©l
+c…Î ¶LlhŒiqÏLÊŒ®–1Mm,›X^ØŒ¸Cƒ~t{$∆|iÛìxäfm¿È}˜Yæ“ên4S\R›À•∑àÖ∆JÎ∑dæ3ΩÀmf‹∑è*„1e¢å•¡vpÎQ„¯¨q»:≠
+˙æŸ´FØ’9jtæ|{–ÍµöòJe|$º}ÜéD 7”•ºùÍ†çonú¥Oﬁñ≤‰	k#÷z˚·z5úüÛLır}ÉÌ≠ßNb”ªu'üSQë‘¿é;Ê√öº⁄Tπ∆ùÒ‰[¿<5±wk¶’{wDgõ⁄0P≈Y¢πwÌG¿MTÂ$)¢#ˇ≥E#≥¥Eov—q¡Tçßnç⁄∫ΩΩ@çHo<.øycIó3§q
+/¯XP.CƒÎ\πº∆$ÈF<Ö{®5%d†#ª}Ô"Rœ:á˜‡ìöo!QhW§‹§ÙËıíÏ&‚Ó∫ÅzGsûn,¨Qº…ËêÍÁ{tsà≈8ÍªI(U%aNÅ‘ e©dÙ˜3ÈÌ%{Ã{/FæîSl¯Ÿb∑&nêO⁄[ñ¸¢J◊—¿Ê°¸t”«S|D±!∑0ö¯+18Ù+ÚCV⁄§›•¢ãì≤ˇÜC_Œ´~pπImk6GÆÛﬁºG|H’+ÁC—e∆¸Òã*tEu‚Œ6˘õ}gäôTV„”˚ˆŸbúJ˙CrOR‰ÚZıbPÒì◊â»“∫’õ¯çGÊêiû_€-@›]≤Ø4O€±{ö•©∂ú±ñ4◊¯rGçî◊ô\õÓß„#nùõlµ\kÌÒVÆµ∂µgTk⁄kKYlã6(¯BYçéÕzuÍ(•T÷“(Û˚ôã‡4,^DÖpK=Îáı≠≈ÎﬁÈucc5&‰Ωë≈Ã»Ü‰Ç)…üã—–*m…Ek2Cóf;RË#F•~9cr—úl4OŒ∫Ωv36$Ÿ&Î6;ç£gá≠é≈ìü‘ú4î∆<ﬁ‚FeQ≥ry√LÀº[G‹ËÛSßºÅ2ü`ôö`Jˆb?Aƒ/z8´0–}"ÿl{±>ˆß±Ã™æµlRÆ≈É˝¿–“w|ÕöVËXıfÂbÆÏrŸH9&ê5ÀÄï•B»äC§Ö≤¢ñØ‹Ûdœ9=6ñÀÑÉeöü6˛kúèDÀTã≥¢).;ô{»ÓRúä%zj‘≤PÑıäPìÂ•ãSÁ∏STöBÄ¬ êjA{ø™Ω¡¿‘>—‘WØ◊/¶µ£WiHØ’Û∑D≥‡+o0b·{%}/oñÏ$,Ô+Õ|_Ã5V	vªœÍ˙óMP∞ ÷Nª‡(õ/ëm X^ÃK∑eëÊ“8n~›mwY˚òùvN^tZ›.ArS&u˚¯{ŸËùcA¯i´ŸÎ4Ÿó≠ØO;Ì„^WÛ\Æq‘=ÑõXxÚ¢|uZúOíW¶ ˚d}¢WY≤$\ß|%§—±r6…óéc&Vû ¢x)bZøùÀä∞˚ôhly_Â_ØııR6åX$ƒ¶¡Íºº6>^M
+∂>˜:r a%Óâ6Lus./ó9≤©:!˘aÒR!cRw˛í(\(÷≥∑„/ƒë]»‹>Kj„…&À¸zE∫∂!@¿ìôc`…£∞P¨T
+RJJ+˘Gí¢2IŸâgc˛uj»+N.VX8íéá8ÊôD·ë*Q∏x[ŒóóLGjƒ]!èœŸìbe"¯ 
+7u‹p>öÖ≤—íI,Y9€ñTtÕ7°%W+$∂5"!˚v πüΩ∑ÍsÂ|pü9ÖZjª`ÂÌm∞ù:Z{XÃÉ≈'l>ﬂ≠#4|øo√ø;˘C¸wó_ª-æßg‡5{X¯ƒØ≠’˘sÍ˘≥Òy¯Ïz]<ˇﬁ’x£µûôΩœvû±Bx››UfÖˇâwû1ﬁ'5r~sƒj√B
+ëºàïœbœ Ñ…ƒ#ˇ˚“œKπ¯≥˛È?/?∂tîä?èó^&Œƒü˘ÀˇDï'òGX≤ÅyæÁAYXÚXŸ≥◊‰©…s∆íå(–Œ¡±kQ0‹bÛ`tkwO4~≤ˆˆ|‰LﬁØŸ›∏£'kÉÀ0ÁâØuÉ¿,oœ.6Wÿ˜bÎó>CﬁËî0ÎÇ˘S^™∑∏˙0v>VÆ‡è=˙+Ôã∂Î¯Å⁄∏e«±–6∏È¨∂Mì·¢Öˆ|}ˆpA®ì„îL≠¥k#/_ãN!∞ÍÓ„Kƒ˚
+I]OXõãΩ“π‰J(ÙõuÀèô∆EÆˆ££sôZ¶˘d*o(›cƒjà¯!HR/·ü$ﬁ¬?∞õªUˇëÌÊ·‰•bH ‘Aæ§]RºáÚµŒ—t˘È‹ùªƒ‰a	∏ ÿ)ÃÇCZµ¬æÙx‘QÁÓ5‹¥ªÜeΩáR›¸vÛï*—'7a%⁄ÙŒ·*:Y6ßK9—÷ûä}íP.˚òY‡#cÁb/«utÀSkπΩTΩfîA∞œn¿®fR
+0Ock√|œΩèÓ†\[ø˝û›àÏ˙‚e˜lX©=‘Ñaƒ∆ë˚∫éSÀˆáú∆>Ü•⁄+Ûüi‰pÀhËbÕÎ;wÇ∂®I∂T⁄‹d/·∆Ã¢ÔJÃÜî∏òúXQÜ˜È‘ê≈hÒŸ®Û(uv¿0„eOü∞Z‚Ôœ·Ô«6òLGMÒö∏5àî,‹7B˜»G¿k_““¡¯í¯z≥ì≤Ö∞"P,W∂}[\Ä§Ù\0
+ÿ*fê/h≠í∂Û#<@œa—Èpà°Ù¿Í9	¯Eµ§π√:DUúÈÿÄ›$ÄØÊæ<‚∂Ô≥∏  Ü?.Ö¯˘öÂ…¡	‘f¨¯ìjP«„„)ç4—⁄è∏±"b2|v/©].¸	g◊#
+yq2¶TöË∞ﬁ~Ôù)¯%Ï:$Y ‚-'Ã¢'a®Ã\[Ω‚Èbæ€
+x£≤is2ÛµÑ\,å%˙•ﬁt‰ıO..Ìπ¨;r}u“n∂0ˇÈÏŸ≥÷Åp©˛e´súúıuØq÷;9jÙ‡ÉÊ…—ÈaªqwútZ+”nımªvÒçç“Û5;ª7Z¯tËI€ˆß»¬
+∂µ0è‰‚~¯`ã¡(ûç»„$aa3¡Ps∫@è©ö“∑-3lTB;øjM„rO<´X3E[îí[ÙQ‰.Î{n£3ÇçÉóË™h'Ó’i≥¯/È‚3Í—(ÅUiÄı›`:-(Ëqs¬§æEã{›
+l∑p˝ }å=√ÿ≥ÓvµYwâkãu≥ºyóD<HfÕ•Éi2º'…YˆÀÕÍ™Ú∏Yn¿	7–Ó÷B:ä_Û+⁄µ°≈üLßÓ¨5-˙èO¸YE`˚Æ™±¥mú%w’Ï\ ∞hÇT»=Ö¯~^ﬂ∂µØ÷ìe˚˛‚»ßÅè«la†Î◊ß˝k≠…ÖÙ≠î±–/qÈ2Ï:Bº~ΩßïUæƒ†ß∞ª]ÇŸ˚˝˜ÑaÕàìÕÉQ4MÜ˙4Ì«‚/Æ#ÊèyîÏ¬Ö›≤„lQ˝é¿Œ∑ÂÀºêßh9ª¸AHÎ˝d@.ùìçÖcÏ•&˙|YdËÀÅItˇ˝x5moÊk˚“qmÔ…ÊﬂgThY‰T&≥/QÙã‹Ÿö‡fpL¸bÀîÿ^p‰∏Î0íg\©ŸâC¡è¸A- nÍê<*∞	T˛ ù∏#w& ◊gRπXÖ:u·çfX“i%§Vbßm‘÷Í√Í3˚4ê’Ù≥éª£ ≈1¶Î¨R)#‹çÍ™¨lP£≠¯©:[}úÛ·Áõq.yÚõıî€èlZÁúÌT ˆnGŒî}üΩtù+G^†®LùK˚>Îb7˙c=cÈﬁpçèL§ÖÄPZÃL&ª'í“ERÂ>€ZKÊùG_‘ãú‹ØE¥Lú^{2¸¡º/∆˛”9®∏˘,ƒI"ë-Îü†˜µ=V&7∏©˚	~nmGÒÂE€Èπ"mPYDQÍ3œ5∞ïÁ(àÓÿK§"éì‰´††œ;%A']k;l(ÛŒíØ∞Ì≈ùo8ÙTÁ√=mÒ˘&:Ä„[åts˚\K†<eèÎR$•l)„+/ú;#Ôó ]Fîœ·≥cwçC4œ$á∂±˘∆ü∏u∂à'Iı~Œ•À˙‘˙[ôp ò˘ƒIËO∞EUl¢•¬∫.Ô§}⁄>l|Ó°Jåùr¯£áÆÛ·öù;˝˜óDl‚{!%πéΩzó√ !«L˙◊ÿ*{$jyœÒb'\]ìÏ˚∞åüUj:P…xbjº
+ÄÍ“-ùÀÚ¿Ø=˝ˆ◊ød'›ó8fÓÏö5§˙Lõ∆O_}˚7ˇbº®ËPŒ‚=>p˚q∆Á_˝∂%0îõŒ®ü.Ø8r±[YæªÙF„äímâ˚à{∏œ:TP˙9/—›`7¬Ä·ˇàaFbSÒ}6°.T?Çsˆ„kËÑú«_œÜê~R1úÎœo»§äÆN=?Æ=ñ7;ìÀQ‚œèÒØ◊ÒØ“ı%CP•ÚOv˚ÙGúéª@~&Z/ﬂ>UZÇ@†‘óAe'ÚÅØâ t5Î¯˛XYÎõ^º«;™Î¯rÆÅxu±8e‡˚àC–ﬁ±I,ªÚ}0A∞Ùåt”ê¯ƒÿC>=Jrä·|\Ué%⁄§Ì∫Ííh€‘Ä8|+K„ZiC¨Gâw≠ÓN]∞v‰ı·´xW∑´ıπ•òÉ€â)⁄∞ï¸7È¬§.zà#6≥‘m∂éõ≠-»äQ=3¢È±Ña8¨|‡÷SÉ™U˜¢A’1KFU©ÒaaπÌ®Éz£<©3˘˙MÓeäπg¬Ca<†g–"∞cÆŸ!º{oΩicyJ=4ú“CÃce.Vû√˘â7Ã@nÅÊŒÅax†¶ÿ'»˜Pä©¨ÙJHHÃû	-Ôéï§¿·›éè ©?ÊcˆåœÎÖ„˚0qRjuqR∞Ó pë£b>¿;â<õì£Ã;uC⁄©ÓFC⁄ﬁ‚C™ÛaÅD4†+ »ƒXNù^ªq»õèYh7P≥Ÿ˚*Q√ù&¶ZÇƒ1ÌÏ⁄Ih>·zPjâŒéª/€≠√ÉU–SÈÿf√J3ÒnÏ‘çúÄuIÉ+#8 †∑·_œÑ…1ë\p Éƒ˝•{,…mWy†πùLÅ˜;^¿‹…/'cÆ.Ç\ A>Û&s–[©]à ß≠ÊxIL†bâõzSRJ,hÏ—*ƒ√¯Ùƒ®∫Û‡Éã˚Åp≤ß˙qu':D{¸m9Q[È©~î$3ﬁâÖ≈#5¶zÇ“jèÒ#ÄQ≠îÙ˜‚1ªW!kÓúYv9ü,¨‘^µ”ˇ∂X*Nˇ)âzˇ‰FG≥ã∆.ü»∆^8”∞ ©Å2ˇ÷õ`ÛP#©=õá®ˆX—Ñ˚,ÈlO	>,Ë‘ØœÒB	Îù/i$≠»XDçãqÅŒ∞8t∆.)˘,IÜ,≤œV¬©BÍ{úêp']–Ò/±%’¢v∂ì8KµÌ]q¬ÔE?´m≈c:t¶3 ï≥’9Ó¨g¥∆≠XA{((O»∏≠O¶üïZ!&‹Ü>ôôÙ[ ú™ÛùÛÈmn´Äÿ√∆πìŸ°è s¬${-OÇW!AΩ¡vØ‚À*7RÚ•ò>À=àÚ‘√3„TìÙ†øøÉ\nÊù∏âGÇ±	*%§V◊ﬂ|å9˝fq∂ı˜=£µG∑ñâV´’‰–˚Ú&w91sUÆµ∫pLIÁûTÇ Ù’Ö5#,´±Û±åGç[!’ó3"Hﬁ£∫*ë^…Ëëıú'ÚãËq[˙«Òµ˝·0Rtó≈KYùŒ√ay-r’ΩBm†™zê‚ÿÂ∆hƒƒ˙ÆØÂ!ë!¨Yg03ÓeùÓÆtù˜è[X¿¶?ÈSïaéﬁ)’íïIÎ‹ΩÆ¯Zﬁe)ù˛[.˜≤ò{;ñß¨æShëaûG∆]ÇeJ»±Ú…x‚ºÄ{,ùëj}Ú\õK≠~¢ç;r«Óå;∏xÄ}™Œ1Ã˙=/Òr¸∆¬Jùç.˜„?w›∏ñÉy·`€…êàMcº‚%=‰Øç´y—g∆œ#Xx6ıI•~©±'ñÃ#æ·Ú üæCâ#xËæ¿ƒÛ4`ˆ9Gn“«£Û®AÁ0lÉ…oéøM¸`Ïå÷û ∞ÇM‹Uõ˜kzÄ)ò¸G~[.«Èí=ƒH‹«µyw;§4∫[∆.~NŸ+w{ç„Ég_ØkèÏü˝^7D8çã∞Áà˚|-ãëM{ùêß∑låuOUm¯Ó¸πÔ'SR,®KYX|ÛDæb˜$ë%tóD\ŸØ5.OWñG][≤™d,˚6ºÚùrL∑Ï/1‚L<‡¯‰∏≈ Õ√V£”:X	–~©Qßéo¬z8‰>(¡›È»õ±CÁ⁄ü´ òË±z•™ñV™juí˜˘\˘è⁄› C<t/f˚Ò#¶„@aó—sM∫æœ¨Mez6©%ù®íM@ë=O≥∞óÎ´+Øw8¨ÜÓ∏iæ‚%8≥¸»A'z‹ÿÿôjnä◊º}S©ô∏„2¿Ñ—Ω≈
+’H2ÊÏô¯'7©-ä}vìÙx¿†Vπ∞ bî3CK‘¶r=1nÙÖÆ*Bwâ˛˛%†	í“≈¶1g:ãqµív˙>rˆEÛ=ùÓm®d3ã7c™ßH”ãöhGlès;∞y—Ï/Lﬁ¿ìçÿ÷j~ÖÄfÇi’ôñ@˜Ûg‹6;⁄ãñFM{Åµπ≥ ûÑ◊–É3™\‚ø0ÚˇVsÎè∑œﬂ÷¶7(„wÍ‡˘«ø◊ﬂ∞◊±üøzﬂ∏˚µá”èoÒode•Œ´QçS[Ä°D√¶
+H”º¢ìu
+∑ÿù6k—«h{ºò"˛vk‡^¶b{˜{¡ÂπSÆ=‹®ÌÌn‘Íè7∂™µΩuXû©O˝"*Ó∏2‰õ”∞‡Q·7ˇ‰AÑ\\⁄ÆÓbÅ⁄≠©òw›P`O)QÅÜC«äóåf÷Êc·ü_◊‡AnÀéè˛¬Æ4è6œ“ü π÷ÖìÄq%ˇ
+èÿúöÃó◊â∆	£€€˝ﬁÊÑS∞ì+<‚ùFP·ÓlÁπj2L"Á¿Ô—`±∑LC|§¨®Gƒëßïá[ÉgñBV≥6.∑6;ÊµYMh©ïÿ±^	˝Zlo/∑ª+YãU≠FΩ»j¨)Œ∂FΩÊ<>ƒ`¶_”.Hù˜ÆØm÷YÖ¯;-¬G˙¿JÒ(	Ï∞ˆtkkÎ˝õïÊß—π?õ˘„U™∂wÁA—XÍ¸¯§GtΩÃàÍèÓ<¢ ’ˆiÎqbH∆Û˜‚‰¬ÌG»¸›FÔ¨”¿û¥ågé∞ggœû∂Ã*å¬—i•∆È2wÂR¨(æÙz´∫µÛ&√†nÑ‰ë˝ Î≠∑[o∑Ai}ª®m=(ÂZN Á'ï(˝Öˇ?   ˇˇÏΩ[s„Hñ&¯W<’U%*[§HÍí
+MD§1(FÑ≤íFTDvvZXDB$*HÄÄR0£d÷3≥˚–ª5ª6;ΩΩV›Ωói€}ÿãŸöµÕÀöÕO…?–ıˆw‡ ¸ääKV“Ú"Ä√/«èüÎwËgk%LPÎá,0ú&6£≥à%Ç(àSD_©EªºT≈o~ÒæÏ[ŸæñÛ™naq>Ú%Åô"v76niQWààÿ@˜˜í,´èÊıNƒ4".LQ=ò«Vy•0…›â7#åÁ˛[ÇÊÆ‡äŒ.›∞ÑZRò8bŒ_t¶~cÓ,æt¬–£xnÇø◊ã¯ XÙc ù8sp]^xÎd˙Y0Yåø÷¸%i˛rìÏÓfˇﬂ¡?v‡è›‰óΩ‰¨_≤	7“?6Ï≥Ôë˙ÕÈ≥∆<Q´™_Ç>ìoäíÍ_Ê?FEJ#Ûà<ß%ÿèÅ˜4£+ΩàˆOn˘™±õ?
+∂0±k€ª*s–ØXÀ•™1â$FÔêü/CU¡ª’ªËù´∑§#]DëìqŸçúŒPIôøe∑@Ï£
+4é.•ŸbhVûæ[¶≠∂e'#Õ†…¨±[»»NŒÕ…»ä>~¸€øˇó˛A¿`R˜oí⁄…©(st∫GØz¶2Å´§√CÅ´3è`ßâm˝ä3u{[èäìﬂ≈ˆ√§…÷÷ó'∑1ˇd’œD™›WÆ˛N ˆñíxÕW°óì»Ω¥ìy$∫:+S	;éP s.¯ÕHTm+˙˝∂s|LûtŒœè,–‚>(YR·ÉEû	>Tr‰A(ƒØ‡ﬂîv)µÆÇ6óí—”Ï˜≠Ê/_S™˝~á˛%úJJ≥/=∆˚ '≤};vj√5€‘—–b\≥Y‚öV$˜‰¯Ë8‰ŸÈÈú˜:+¢:…ËÖZnﬂÔ1qBÈmô∆ÃSá läW=ñÉ—;¸†4OZ#–:t‘ßôP{‚Âºçc‹Ω–xbwﬁg|πÕòj—ã*£saAˆr"«»≈îÉ•eä¬.˙„~ˇO‰[$¡√£˛»mx0”?>Ì˜ó&6Ÿ[:ù7áΩnÁªÚÁ≠ù·ì≠È%ßN≤>âDÁq¯ò0#µ†27,¢vH˙RXÙ‘MˆCΩ›,Ñ à«hu≥x⁄2m—n§x∆ÜD=ÖDäŒ™:oúj;º“õ ‘Çáp‚$˚
+ò√“ƒëéLÏC°<(mÒÌy6Lœ˛≠ˆnŒ∂”Jm;ªÌÕv´µŸ⁄›ﬁl6lº∂Ìù\˜2ÀèS0Eîp∑µ‰4ô¢…0;ß¯pß√≤Ùc‰p‹˚R{“˝ƒ$zØ≤pƒyZ€zÍ¬Äep≥≤9tö’w1ñÅßKÒJeÙã‹›÷9ä®eá=Dì-=fIp?Ä8_[4uU2ˆE(öZ∆_◊∏≈N¥)Õ4^¡Vx∑±	¸Ô‚Ω…†JL(Ô	Ï?ÕNËc≥è¯KÔ0Õﬁï<èB„Ä‰MPp@
+Ø¥}«È<>ΩJ:x'ìÃ0Ë´`G∞m±üdâ•9MÂì¸ã¸‡ÿ/YWåU¨±ﬁ-qﬁYô96zOY¿S¸0,Iæ$uˆ(‚H¶mXaI∞!AJÈSa¬&°O¥¡Z⁄ÆÍ¥‹^o8òT.å…òâ@ıÙOZÚåa¿EhØ∑Z zÍ‚ßÇÅùP/—˘¥?®ÌÇ∏˚Á$ù◊w∑ø‹∞≤BîÙç,*4b0f[4bÅ¬gÖ#˚”6ga[CD√[(Ú óùl,ÆxV^è§DíÜ]{ëáô¢2ô¯¶>C	˛ ÁÙ¸*>ex7ˆŸÍNBﬁµΩo⁄ñ@XTπ˘]˚—˚z ìø$Ì∆æı{ÑG’≈íAo]Z88eí_ìµ?k5/Ï∑∞˛mû/‚5˜j>¥6Óü]Ì>põóä“∑™◊}ãû•GÔ#)caH◊	s¡"F:æ¨UÒ5áàA@Tﬁ6Ÿf-í∂uõq&Óéß±,aÇ‘ı»\ÿB@´ﬁç∂ök˛Sòªz%ö¨;ã.ﬂá¬Àa≠p(;f£x§Û[¨x-S>Zy«Úæ‘Ø\A˜H{nYcC≤á?á›¸ÍÓ}î’≈^T]ŸˆˆÉÕΩ}¸á.l—(yÀ¸9,kñ[ìÄˇõ°˛WZ⁄ÿ±ª˚õ≠÷=oZªRßA=ÏCÀ2NQ\åùë`#µŒTVL=µCÍh√Ãój‹zPtÄf˘TêØs‹f)Fs—F2À UI‹9ÇÖ/f€HƒD¡,
+ «v≥Pı V\,“^ì5≠KÃDö	RÖH‰V£bíáh£∑Ï7V~»k”∑SÚ„_ˇ„˚ubUüE÷πÇ‰P éÀLRÎích]ÂΩS§›eº#k÷¢Êj:¸Bg3†I◊2ü}øÄõd=WU›æ@µM@™ÂmÃv}≈4ªÃî4_ÍÇôÒé|=¨ÁÈ$p–¯≤ıÑ:§I◊	M˘ÍWYyE1¡µP”…";M•ùÄdW5Éü∏ı2áì&ØÄ*¸»_jƒ÷G(ë/ÿ´6K‘íÔÃ⁄C—K›‹2I37„ X∏êdË∆é7IuM]∆LIáı©õ)Y'bfJª"k"ƒ:¸nÑXÁÃÔ"ªêˇäÿÍ•Á+lÉBYv*z„ú≥ØŸ¶H9Y%>ø¬¢p∫Òä\†8¬(¥≤8bHÊQ{_ÿ aP¯0ÊFíÎÙ€Ì˘ø6™íVGΩµ!K^äh0C8düúÙ`-s|M÷~¸ªK˙¨4*"íÇ÷ëÀE$&@·Ç I1,V∏'„åBÏzç∂epùÇ™y:>0Ç∆ö}óä¬Nï±¸Ò˚OB8 AN4c°pƒcáÔÇéÌGEÃﬂD	û:!ÑBﬂ◊oùÈˇéºëÔL∏oÜö‚D5»∑‘Òé„øûO|.aÚæ®4‚5uòâq‰–ΩˆòCŒı‡dìòn÷ëÑnAR¡c/+ê0dÍOzÏlü`Ù	rn;Ün√“∫®¿Ê/ﬂfS˜ÖﬁY‰ö„–Ûﬂ&1¨:D˛RK÷µÃ„≠q…†>ò†`[ï$√O’2f¯±vW˘∞ı¨¥j¸h‚k©~"Ê´R0•V`¡Iíy¶øöù¸YQ£ír\°>~ly[wÇTÈâfI≥v≈äÿΩPi©-Ïm[≈Ÿ$>€E∫`∞”?êD‘ˆ,DÄ~Ä^VMdC%v#ö¨ò˛€®iì ÌPôÒÄ‰bÛ_¨2‡jÈÁM¨é•w–‹°>E
+ÄÉ(É…f¢ÅUJx+C≈F∏’:?F˙HÓÀnäè§Éß1±t«pG“À0ΩLHœ	Ω`i5x©K:B˙∫ÍX+kè[çÑº3¯@>:´à!£›ˆ^çîúﬁ¬‡â¨ÆÄ"¸„ˇﬂã%>‡ [wë›®C<.4ùnZˇ„˛Êˇ»gH€œÓÆÚä™>ˇíˇàBOñ>{ëLïWeP›πW˝Øˇã ùΩE∏]â«ú|^≥X-d√Ù4∑–R+VZM¢cÄHyôU|ôup Iû∞∏ˇÉf≈öçƒh:ÖË-qê.Ï+YÎ§'ªFfgÅ˝òPæ|·Fqm=Êò4o8< é]ªz”Ö¡ç≤rîÊçÕ>ø˘˛¯¥À”óøÌúΩ∆ãß‹î0`j‹:‰Ô¯ÌdÓ^3eŸ2._ux‘yvräYMØ9·’ÑñÚq#›[:vÿ OP∞Ã ä9IÈ>Ÿ√"®∑e:,~xqQ´ªÌ
+èV.. SŸI¢rõ–≤übΩOv†ÂΩ5Ï–Aîmµ"Æ:µ&Si9q¨dx!ÀSí˚π]Æ›∑LÒp≤R“LjG°(*√õ˘†E∆Èº“„°Jim˝}F8-ª˙£Ÿ,g'>ÚÀ¸géoF‰¯–¢ŸáÖ–[{‹n	)HÆ‚î›Æ∫&XÈƒ°wE_ìkê'—ëëÎ≥ÍπäçB-«U≈©p…‘gUiRπÙÔ˛-ú-pFP„`ÑU3h˝íı”YLÎ¡— Lf∆«U$;öÏ$ätøˇ'Ú°9VŸ{˙.∞7±í	ïÖ*ΩãâºŸª˛”ˇ]Ã™ﬁ∏òNi≠√lY—≤XÂ}M_ò∆ˇÈﬂ∞,dä∏Cû”ã¸}©∆í/≠˜)…Ø,•‡ß(¬äú§∆˚˘âH±Zﬁ∆ﬁ7‰û≠ku÷Aô£—à<"kkv-£€7ô"Íœ§ºBU2BÚ“ÙÖﬂsd·◊æ~Â–ö ¿–?l ú$ R6SÆÍîÕ` xäÜ
+“.ñB6,G!î√»F[¥E;ò£ìoz›ã◊,9îÅ˚Y§#@ÊÕ\`a1(I≥Ÿƒ√íÁuñrà–ÎÃ¬&dñﬁy8∫⁄(V√Idî!I eÜ;R|É±l—ﬂrÌ¶Ò:u!e#∫,ÑƒÒä£º√h∏	80VÍ7‚’Bíï‚Â&0πç◊a⁄îá≥ÄFpÀ…9è∆(ÆLAõÉ—¿&Éõ
+Ùg„P—h¢llõâNı‘%éø¡—8*(Jz¯È1êU]™S¡iæí:ï∆b
+ Tˆ[¢J•—_Räî<⁄ê;ı%´Bô"-UùÔO±˚ì∏F˙Nämè°¯I©w}7é)êjè9⁄£ƒwÅï;S¢ˆR
+⁄vC¨IŒGà≈√ΩK€“=âß0´ÚM(~P’î¯4ä«FQïπÍäº+Á∫+ôñ™¯Ê4ë.©€W(ä‘Âp:%Kßº´cg◊ß/úY˙¶F<ıﬁπ√Zk„ñº}˛©˘Œ|àYrñq5vË¶û?õ«∆Ò†Î?’OxÏJùëáYo`Zπ0ﬂ<ı¸GkÌf√"˚jÍºÉ[˜lnçbwˆh≠ŸhõoΩv&s8ìekbf˙† Q4hHÆµäƒB·Ω BÕú0riÙlÕmx*⁄#+¡Ccƒ~◊†´Á∑∂»ôz¡h$Õ$aVêTá`
+z·C“ll€ä¬w˜ t;«GOíÑŒ!e K
+WA4@ãj	únπ≠Ê§º«Nghh¢ Tﬁ¥M‹Ω£ªÒ9S`A7I™LÀÆÑÇ zÇ™∆¸±¸äBÚ∂3@ﬁ,≤7”63f XùB:…ùÉ6êÂpË?Ô∞öÒ÷åºâΩ§âŒ;&ßÁ7\ø∂öŒD¬ƒ3Û!ne¨¬s Ω—Ö¯Ï<Ä∑ŸƒÇU17Ωçø√G≈j	&öØl£xETpÜk∂#ÌÔZ4s&ò1¿£”ì◊‰»Õê30`Ç^ù¡’äÒ&Lñe≈ﬁ
+ÔH•#w0MÆÌNÇôK¶†πœ©%È,0$ñV2`÷	$≈A‡b≠x,NŸæ‹ñØ"OµôÈXò`[ÊyáäÙqÂL¢ 'Ú\nÊIˇe∑€Î˜_ìs˜j°}…Œ	d¿˜;öπ®ú«W<ªâú+ó›âFòÅƒ¢[¡˚¡~ayŒŸür6g‹Ì&i∑6ﬁi<Á ß\!w;’Ùì]-a1Y≤™xé`g¡w-ââæñôcÃ–ôI¯øv4FÁR±zåM∆∑URC†+4∑uoÚäIµ,¡6_∆*›µüî∆…B≈0∆1úOÅñ,¨FªÇUj¥›¯yÙÊ¯œˇÚœcor°#$ør¶≥ïºn6\¨z¥äqöÃ'f3LırS“‡ .®+¡§jŸ©e
+Í%Üì«ınÒæˆ≤¢µ	AQ˚2ÀóL´V„åZäáñﬁD—®G'–@ïãÏbı´9ÀÒ˘π≥Ó˚◊1˘ÍŸ,ôkÀ˜ ò†Á™™œ"˘Õ ÕÆhœ4b37`±ˆ|áÂ}ÀÈ2a¿¨€8ógã√Œ§!W•ÌWÑ}¿¨∆)J”¢ÓÃ„ ´!ã…N¡dr	¥Ü zÊ∏G è|°T3œ=K]Ò@÷õ@ÓÔ,›Ò|ûòè|¯Ó6ÁÅI†j‚HñûËB√Ûì˘–çjÎÃ˚µæA~˜ª¬öUµnF:gür©⁄?±,»Ä>í|/0HR÷;.XVÓüˇfﬂßuaüo€9|åexìèéC£»7ôU˙˚˜æ{C·Á⁄F#®Á¢j–è±∞ÆMÚ8–<Ñ˛∂ÎCo‰≈†ŒM=ªπü@¡
+¸°f÷øÆí˘¯√ƒ*œf√¥äñìa&§ä∑;ÆÔØ=N§w:ãr¡åƒa*'f‹9‘LáñNá:„#L}πˆ`=‚ÙXƒÀ2ÎÂæ˝J˙ÎöÊÂ2ùDŸ¡¨¶íüZ“√≠i@”Å
+WÚ”J¿ŒÂµ‰≤hZiö‘˙†ØÚ+Ú<ò∫‰¨‰ç≥àäê«<_ö`°≥§I≠ÇáYáàGM¨Ä$AÕM,z¬ïÜ‹Ö^ê∏åˆR„ ∫GÂ#e≈n:ôd˘pº]¶˚iûãŒπjiﬁ_83–‹Ú÷<.ÚTÖÜ’è©aı˛lâ˚†ÁèÊN8å „ŸoKFYN¢Fm6Ô1/ûä©√X:¥^É>ÌEc2√,`É8«–•,%ò⁄*Xfm‘ ﬂéAwﬁîgƒﬂF51LaÇGÿ=†[4_QKê©∆,C‡‡D:·–Ñ¿ë‘Ø0XaòºŒC∫èÊÉ1ç2yÖÓ ¨∏â∆ÏMgÚÜó,†´4%Õz,2pcìg3Œq/Q$
+±†ÕAs˝´ §	i¿∏∞:Ô⁄)0√”yºlrNÛ¶ß	8¿„≥Ç∞’tcï’`I ∞ú±öÌ3™`˜›êÊ<ß.p¨ÒÃpF∫©4∫vkÌ≠ƒnè;aá5¡˚rYÍ÷:ô]*B¨ÌpTJgÈ`§{ΩXíÆUúØ\˛@≥dI∑ΩÍ¥z¯l\∫Œ°4≈ËN–áösÒ·xGõ +ö¡°∫{•	∆èílƒÆ>µ5•î$µ¡•C+,iªô_™Ìíz)ﬁΩìã(–Ÿ\Ã,tØÄß∏C<¬‡öN=Ä1Ä—]G°ªC+û¡øF9dŒgA0bøD‰*Ω«√éÚöiCYúRè∏¡SF Tìt¥d 4‚‹ôfÑK+LvAÓ9b4!%!≠¿}-H§≤)*Qîú‚ÇJ4‰¥ê•S	‰¸	ô:¸π∑à∞∆
+ìõŒ2d6Ëå8ICÌ=˚)mnq˘çh◊÷ïXb¢Ç=£d·¨H¬”¯E¡í^/ß“ö!∆Q©¥◊4{¥·d l√ÒoJBŒßâ·È∏-M€œ„L∂v•Ë∞≠›ç◊¥¯7¬H‡ˇƒ&v5Íq1rØŸTBMîÂØë«9™œ≈© ‡£§G∏˙∞ª”!M[(7ı}8-˜sñ04íÕ]˘ëù^±©ÑNÈò>ëG;,ùù⁄√‡ŸíL\ú”Î„›ÍG˙⁄cë˚ú± "?úª⁄WYï1,ûm˛¬√åØ_ëŒ⁄°í¸'|"æq¸:=_{Ò˝R‹A_ J&$}íWcœ6ÅÙ—À√Óÿº-¯Í–S«!“Îﬂoø÷zÈÙs™`Í:ãGeq°®a*«ãâu–‘‡ÄXên˜‚’&Èüù°ºò˚ﬁ¿õÅ÷≈UB^,¢•]@√s&ı-Ú‹Å&–•H~XÆa>aÇï1∞©É)
+%Ña¥(‰	Ö4ëôÙı«z˚Ä§≤‹'w™syÛì?‘Ì‰ÊüOÒ?âS|∞@¯Ÿ)û^±>≈Èw9≈ˇÂ˛ˇ>µs\T…7˝˚9¬ªsPxcÆÙ± û‚^x·å»ì„®ÓqK-˙ÁSª|È˛NÌ˛ƒuﬂP“ﬂ÷1ë\3/taŒ®µó—O1]Ò≈"!Z‹åM~Fû¡„xVEnm“S˙ØÊp¥QS+=X"he0ÜÊñ<´sU˙ùñ·ù^∫C4c@á“LÖIGéÁ+ígT	3mÙ°•VÕXf’\“†Y‡⁄∂¶M+bPõ˝RNT	˜!fÓC?Tëhñæ¸ËW™∂å˝-"=åΩsãF∏‰Á€çÉÍˆXm|èM`é,áªÚjÇOÈ0µ[¯Ùt‚sËohEf≤*aÚ%/HÅÚ°®VÚ)2ŸWË)˛Òﬂ˝≈´cj‘é‹RM◊L†Mc_∆l{_È…Ö∑©%{bSùR)"±ùÖﬁµ3XúS#Ë dÏ\}É ò”∑‹
+ŸH…_∑ƒèÉ˛“°·]‹Iﬂô¿ÈçWƒÔ∑™ç•#x»ˆƒß–K©j•µÏJî¯›†g‰h±Z)z⁄0ÍS‚U£5KÔ
+¸˛¸rÍ≈⁄D1J(X‚‰–ΩrÊì∏&çî¶ı|˜˚ÅÙ€àaß◊hòOÚsä≈/%ed≠±d4˛úD¿G˘H2OÅX"∏ßæN˛ú÷4¸‡¶∂!+GÏµ"ÙY~[r¬ß∑&„êﬂé<2Ωıæ»oÛ"∆¶y»ÔI ⁄^– ï¥Q
+¢*Ça4†!ÅCoê¶¸N$˚yDqk∞2ùÌV∂2¿œ´!§¿¸Õ§ßÚ{h‚$õÙ⁄˙∫·ÆrPzß$,uÓ„Ì‚— ‘P{)m}ìkè›Ÿ$X∞ùú˘˘˚ˇ˚	u˜À]d’=@”°•H≠>§Ä πyJŸ>HCX¶óXgÅçê`[∑h„äÎÖ1Êòn~‹ÿuzßJHaÇvQu«lÄòn¯hÕmå3F¯Ã	Ò >¶ ,bû∫+ï®S ”-ÏåBÓ≠ÖƒîÂùT ¨§hàÚ#Ñìy ´Ê1E‰°πóÏ'â°jO têœêÙåTjÜó.˚qË∫1≤àÉa9Ø\æ
+ExÿïìËn≥MNù∑‰ÿÒ-…3·≠Kêh ñ&”•ΩÒü"/¶N∫ÿûwÂ8§áé‡YI)≈#A◊Ÿ≠v¥â¬ì]P‰∂<q‚≥ü0aV”8Ãa√¶gç≈Æ=¶ﬂ,@eÎ◊Íº#'å·tÍÒ»¬á[ÏAÀv«x®a´O®æÑ8âaÄ∆‘Ÿ"œÉyTµ≈Ö_{¸„ˇ¯ˇ$·‘é∂Ö^\›X±Iåb‚ı6ˇà†bÀxä9Ω.¥|N´ÖÅËÃÙM?‹bƒX]KˇPáì˛ÏÂÚ^T nß+8ÖhöÆB≈8Ö¬•(3J)BJkW	«êﬂılp’è#˙\ÌdéŸ*≈ù_aÎóQ$»Õ°6£ïJ.⁄ê™	uˇ´J¶cQÕ^v›îßåﬁ´R™2è=‘Üì™·ÖRÆXL`∂ÕV÷÷•ëN˚ŸdÆ≤€*Ã¥\Ù/Æñ†QE≤Är#ﬂ√-¥µ»m5,s‚E¥
+Tjï9ﬂU÷yôx†áÒJπä“D^0•sú/…Òîf("µ˜≥ÇUÄg÷›ñÅîEÖ´åf¥ÙFöè—/öl<˙?†iy¨ØU›&FQ0 3BÚ— ˆ•1Ê∑1∆|Gå`–$&=Á∂%]P[®≥†îsôV@ﬂU≈®¿óπ3æZ÷ï7pSG∂Ñˇ…˚‹ÕÇöùøZ≥Úú&‰Å\ñYÀô<F}3(í·óÓAŸ*π„Ô•w0Yâﬁ‚]&îo¥’˙˙FKïµîô≥™ÁôrÂìIÙ5÷ﬁüb9ËﬂxKb˛t;Ôœ¸E!ã’3R1Ê◊Ún2c)˜ç0{©9”¥⁄≥'9"%'i€&èı@÷∑©É“âè≤øuYzØÿΩ,·∑î⁄∂Hîcâˆõ%¸”b ëæAãú€˜πâ0Âaöí9uâÙ∫M∆ö¬Ìhêê%Â±†åºﬁ`=I¶db∞Ó∞kC™ì•nBg∆6;n¡∏ﬁ“h:68§èEáú;C}1≈)Ú∑±Ÿd§yW	ÍFÏŸ«VEË-?˛ı?ZﬂlQ`◊å„¡ı;’r€≈$ü§‘jöπ®ôøíàŒb…íπ,9ën”ŸºÛÊ≤©»ßΩX]‹5 P˙ØÍÆ?D¡ã˛ÕØ[˛‘.!RX⁄≤”Œ\KÜcX˙¶4"0{CıÖ%∫≥=e±Df(VZ'Ç—J=Ÿwı_b≥ó⁄âUoV‡˜åÏ√Mrf°}≤2ñ™à£*∑FòÄ∆t.V¸?’s"j˝H†ˇ”πáCùWoñº«ÿ•[î6LıMı3be3[Ÿ∞è6Œ– å`$¢‰£—Õœîj≠âµå£˝∫ôhÉ)Ë⁄~!Æm0A"%·ÔxÏê‚Q™öûÊo1cœP:3ﬁïE:d2?ïƒ'É¯:æA∆ÆÆ–úníG•A¬e˝f–neÌV4!WíY∞ÑYiÚt
+
+⁄ºa§“∫q
+}CÆv®¨~F]¬J‰/I˛≈‘ÅØt
+˙r6
+ªh9=9>:ÈQ::}˙î˛≠”≥5˘4¸;.4t±p˝]πêëœ\y∏$y6¢≈™)ƒù´—–Bóî]¡ÿã'–‰π;–ÄH˚¢æ_+†\ÑN4nW †èpŒ¥:äK≤ô‘ÖÔÂ™ £Cv0öÕ!œ8¡·_ëﬁlÃv)9£qú¨µEK˚¯¨ê⁄˝£Ëî°7>ÿú„†ò4Q	4ÁypCéQ#{±`ÎÈE‰◊Ó¨,nØ-G:éÔÇ9#3"¿L‹QHãl≈∞≤·Xq‰†pÜ.b#D‰-Bh±ü#Ùcp,aK(⁄G“Bƒpa»•;	n ÒÈ÷ò3 ÏÈ“Ik! O_*£√πÉo≤£àÂµ˛~çS“πåÇ…<v',üxŒ'®ÜI£~üN1Ád∏°h-)F8•ˆq<Ñ∞Etâ†çKÆ‰_Ö¡îDŒ5≈#ÚÈ"`w WaFh∞R≤(É önêã±ª 7HÏ3ÜåM◊üÇyæê£äŸ-C/`6,≈∏@\≈‹É	´Òd—êFã ∆§üb`Y·bª√7g0vs‹KÓ|Ó«‰‘ü,ÙŸô çEÈL"q”'ë∂ß8o37¿\
+N≥ÿsKÜ¡Tõd≠ï¿B·œHºNLZÌÉù›µ¥'®¸,õL∂-ËT'gh‡¯~√¿çÁa…4UàV5ùó\`ùo?”`¶¥ì‹Gû—‚¶Ê⁄CÄK’£˘©eN“„õ |+LÒà∑•Ì!ë'iõ°j%î qπêq:}6ú¿ì(p¶DÛ[ÎW°ªiÇœ3≈$ñ~„ı3ë)5:¶=•‚‚#û„;Ü}û<sÈôä-1Ω^¶GpUJ·à‘
+çT`L˘Oﬂcˆ:µ»Hùò¬çä€lí≥Kc>Ãkf*s¥Û∑‰°xú[&nkî%)sÖ¬ >öDg¢‚ÅVÒ)˙Qã	8π0ä,µzß®} è´mñsæ\≥,◊-Á]„eÙ¨j5\âõ:ß©éƒØeøıûŒwdΩOﬂr∞ƒ”LG›*çZX]îñwÕÎÆ≠=f;ÿ¶ÚûﬁlÆÃ´-®v”ò˘R'ı›TÜÙÉpäÅv¨/º"ü¡J≠`I·FK/Vr^)∏¬.©C~ÄÉﬁ!rAZ¶\˘WÅç¯ü:ME¿Q~e™Å\rœŒ„Á	∞eèÅ?bM›É‘[Cû,¯Ò˙ò'ÛÀÀ	Ù('^Nƒµ°µ∂â3
+]⁄ äŒt&dGÉ0yπ¿TX¸Ö·\Üsƒ»A,nP	ΩPÒ¥√ì˛
+ÔÒ¬DeXß≈W'É;¡Ï|X,√5Q+ ˘ü*Å–;7‚ëBÜﬂêSéüi–ö]z˜œ¿≥+—†Ì.Œiπs’6J£:t∂ŸàÜLóØ3@eÊïh√nºOë$óŒêÇ÷TI{Luû”≠ƒZ–xm2%¿ôÕH4üÕÇT7ñÃâƒkÉÍ;‰Ü¬’Œ@ªÜnMÄÆ]ÅÆÅÄ¿S›‰pÿÊîò	-¡∂Éß@…ÎÏLËïúÃú9≠z‹C≠/}9ö)òCß"‰ùª#blüÆ<•HÍG-I#ÚH;5zk•∞:Z∆x8gÂ hπDvI&D-n2#<⁄Fs;í˛¬@x8>ÌÌõ{˚¯ÉÒëäû•ê¢∂*Ç®¥T≤tö€†=†¨XåœÀ‰}õ‡;Ö®XòÚl~E0‘ƒùpœŸ|1/ëŸ#"’U“#èŸ†ŸﬁyÜ£*∞XÓ©∂9À≥J-P.äRåÑ_≤ùßét ±HÓ€Jé ñü@•X≤ÚÍàÎ±û÷YÁ[#öK⁄˚Òoˇ˛_˛˘o»È´ﬁ˘˘—aèt∫GØz§N:««‰…ÒK¯ı‰πËΩ8;=ÔúGŒ:/˚ΩC@˘ﬂ˝ûﬁÿ~‘;>Ïìß/è·÷Ü¬„£j©ú˘%Z.çpI€¿8à”ì¥ß´¨S	∂cå.˜ú∂ûPåE˙D∂+3•ÿk6s“B9#‡·bZ Áëkå˜ΩÇs∑Ue?U4«FömVBÎÕ6(5≥¥ﬂS˘Jhu%2Ö‡∆ê!Ñe“e[?ïÃr,P©Îüª5˜Bﬂi⁄‚ŒwÊÒ8<ê“ Ú±J≠ËìI‹§Z:9s|w"ﬁQÿFR@-ËÖ{¡àùcxË®˝!˘++ÅH
+üdá¿∑LDÃËΩvËNÉ’a`>˘Y∫CÓrÊî&ód‹Gá(wÒyù•4™híÎåar»†=@´:‘«N4÷Áz€d{ÀÚΩªÁ¿Ô⁄{ı˝Õùv˝€^ˇB˝4ÅKzı:•∂_…ÚÏéÑ'mSk?Å¨Ô,x›úÛçüê±FUµDeçFÂ ê∑amì¢MXU"ÆX¢·˚V´∞)≤ \*˝?¸√Ôˇ!5ıΩ)ú%'AÏ
+#∆cVËÑÓ2üÓÊ6åÿs.1ai∑NÓÿ†*/+>2&òèK·l©&-"‘6—]sÉÌ£3}<ôŒÀ,L‰jÓ4(˙∫à@≥ÿît∏ä‰§N•ƒèî¬3™Ω b"Ea≈≥K€•4åîFâ%øì€mL)ï¯yÖváÖJ“`‚÷⁄8‹MeIK)ö≥DÃ¸ØÂWPëO–O˛Ÿ$c&î<Dqç<ßfb2{%ˇæÇ4ÃÂQ+
+]°ÆWvÄ›%?ìµÄQsVjIu)Rµöy¯ V‹IK§Â≠
+Zì∑V `Qÿv◊'sÌPmC…⁄˛êÈzºØ@#}!'.=^ﬁ8‘LÏM!√yﬁ^¡∆T0ËµãV'C„™n“ùb€π'Ì©:≈lñ} Ñ∫Çƒ^íi®§èÅ Fcs◊VñMhÃ%|_ú}ﬁ‹P§+¯eŸŒpáﬁ|*äyÔ$<H;Õ˛G·∆¥)}V/ŒeÜ‹¡y˜+ñ8=Â ≤æË_÷≤%j¨Kn¥å1∫u~vÂHÔö/Vd˘4√Qäú“<õ»;1ÚDP3KÙ¥=ãr‹b˛„2uñ\QˇÖpîr∂*%¬–TòûxÙóÛ`∆6Õ∞Lòq¬ûˆ6ÕÑõrYƒ\òÑ≥ë±í˘"+c1ñ‘~ú˛n~Mí4É¡S„Míæ‡@|µ!≈òéR%7´∞õ5uÃÉöTdüí…}N+Gc4's™Î9¨π4πÆ@WË˛¯ùÖÃbªâ∏…ùo¢?â›£&ÎT8¯TùàbÖlîÌ\6 ™®ö˘ÓD¶+ a‰ŸCU…Øú=§!.û:DÈKB9∂©C˜ì6ÑÍ˘
+ìÜlåüF‚êÃY¬qøAıØ≥ïT¡~óﬁt®ﬂå¢:Tœ* ≥K$∏Ó˜ÛnìÅÒÒ·iAøaSXa~3EñBiã}ñﬂúâ‘¬j†pë9¶áû¢¢x+4û˛&yJ«-ﬂÕ9,ÓÁ: nqÙ`‹Ÿ¸î°∏œ›ë°(é€´ã©¡(tfco ö	WÖ∆m]èıO2ZX7?™ÿ¶[=‹1ÕBît¥0_!~ü≤¨HÓa&s;Â”ó]ﬁˇ•ã^˙»$…ç›Ë8‚¶è’—g¿\=Å&î˘MÉº&5Fë<ó@çòÛüi*~ñ2ci3´•V—vì??í ÑãqËFH)Ú’°j¥;H$-¥vëæ¶5-â•œ⁄—ŸgDe
+.í†>©xãÃÒ¨˚,N;YYX5\{lwü¢ZˆÍmÀWõÓ´ÙÍæ7ÚYÊmìS∫d†˚¬[ç∑Tz·7àD^ÄÊ·’π<íﬂKy72«Ø=^‚!]ß‘·À°7;√a¢Ω≥cb•Œô•êu∏ØÇ`ŸÕπS∂?W¿fA*ó,TeîÊ.Ë†¡ƒ%«¡®J,Ä4ófµ± Àz>Ö&⁄2Ü&tI>Àho¿ôÜ≠4Ù‚d≤$Û.∑∫ÍòîÆ£ºs!ﬂÍ„˙Œ~VoQ«4¥bç@Ò‰ŒÅM_¢ç¿b&¡®áõƒ3Ö-–¯/ó€UL%¢áÎËÁEsÌÒ{ˆÜ€è5s@“ú¬cä˝à°Õ“D>rÊx4ë©∆ÆaΩIﬂ¡ ”˛¸≤~Ìπ7Ü\∫I“Ê'ëNác~ÎÉE$Ëâ`ﬁÓ˜ëq∑íËéïÂÌ]è;7àbL‡+ƒ¢´å¨YnÍèˇÊã‘óƒ„w≥¸QNr“ÛZñg∏/gU´qÄho,§e∑BHãbjØ€ç9Ô={y‹π8=ˇétOœ{r¡DŒ]˙–ÍSè|1•ó¶≥∏œÛßÏ‰üzQÑ;Ír1qn"R{⁄ÌbÌóò¥v7I∑É<deîè˙ΩCrﬁÔ◊€≠Ê∆&ôç&√ÓéÎ ‘”Ãd:‡Ö¶f:0wìô©ŒníÅ(Ë—d‰à	§„Ñ¢≤ƒc\J^Fáe ô!4Ir±ô∂ºIX•h˜F/„bR˛¿@X%¨˙&ô˚Ì2úS§ﬁy,¢√J_Jñ¨B dgxçÔ¶πìnD3”“Gm≥dHŒd¥\Äı–1øe”aríêDûœÒ®…swÑÒ (˙Ù˛ÄNõ´vﬂA£4é
+9¶ˇ-‘oœ1
+;6i∆å(ÂY—l°t ÷c&‹Àì£ã>ïg«GùìÕd(ì+iŒëFî√≤å√¿ßa¨ÈﬁO6;M[v&ﬁ–¡ÕDπÃ6ÿ¿õ¡MàMsI#‘)∫ïtíË €Zmü≠ÛÇı03O¬¿¬ì1Aù8ExDﬂùÕµj≈%hÛ9a öy˛â‚≈Ñ
+qÏgË˜!œ‡; Î˚—:JtKmÑL¸ó"í$‘≠=Ó?Ô‘€ª{§ﬂÎæ<Ô—S˜cn∫îJóÆcÑexÚ0»1v¡˘C∑≠xíæ8Íí—Ha?oà~ÁúÙﬁÅ®Ä«ÛπÉ9-˜∂˛“ôiwÅ	‘biˆæˆ∏Ÿÿiìo∑ﬁÇR÷Ô<¡™sÚ¨∑Ò1…∑˜.aÛùÇnN‹Dú7(O›∏hÆBÙG}í£]\è¢õW§’ÿ££™J∆“%¢‘!≥ÏäB!aæ_ÏÌ>6rì9∫îÔ¢À≤"9ª¨¥uÓñhb>≥Yæmn÷¢l⁄jÔV^"ss%.˙öß°`PHSíã¢ßÆ¬"≤#¿4êó3*TêoP°8	n™´Y∆e◊ë‚R+¶äôúºÅ&V0Å(dπU∏eq’˛>b5†‡Çg»/l±Œ›h>âøg_3£L˙§"Œ5˜6Dêyd◊§ßåúe-¢B÷&ñ£
+Ó!x∫± *IPΩ(Z$õ'πaª©ª!†y	bkö
+M{®Ω‰0Iíˆ˘"ö∂‡¸ñ ñÏZ’å“4˚™€=bÌŒÊ·líüC˛ì–™pì≤—[∫ÿ∏|XgIlñi˝ıøí«8jQ0ı	_<Âã—ñMñÒ˚ﬂ(,tøx/∞rwWŒ”⁄€lÌÔn∂⁄6õç&EÁë†?ÆﬂÊ≠~≈$29îò_‘–C pNuîbv§
+RáVÕä’i‘@J∑Ki[qÑ=`GòÆ“ﬂr9qÙπ|¿óTTJ°râŒ2—Çæ≠§ÎTˇŒ-4«”Öz˜JíYKØörÛ‡ÂIÉL}ÇmÂLl™gÈ#ˆ∑sGx.N@Ã‘'ÅÇò‡àˆã¡<X‰.s∂Ãë‹wU$íıC"∆Tù—»˜ƒéä@ÖÊ…U&ë´ÛπñŸÈ|+µeÁ≈Iã:}“3„6ë%ïà|dÀgú“ƒßêBœ›eN$SZ›˙o]íRqπ¯§·©;‘û‹∂*XÏñeûh≈‘⁄Ìä©µ˘dQc"Í*JOfq˜∫ì6•Ò¥ÁˇÖ;˚‘~öWjÃ|%a†‡1hÁ=;¢,√œÀÑEÉ’ü©äó∑ıàL)€öuwzI7©õó9t(Ø=:¥:¬tlÁ0π2+ÕG…'º ˙Å›∞I≤7Sü–,_∏Öì9v`˚Q_Ã
+gô•E«·‹G8·≤ÉŒ$}3=u:ìâG„‘“’áÆEÎ?πyGŒ–‚FŒl≈t-Ã=ü‚©ÛÓ¸)}›·%Nr´yK¶ﬂí⁄ÁÈùüiÏëüÂ‰>ôA~Åµ√{üﬁ´‰uÁï˚b¸%‰ˆN≥MÍ§Ω≥ﬂ$/ûˇPÅÇ?ìY>õáÉ1>¥≈‹∑ò‹uÁπŒÎKÔÌ:%ÛÇŸôjÕ\éòÒ—‚(ÔYö¯¥ñπ˜nÊ1„,Ù1˙0™kôu~ˇ„ ÇÃ≠™SÙ⁄îN2¸⁄DBÕZádõˆ∞;)ïªë∏È\˝…ë	è›éâª¡	W«xq¡IﬁÉw3=’“bF 2–Óı¿ØÃ∑ıìé—ÈúZKªcwvµå7Õ¢8}Nı…Vgìi£-ÂA-ñ®§)Õb‡£BÜ-wôJﬂj˜VaÅÛGöº÷F‡±åAˆÕ]„a+m€i=éÌŒ\ˇ √⁄hBiË˜;˙-DU˚∆TWüL.Xì±ßD£ÿCˇmbîÂUÊ`™Ä(VÄ ••¬cÙ¶æúi¿‹∞¨ı™aæŸƒY„™-âû@)≤–+Sîı&Åˇ÷wï¡÷Ùz≥rù/À”¥J∂Õ&Ÿ.™‘ÔL∂˙áÁÓfÿuo¨™ı‰Cì±ãK˜hŒ‹‡«(j¿©L°§#Õ±8LB‹x4Úa|ûö+£ª—hÿ0Ky¸˛S∆Ã>¢ÎÏÓ‰5∆¢~±.û?ªgw˜zÅÿ“Õ?ˆÜCÿ°Ña3RÕ9˛Ùe±E`zÿµ˙µZüå<VÕÃ’Eú±G$)_AÈ®∞3hº˛˜ õLƒ˛lµlÑSí·ªÊçè)›$HÌîíèyA”‰ R#iÛéõÑ'Ÿå[a-X°*óN˜B∆   6”o1z_%9O`1%¡òî%⁄[û?èAV=‰˘.+ÛÖÑ‘ÇLÇ—¬<õ˘ CÃã˘AgVø[ƒ∏ßë¯TŸGß0Û	êó˝VsˇÅ,È”mÊpo—Z√!Kò=GÀg≠ﬂ9O7"ƒ∂F‰îî9&-LΩ8ç´#ı4°!˛|∆ﬂ˚´π7£•Æ∫¯p:`ûYBéÉnıº¿äÅ,'ÑÂˇãøX—Ìn≤≈ˆ,ƒ2◊7®mõ‰·≠≥üê˛—≥ìﬁ·õ'ﬂΩ…Råﬁ¸∫˜›ÜΩ¥w˜ﬁ¿&y”‹π8˚Z≠¡ŒWóÓ˛˛∞≈£o°K.jòƒW_ﬂ$ÎÎ∑ÓWÌÀùóßŸnπWúñq˛4–§VºiFwXﬁﬂií†SÕKñÖÃPï√"HNäÌ;Ëä+.‡†ÏOhr¥ŸnÅêhWf(˘@ÈX÷)æ45FuZƒ9¸ÄÇ‰\N‹·#Q	2=$öEx	Q5…%ÇÄ/hN†4;¯âVi¡8ø∂©h¶fÕNÙ≤Ωà'P∆P®z¶óôp3çåV)œ⁄a˚±O!0P0é$?£!XT±·ÆÙ®`‘NÃwTN˙’¬õú¿∏_œi
+b÷∏˚…l›»ç˚„‡Üv–ôºÜŒ§~„ëø&>∆«À˝-jnÚùjWnC‰+K_…Œ◊O¢ëÆeˆZéõ∫~Òûf§ñBΩÅ,ES%KtRò∑@ëº<≈XAÛ~¿X9“∫uÓ¶Â]Cº˛¯˚√|∞`¯9KH èà./`ÇMZ∞	“Cé4(ÑÔdìD¢≤6Q9¡R`ﬂÉÙÁ‚D†!.»-n\„˚pø|ñ(ƒTçˆãyì«|êŒ ≠±IÜjŒ|˙3ßÕJß¸≤Å|§PÒ¥U(Ø(´ÇögmŸ]ˆGA¿HﬂX∞ã≠T∏´,†sÎÚèD@©˙‹≠ß¶÷’ù—áü˘ì9òW«x8(4Â=ìöﬂüˆN◊à∂‚≠hºLÍB}≥∏õ`¿HlUG≥·≤VÅ>¬aÒzÊ\‘£ @¥Êf≠?¡“íá¡çop\È$≈Oœ”†©ˇÅä}EGDŒ_∂Õß-  Æ‹acπ~ÍM‹†g3Íèï≥‡·x◊¶ Uö,%ö@y¬a)uóa&Úpkº{ÊºÂ™0füﬁªÿıád`â·	·s”‘Ñ˘Hld®vR;.»aÈù÷bƒ˘.R∑Ò&qiªÕ≠kíÙ2ÜπÉ∆pvºuI ·¡»∆ ¯ê
+Ï-E5Fq.gÜC“h@c±ô©RoÀÍ ≈OïC?R„]Öºmjì¥åÍ+~2ïTo≥iB§·!O•b0πhjÅ¿U∞ëw÷ÄÒc„)Ph∫p4Ëm∫É#˚®‚òö]),Ä}∞Ë7ö7lñîsÄ˘ŒuBRÎVÒ∆òèx~Á'∞G⁄?Ôëü˜àYbè¥ÈëW§œıı≥⁄ªüŒ∆»Ÿ?%ˆ”|Mb	R∞t/‰ûˇy;»?Klá]∂@ÕJ≤ÉèTá9ùÆÓ∞çWÁ´≠‹æ‘Hp+˜˙æØ}!∑l`‰ù¸JWÉ“‹Pk¢Âÿ≤˝¬:—8ı€Oæ2‘•ÿk·)Ë'AM/áµ∑p„-"Öx˘é	ûqº∞°Ù—´—âÔ\Œ
+ÅÖ…Ø“™VâÙ≠	±ÆÙ„0Ei(∂Çk¯†T◊J“‡÷yÊ∆$çƒ"Cûîã·ù∏ÑAÕ#f(ﬂ‘íVò¡.m$IÏUÅÁPËï–ße≠,rT∏20èWﬁªªäπ≥§›Ÿ?PÚD#ˇy}ÏÕ√`Ê:>yÈ£¶ﬂ|\ú≈TŸ7˜≤€´ÎÜ^6€{ï;…`~›<Ú˝‡ökŸ˝ÅGÒ˙P€Ó¡≤SoÄ -∞—x¸í„;C«‹mƒjÔo∑öï˚L·Ñ]~·˘∏+∏b=ÑèÏ\]¡nåhﬂdQ˚∆ô9˛Üπ€àEHi¢’™‹qXdË˘´`2˜c'ƒR?É	≠50ä*dcπrC∫÷ù∆S´“y•ÈµÏ‰˘û1Ñ.èÈñ#!±Ì{Â¡$„ç(üêÏπ£°¿`ä{º¡:I˛úºp‚q„ja≠’¶œ	aµ|¯KÚ ~ﬁ–tÄΩ2zOò≠∂¿ç˘≤(∞óÅ⁄ê"ï?!¢¥$œ$å5xâÅœ]‡ë™˜%ÓÃƒ›#øKÃ≠§Ô†„®m¿é˙ß˝#`·[x\[øXﬂ¯æ˘ZﬁR>Oh+õò•ÌΩ]Xàˆ¸gØô¸ókâ72R∞∏‡`Pè‹¡¨Ωª˜∂u–‹¡uÈÑ°≥h\Ö@ÔôõoÁvì05D†öπ|Ÿ⁄√.Ò˛¿óç∆oœ«˙~Úﬁ·
+Dzñ?í$:ê¸&QóFLÉï ¡WíòLv∑E”Ÿì^øpﬁ—_‰Oî2¥ ˘Ÿ™^ß∏¸M«Œ•å≈HwtÊ\ì6û:‹§WÀN8¨YSÀﬂøﬁÿ‰ù|-ïø•}d≈£rú@_g2e ∆€ŸoK÷8¶˛Fò˙⁄˙ã–uJ¶‰ÂnÍ·Ÿ±(yiôe¢gS‡ãñÚT¬;[E5Œ ™„éeë§ï:”¢9óê7M°ƒg÷&õDÙ˘¡ $ä≥ıÑ*}…|a„ÀóJ\¶Ù°‡”ÇC_œ'Œà\óÍ∏&ü¨F]éUT,Éòg3üK%D1T∆\5YI5ÈÂOµäßHûÈéeåû'‰|`}RˇuÔª˙É≠v≥˛óVd…z[ù$˘qˆ9ì#Õ⁄ˇ©íc>î ±¿–™5X≠fì∏Ò†±°'OMΩŒ%pu:Jû,PèŒ¸ºJÕﬂîF–|âHXú5e-π¨skè—@U{ŸÔ§hö—ÜæeÈU›û›õ∫=RK≠Uôù™ÍÎ–‹d˜BZ=©∆åIÀÔ≈ëÂL¢YáôS»í{0ÕLpU_ä÷ª∑RªmŒ≤√M>Ü7´Àx~z|(Iò±§#XÂ”´Ôb‡C+<&è]ÁQıˇ-z0BÆ>r}ÃïsÀ5';´îilÀq>–Ù~ö'ËÁpD"îﬂ´Ï£Œ≈“lYRqm˙Ìùâ“ß†äÜ¶ûˇh≠•ºÍº{¥÷ﬁµ"¿ƒPùS+Vã¥¯S!∆üÄ8'‡®î·G?¨í!Gµ¢T∏±:ë¢Îsfí˜¢ı*~6⁄|hY{®òVnr¨ÄEÚ RÛ—ˇ˚ Ì"Ù8èZ&‘7|gp4vﬁRÄLvojC˙üQóÜ¸‚(îök‹8‚Ò÷…SPyÜ¡ç?	úaDº8ÇA±zd3ÜÜ1√B\&IDÇHå8ŒU€ÑsÙ{F, 9)Í	ıBcËc”kbi®M^^S_H≥jIˆ•™¨[¶FU´!{/e◊u˚…“ﬁk ¢>¢i1Zq∏V,ä#oõrñ%kVπ:{>Ôdƒ
+
+˚@`¥ ı_’ip<Pˆ§RmgMÖ;Å∂ãˆz2çÎ{∂ı¿ñ*µ¢¨∂µœÍ¨0ú	•˙5Ó
+Oﬂ‘˜Å6ˆuâÿF¢-dé(«s`íÅƒ°Æ¶ßé”a‘¨⁄eë®@ïáû3ÚòÜA§+Ïb[ç¥cŒK…‹Áuâá»U·ÿIÜ	Ë,ñ√Å9˜}')∂ó®mQıx/ı9.‰É¥@@pùÕßêîüê¥∏:øƒˆ¶§Üº∂ßtd0?¬:`\ëLÊ´Zˇçe¢„íCDãCrX-‰A°7·—&Àá´V∞YÁl¢‡6ÓU$7ôO˝É§Cp“_y#û§»…Sïa¬¿é)§ÖõîOËiD/Ôà'©ÛIß:¡ó˚fz—–0†—XÚ¬îgé!∑ç/CjdÉ≠_m˝e]/û≈âgBW~tèÂ≤‚Ky≤"ﬂë-Åí	Úù+H#Ü$˘Aa¿,á≠}*Ièœ;•ËÛ›˙áXÊm?©Ú÷ﬁŸ›lÌÓo∂ZõÕF´ºﬁù√…Ÿmñ}ÎÍ4‚4œD˜]Jº.Ï˙è¯Ø˛3¸˚œ‰eü∫0x4up∏9(¸√{ÔÂü ±√†&vÈ«@Ïˇ;<ÈΩ$µnèú˜ITé¡ƒ%€ü≈w;ÇÉ˛ô‚•≈ˇ¸˚øÒrR£N¿Û~ˇÛ°ˆoŒ˛©˝3µK?jˇ?·ﬂˇó0ˇo]–¿ﬂI{yj◊Y4–'*eG≠#ò6ï›ñÚÜè÷¬π_œ®™é¶-¥l’/cÕÉÈNdI®LÌÊvîzQñ⁄É:üB9Ì˙≥[)±t$»˙“J >ûY¥KQàæƒfZ‹¶ø(œ£àÿ7√˙Îr-WÛ“ ﬂ'o≥s“9˛Ó/èNûë˛YØ{q˛ÚÈvéèûúw.éNOƒ ?˛·ﬂˇ9ü˚rÎö0ÆÍÿ®!Ààç%Èù‘gπ:–Rªf—pö£
+vÏÁÇBA&ã*è±¥9;˝∂wNéè^]ê˛∑Ωﬁôu°ú«¬¸úÖ¡(t£Ëˆó+*%$Ÿä„z+øskÔVUaúÓˆå‚U%Œ€3≈ã	cÇ3ìU~ÛÈl¸Ü‹ﬁ>∂≠Àº‘eÖ b2~*loÁà&ïﬂæ3•é:Z‘Â¬ßò-ciìú«Âc9ó;∞S(9_ÿ*+^Öj>&9}≤≤ﬂ©*Á ?¿ñ˛këı–ãÕÃñ]yZlf©ï^|/äct‘…˛ 3æ»(ÿÏË¨ÉïπR¨ï¨Ó§N&⁄Dó.Ó$Ä†ÍµE)˜6@¥¨åÙL]g—“2üÑÊv›”"]“:üÙ%∆hüœ&%`…1z¢ñûΩÏT—Œ†ÎÖ3ﬁı”ô¡ÁN8E‘∆YÌ˙•ÁQQih©2®•7‹¿ê«Ÿ∞KAb±-*ﬁœß±A‹ïc#9=}y|¸›õWΩÛ£ßGΩC≠L∞RdF}ÑØ”‘NjÔù;ùqDµ«LV	ïßwÒl]Ú+¢3®há™CY5¡ˆ§§2G´ ùˇ¸ÔY© jŒZìÃpËNúw⁄ÌÙ∞sÉâ9ö‹ö‹õˇ
+öG$•≈Kå#wµÄ=L`?	»Ωå4¥ƒôΩxë∏Ôº(éÑj‹4Œjòâ0LM¬†&/âò	©ÍÕ‹AŒßb‡m{Äão®Ì¶[8©x©Ü3˛®Û…ÉÓ†|·\∞_@óÇrôózﬂ≥(∏ôô«(ﬁÂzYA4‚º*¡]`Æâ,Wé–aÅEWyÑ‰X%TH©`ÃÏïËò√sl§˘á„ÌÚY2-ƒÀäÚà,óBkËúâ´LæúÃ]-ÏYË];^vuB]hâá'ráb2vMJ”„Ì
+Å(åù¿‚—ﬁÂL¨©÷í\IıíÅ–êòó|–	;„2Â††19E:˛„ﬁ≥Œ1yr¸≤wv~trAÆ[çÈµA(•ümÄ¢
+¸‘∞‘¿Ã÷‘´µFí#ªŒ˚¡ıifö%´$ïáﬁ»ã·ˇ0¸–Ûc4/¶ë°	u£ëÿß&1üÛà÷™õ¡†Ä]l—bFÂäh	|™Ê˘É…ú˛âfåMP8öèmM—∞hD‘ô0¸2•âZ‡çsÌ÷Hs óå60xß(G√ÿ¥À·r◊:f	¢Îqì<;<;OêÌãwÌvœ:‰ø¸'“˙Í¡~£’nnB˜Éko»
+Ô• aôÖn¬∂ÃeÑ¡ï¿—6·â@Zä"å›∫∫⁄ƒâ≥–«dû%HΩí/◊^$¨Ì3æår|<-S\Ó‡QãÀ  C†ÚPs`‰b´Ï¬.¶X¿Ddàú UÉ˙¸ã’¿$Ö”X.Ü¡É≈ï(Ô%É Ù ﬁTGû¶sú‹_nH2 ,t}ñD√Á ¥9"¶\ﬂ4çc»V–èY€Í¥7IBáŒ¡»`úÆ¿í‰s=t•"7>,v®OiÎ- æ+>¨(mR-˝xˇ˙Ü°÷«Ω¬]Ø≠2·Ö(öz«˙G6ı!?~∂ÀÿZ≥Ápï± Eπ%ûﬂœZ≠*¥Ö]¥‘ôÒHŸÎ“:“Tä∆B“ËzŸÔ†ìg©6∫=⁄DÔÂ“-`Dm£ª|/^¡H~˜;È5Ã¶ÌsF]Y8Z√K+°+P_”î"˘ËŸU© kìZ•Q|ÛY€∞ﬂÌí∂Uªò óZ∂ﬂ"ƒ:˜£ÄE≠çi„X%DS·î)«‘÷
+·ÉxÎ.Òr¶∑	óNæ⁄JKB¥•åç‹í´I$∞É[RW◊!˜ößHù}ZZA∆≈-ÒËΩdãºÙ'òŒ3Ã†ñíÉ“êÛØ…Ω◊G[îOO∂ıÖCHiö“[ı¥F”˚<∏ƒÙ"¬åÄLº;∫tTˆ1'•≤è5Dìæô¢h#û§zkYŒ™¸@∂Ã_eüœãœ‚Gge4€§?ı.ÿƒ˚tØ$l·ƒ>r ’#:±èÂVxbüOèru† ¯Yñr*TUÈ÷ÊË›'áÊkJû‚jXhq€vë,uòwR¨y˜)íüûqj≥ˇï¥i
+Ë¸®dÜ–’Œ &µﬁ‘Ò&[gcò#=ê Ωê}˚í4Gü˝©›ÁCS¢· NÁcÁF∆Y°-´h§XäjJñéjhvüYÎ÷/˚;µÛïA√PTß©Ω†®QO√Ÿâ«§3u}ı∫–ãﬁKªN™2$πW[©Ñ¥[’ﬂﬁµúÇbÓKΩ›j¬ªœéŒzáùÍØ˝ÊÃÓµBBÃ∂HÁÏÏàúÖAÏRr6√ÔïG]A'Áu¯NgöIÍMÌDn`ÚÛ}iÊâ≈¡ßXÔ°O~$ı¶àœ+fugÛpDÀ…c¬Û?38n<Ùﬁ¿V;JÔëßËÏﬂß…4.†?Ãñ ß≥∏~:è+Ô6[º7m°˚
+õ≤‰x‚#‰Ö{#1^·UÄˆæ+w
+W˘Õ`8o≠˚C$∞‰¯ôFîÙ—ï –x∞<NÌÖÁa¥ı<ò∫fxŒ;1ÑO ««Õñá†.–£àØPÜÛid¶	Ωƒ.8°Î®ıí‡&zÙ~[ΩôÀfT0˜iÙ»œç¿–+0¨¿C∞éÈävñ+g‡MÄ“\t˙á /MÎ*10è{\WtaÜò{5»QLÜ<‡1ÒºT≤Äëò#¨S¡–í∫–~√Va¿âc3|G^¥4s⁄¯
+D˚#´ ^|`| êmŒ°M∆a!ÅWÌWÕ/Áa0¿RáΩ.-T®S§¨T‘lnh\sä#i@J-ÁjO≠“/'%üdQ≥ÙD˙À^≥ô'Y˙a>≈¯N	àI"/÷xg	Qjë≤5ı⁄5aÆ…Ïí”$dKúw»∂¥≠NΩ≠*è<VeÁ»0◊X∏JáJ‰‰â#Íî5Y®HÆc£Pk˘∏D¶Çi6G>Y*U√h[U∆q9Ö_±	ØúId…≠EÅ4Wwπê¸U"‰‰√”‡Ù–ÅÁd%òs	à’E◊ˇ›Cz‡ùƒ^^ÅJ)>ÈíŒ´àOüŒöü±HD¨õEŸÌ2m	òYJN1#hÊ¬ÏDúÅ∑™¢õóPe˙c€’ 2ŸáO#ı*DÉYGÌEp	,ö<y®r¸≥´Ôe›o<8ùo4>∑∂‘Çã°’˘U\Í4™⁄}˝ÅY~n⁄.3ÃŸ"}Õ?;|zF°º†8ÁíCôπ@vµ=Ô`mòx#Z1≠òaúÓ! !7NO‹DD¡Î|ÌvÚ96òS≈¶ê\.=î“¶ı&ˇã∑ë|ù’U	S8Ï§z-œ€¿3ÎP‘Ñ‰≤‡·\Ãp1óf Öiï'F1É√}%bTE‘™E]Óù6π¡àgÉXîyµögﬂÚ|ö¬û®Ã\ L´|≥Í∆≠Rœ`ª¬§∞ÌÃs%.A'~+ÎaLÛÁƒhJEauäÇ∆k=ni∆bÉ¡∫ßHäóÜxsŸE;åÓÈã≥„£Œ	µß?;Í_úGKÈäÍ7’µn±™tø◊}yﬁÉá‡?wΩΩªß≠Ë’‡æ∑$›TÑk)ÒÌåØ…4-6õ‘xQùË3hY¯:ô~&≥qSne÷≥åZñoi$o≈÷kinÈeRµäË˙Cã¥[I“mß∂2ÈvØòt´=ƒIRk…´ŒÒë:¡vÈ‹Dm–Ùì F;Í∫V÷i)w"5sú¢ÿ◊aM+∑af;a¯ÍE—°á}ä6vÖÔ¡˝Å^äÄ'¡m©ÀmxW4_x≤ Œ⁄Íú87â]èÚMñ‚ª≤ ÑÑOÍb4Vîºíı«c'¶ÈE‘∏∏)dE}˘e¬,π=aö,÷ÚÀ/qhÏ–kœá¶‡ákoÄ	òãr~Q≤≤3µ∞∫¬q¶(* P⁄M¶oıÍ§’Ê9«ó‰ı)éQ°¯H%±l∂~íπY|ÑaØ+D-˚&π¡ΩÙÓAÉñOÃÎ†·+,óÕÆ€Ç.|Ù%¢NRX {¥Ë;≠ë¶MBT°	rá∆:ØÁ}˛∞—;¿ﬂΩÅ£DÁ≤iS<∞Òº/ˇNMvys˙¨2›ù⁄∆ll[¬ã7›≠ÒnXæŒΩÍ[y_;ıÆiﬂq/ªo‘SL@%ø≥WWBCÖƒWL˝g!©n%t≈"<p,ªµ÷ºEå Y	u—pét €
+$¥”ƒ	L^ë¡^≠8‚™J˜ÙÛ˘®É+`–ÖiµÔDp6»ä´(ã≤=@™Ú¸∑¿ÖTbôZ0KuÏXrÇ«πi UpÂõË≥Á§˝§0Ç:ÖÅ3ÑÁ)0a2T¢ üEV
+¶Aj`≈¥3c⁄·ÚÏ'$!˘ï∆ƒıGÒò<&MCó£h√:µJ\.ªJ¶Ó6)“ã¡rﬂ⁄’iI¢Ûe«“2 ˆ“Ê>	õñÒÇàTH˛≤Å2RæLs&dq˙èYŒ¡ëdômmef<¿{¬´RÀ2UË§Å—j,ewÄ⁄ _Ù	|’î}7
+<°iU^^jèπ∞ö&ª	µöŒ]J†ú)}èÃÇU¨HádÖÜ?o∞Ü G—¬åCô2‰ À∆%<¬f»Q ù¯∆CÛ∆∏1ª°±:ÒÅË8ÌLô&Ai£˙x¨»Ü	Uf?Fä3•S¬A!ÕÈ£·•è@UﬁV≤L¨ôu\Ä
+˝•^l|-rM”¥XmØ%Ÿ©q
+S~[y*yŒNÂì'ıgΩìﬁ˘Q∑~—y∂äÈ+r~„8\%—Æ¨r¬˙—aΩÛÚ‚T‹£ÌŸX¡ËJg÷
+HƒÇ˚~é«òYMC@Ü^v†!tÇQÁ˙ö°9Tx
+ı®Ø)~C˛!§"·˝Jﬁ[y™òµ]˜çYû|æöOÆ>≤≈cë	§5∆œπù#aÒBJÉ^+“ü≤¢yVi≈Mg+âW¢x2±EÔ1»ºÜÆjï"s∂lÒ'ãd˘·ƒ{ cd¨ÊπP`ë—.E%rò™…,¡πÆaœ}∂;‡^°±Œ<…Qˇú¶Å∏râï|I-ö∆ò(–nÏêgœÿ»¬/›IpC‡‹«êﬂ˛ãÇÏ∆„–ç0÷8j–ﬁÒ⁄∫Qƒk ≤e*ı∆àêQ„DÛ2Î5ÛipZ'pˇÜÛâmí‘`»m<£9–∆Ãrán˛û ìZNT~∫8z)qk€nppˆ8 ÁÓ¬ %o Ù+oB1‰ûx¡‘≈ôN<#¬zø§3bar˚Zbq´•oO|.0•}ÑPBÇ¡E¯~¯)ÊGD pÍ0À¶âÈrˆ^4¬	/Ω¸-ñIÑø@3¶‘±ìç◊l@ª‚ﬁQv=*§a|À¿õ¡˙Øﬂnfh!rFü8HÁC=WI(:æ,Ä±l¨s_ ÆÀtûØp„G<≈#-&çA#ù#Ò\FUI†;z2;˙ßò«}i:µ†,%‚—ˆÈ6Eo£t2ucÛ]gH±ìŒ≤˝q…uªANúÉMzÒòé∫ü"û0ÿEéQœ$S∆0ÙˇÀ/ON/æ¸í∏˛»!Ã2ñYpÎò» f¸÷ôN9ŸqüaÇHõœ"`ésœ˜TÅí{ùÈ•á_CÿÊ∏«G∞˘} ÊBŒÅ3¸≠C˛Cûπ_Ä°ï¡""c X<éÌ∏IX2 íâÄÕà0‰fc<¸P„Ñù–‹˜ô
+ë?˛ıå»5Ê‰‘Èz∆X°˙À¿ü,æ§ãÙh√ Ë…~Àuè‹å1>ÔrAÀ‰¬ÆOX˚¿ô—ñF%Î®0å±Bﬂa8s»kà¶∆;êí"ÎB_HÖ—†$ÿI.É¥ﬁÒ‘`‘¥˝%y5EVN±òä;"\k$æ~B Ù_üìW†U•¬ü>°™sª≈º€{¯xæ@•h¥]∫DÚw˘Î·mi˛’æsXhCÎ§	§ê‰d1E.öÀ@F›p1ãÉ˘1VJ∑jn®€Sôu¿á`‚…∂∞Ω2ûª≠ÜYä,$·w@FÉ`Ë‚1xçÉY–ÀÁö YZ=H#EÚ±%p¿b<}òˆ¶rä°Û"Ã1º‘D7I<pm:˜°Èº»w„õ |Q¥XÑÍú¿AHdÒ'"Ù8Z?°‘_«ÛÃ“|±°ÑÉL:†‡mÆe÷~)dÔÃäFπ—Ωö“Ñ∏1˚àÅ≥#%–ª£.ÖF Œo•aèB]ñü…≤“‰p∑a7ë√`•ùJf¡{∑ø|ÔàÊ∑BÍÑEq∑Ÿ⁄"Ô}˜Ü¬#µçFıO1Ã◊¡∑7Æ≠_¨o|ﬂ|mÂÕ∞1˝|0¢:Áª9$=Ñepwô„$XﬁÉX&'MB°¯˘ÒÔ˛Ω'XOê——ƒc˜>â®XCJDŸÚ‹â∆™ﬁﬁ›{R‡õWˆ€√÷‡Å„¨Ñ\Ï
+è©›…¥ ˇ<ˇNå.N‰Ä÷”H˙Cø∫ÆÀH¥sC?åÆs⁄ MΩΩèQß˚%DíO îøQyW∂W˚⁄soûÔ≠5Iì¥w·=>ƒ√âç{¥7ê√A»`É6;y¥ˆgOÈgMÊ
+ÚÄ …—⁄xÛ¯´Î÷Û÷ıÓÛÊ´Ê”içw·KÎUã}Ÿæﬁ~ﬁ~’Ü/{ı6‹˚’∏◊∆ı=·Óq}W∏}\ﬂÜ˚°È÷>ﬁˇºy]ˇJh¯∫æ+¥|]ﬂÜo˚–tÎZÖ´º!Òk=˜µùø
+KÆ{∏ù∏ôøYµæ_ﬂ∂ÔH·*Ùk'wSÛµæóüÇ‚›˘´ıÌbOrw7›6ıÛA˛≤f:S:£ÈÀM-ùóπÈÆõ¬⁄eº\&}Ks<ÿ◊o(&∑Lﬁ^hG¢„ó:N®æ¶∫"ˇ]ˆkC∞»T%ïh˙01NË‰b‘7W±‰Àj™,QdLWÂ@Æ·›-Ω‘PÂEYŸK]0Aß®Ø∏òBô
+íıVR†Ω∞I˚ŸaµÌ0íL–†6πvá•Ü@`â9≠ÊdÏAg¬¡ÿcÒª y√Ù√ÏQ{(/g¢éñ0%J.Yã]›õRÜ&óºªyû$ÛbNáı‘î&‰=˝ÎóG)©∂NÈ˜˜1_Ì~ÏŒ®ô\ßN'ô©%#+É¬vπ‹éídÃ…[?∏¡?BNL÷uá⁄€9ßöÕb9±"˝]9St*T›—0!P‚◊‰¬yÎ2ÛÉ'lóàs»ˇ  ˇˇÏΩ[s#Iv&¯æø¬ìS*Ç]í…¨LNíµLYI5ì§fe∑“hÃ $B	 – ô,6ÕÊA3/ª;2©¥ª≤VØı¥^fM´á}Z”ºÃ√Ó?©?†˛	{Œq˜∏˙-@2´˙…™ô@D∏á_éüÀwæC¶jü˝b|ãáÁ}√^˝˛ÖOÃ∆dR–/?˘	ÍÛh
+XLŸn¯…O‘Æ˝“/≤ü(Xî“x#G¸í§V #ÏjZ‘˙d 'ŒZj—˝Ó7ﬂ˝äΩ≈¥úHÇB¡‰G∂™´œg9$å÷˚AÛ;Ñ%òÙ[i¯X‹$œá¡6Ωn6≈4ïB◊åèXÌœg}ŒıqxÈGlPˆ˘≈Y∂!òG†¿bÉÈ€ó|!ΩEå›D˙§¿‹zg.√ï‰`O◊3/√Ñ•óT~}Ù…œb±¬E¿¬ﬁj.∂˙e8 ©Q§MÏ*LLÜÖ=Â˛¢îÎÉ],ÿ‰¥ç<<”PFô2ﬂ>)5œIF¯’VÕ;Ú⁄ùq|√]ªπuª^2êI&ßõ^˙~øBm<ÍÎª‹/ÖOÍKO∑0q@¡)∂û„ê‘#)øÄÉ¶°Ï™nÌº/ÇqVï£YOïuvï;˙∂∑ÿ*år_>ﬂbkö„Òcˆ3êÙ¯ˆﬂÄ}Æ∏§fZÅº‡ù^Ú›‰Ûb∂≈ﬁÈ"1⁄’Ù7ŸÍ≤~qâ√jì-$ö˝Œ¶h1ÖØ˝*=˙Ù¸ÖË-<Á »πöÏÅd‡ëD‘◊D∏îK…k,:
+zio 38cJºîBw±√Àπ!e*Q;ﬁ9»C∏u}Ò:5Ï'ë…p‹`?«„Tú›<≈s1â;êì¨ãÊ¡ï≈–)ò.:Åy¨≤¡Z<"qÕ∫◊X>èº˛ŸG>ï‡<ìöJaL|∆WÜ¡·4ÇÒ¶vi.aŒ>n≤ïe⁄Q8é®ã$ùÂq∂lËïoxÂ]s°L'Q∆àa¨`˙&r‚∆¬2‚V°?hìë¸YfÁB∂@É{„ˇ±A7cì≈Afﬂ¬h∆≤·)ÍBr÷ñA´©ãÆ<`OÛ˚>nŸÄáz&rY•ß*ëÛ≈Ë|¸÷è¬˙4¬/xKfbÿ≠~xì±[M∆Ó \xüâ,WñD
+‚S/•„ó∞XDÈ¯ÜÈ}r£'~yƒNí˜
+dT
+¬•‰dø4ÆÀôπCåÛ≈óÈ|nƒ”Ò§c9€[ßkÊW[nÁ`‰~úéå7æ¶~Âˆ@˜öouQñ1π–˝*KÓ-¡<¨^QÀ¯Ê±Ñå¬>‹©öÃåàÒ8.¢ûﬁy‘+i=‰áH;Bß∫CV7®fQ‹¨&ä_lfìŸÁ¨#Ìî?¯ì}Ô ]Gí-”ÎÖ3™ØÃkÄ‚X«CíCéƒTzNß`¬éÖù}âÚ'Å{¿s¢pƒr$±∂sC)›#áoóÿ^S”≈‡Åƒh◊Ôyà_¶Ò,‚ub.¸±#¡^x1”˚y∞¯ê§ °Ä[eo3¥W™H2ê7*ù%∆ëõìÈ.‹dÓhVÇ8ë.}ˇ<Û’üH/n åº¯A¡PÈÀä°b1÷¨ô1ó¨MñEfœÉ·T+†‡H¡öw'Öîõª–i∞˘»j/Æá*¬£çÅ9Xﬁ≈òP∫9€á’ËÕ¨2-8‚(òó€|§ıq·Í‚»ëLÜ√ÒS
+èµj¬£µ…ä∂\
+jlGMKn≤c'ÁöMÅ(@±Í9¶∞7&®FÌÅÎ]DﬁàìD?MK8⁄à[§•áàA˙Ih1Å-t{ô˙‰R«3Ö$=ºIﬂëz")ù•*QΩ»GòÔbÃ;˙@ÇÖ∫,∫≥òL“è´ë\Ó$âŒoRm‹W˘K–ìIÙP3I»<rÜ8w`;-C¬!ıàF9Ï@øé∏wãæE—/œqbƒÊì 8Mxj√K°ñ^9¯ŒzÿŒ—Œ`0&Ä-}’	HΩ
+∆Ë7CÒ:ÙÆ1‡:ÖéAœ?¯˛DJ^>∆0¶ ˙Ú0›∑◊‹
+ ÖﬁU∑íÊSƒdÿ=ü≈M%‘4q`H!'◊2ü	—≥t›ÒC∞Õ ˜ÕU0;xL¶ãÿC˛G¨]Ks"£∞ú<⁄HQ8úO‘(ø?˝˜Í»:7?±◊ˇ∆fŒÊ≠≥UµøA‹"çﬁ-çÒ˙zjzU¯˝ùqúo_∏Vﬁ…6A_◊ˇ»áÛz¨/o®sVWÄ⁄#M%N9kñúÜ≈Ñ\ÿæI∆C
+ˇπ)líZ›€…·ëã ‹¢,]ª3EMŸÎØQe¸≥Èk ?nMlIêR
+⁄!Éöπì6-û€ˇ∞öñãÑŒ å‹≈ıΩµÖÁ,ÊèÊ˙∫ÚA«†h{Cø_~ñìFuö‘?Û√å?Çb›È∏3Ω)∫≈‘ëÇLà†@@¸,ı"CªyßˇÇΩ4µ8{uÍLèi<•ò∑◊N˛ä^Qôêò˚vΩêâHËÎ”7ÈÈë_|≤¸F>ˇmì[fä/Ü&Y
+üûÁJ£U|˘ó,Ãu{Oı[?-?6ä^˘!Ê±èl LWb_˘È1zØ˙[7Èê€€pé4§EÌj"πaçFˇµÃr'‡¶îÏ÷T@ŸHG¿GH5»·!Ü¢›Úì
+ﬁõ˜YöÄ4Åëõ˙Á”<MÒ»Ô`Ûe¢ü›»≈z˚ﬁ÷∞qÑÃ¡ŸgÕT·πG——îb˘YXh!Î9áë8ê|≥≠ Ç5¢`¸°ûEs—Ôß7–}”x¬)kO6ÿr°Yä≤ä±q'F°iÔbù)Uú@ÃT—Úc\Ú∑ˆ§ÌÔE U˚#ò0cë~4¬SoLßª-y©∞ Û{0ìf!≈,	F:˜˙˛ﬁ8Eπ¬~4fIY"ûÇÖXHr
+5û¸ª-}ï]ñ	u=´ãÁû¨ñGW=®MkÊ˝≠"ØÜEh∏ÿÌ‹wwŸÔ˝YbwÑCÇΩ ˆÊΩl.‡}ˇ¸œ,„É‡®∞ØgA›ïõ∂¸4{ˆ@Ÿ<H∆Ìƒëg◊≠ï«‹öì~QE_®|ÓWÏßTK≠5ªˆWhñ Î.?◊>Áy|Æõ_0ú"iÕrÖU1`Oã&ãÜ7±YäåàvõÍ6H>n•π_<d‘ö—∞Ó¡ò‡ìÒM¨{øºp;≥◊~À^ÓÏÏ≥ˆ7;˚ovNˆÿ˜ˇÈÔh¥v¬:≠ˆ¡ŒÒﬁ!}k€∫ˆ£Ùéå" {TÎ‰v©V¶ˆ“1Y=~Ãé˝x6ú∆î*QäÅ÷p‚M•ı¢ÕnCÈ•Z=•âX]‚7ÒÖ˚≠M~Î ∑Æï[ΩWY¶Ïõ_|»U}ı	Ëª%å6M€Mp≥’„—Gæ°®wM#ë5jW|JÂ^˘˛Wˇ€ø˝Îﬂ–∆¯›oæ˚µa/∏00W≠Ga°KRjÙÊ‰ßL–˘Hÿ«¢¿âÄú9∏	pÚ4Û≤P/†‰≤3äì‚ËØ4%;∞|«”LuP∂”«0Ë‘7J-H]?Í≤nV≤Ui$2SﬂbSºÕ-{/#}ß±‘•ÓÉ”;gfzÎWàó+~Bıurn:›y∂ëKØ–@Æ◊À9‹©µûœ±¢ãÁh¶b©‹∆îw˚ªﬂ¸ÁÔÿO˝kôu‡}=Që	ƒkX¡‘Ö…6Ê[JíÖcÃ!êµ,˘GìS†1ûue£S%$Â‘∞Èrä"ñY¸Ô ã038n∞É0Ê,ô£ü>Ω~ÃA@≤\Åç˘±~;2nù"#3/ô∆∑9ò#Ö5‰ÄHêfHP@4ëP¿à&·z.PÄ$ê )¯Àh~µwìDC"^ùyØ›l$ëá≈{ÄÃ8á!FXﬂ%%ô‰—…ÀÑ÷˜8O:;≈‹ °E6≈@H´3øãu{[MWÛ£íÈQT–W,yUês·w”∆®÷Á´¶=·˙à±¢≠iVVÅ,'“◊¢¿õ˘±OË=#|?6›˚~ÙÁR˛^˘©œèBr2~…Á¢€ÎƒÎn¶ÏÁG^@ò¿º√ÎÜÀ∏îSpM¯UãeÔ÷Û¥YÜT`∞∂nnXg»…M∂´Fz¨r?¨‚
+m¨Ã√}uÁ°,ÖV1üQóA£œgT%⁄S!gu¬bûı0Wd#©˛ô›∫˙VmÓ˘–ë¶aàhMÇcT÷Â3¶®êÔˇ˙üÿã˝v≤ZZú(EıÜ6EÎ®CˆﬁZ1{/-¥•¶%≈PöWø.º ßy`ùÎqO˘r∆,Ω“◊ x∫Fùìﬁ]ÛƒÓÒ-Ü∏/¡'ÁXÜƒVe‰Z†£SrÏ{Q˜:?•ı^¢⁄'L;„∞èƒrr¢¡bÒ∫†y8ÍÙln‡›ﬁ 1z√e8r{T=fÌ÷ng'´√Dà+«NÀÑQQ• úfƒÏ∆u¬ÏdòÙ§∫Eå€SŒ=YN∞SúÒÍìùË∞f›:ºãaTz'iBõ–òù<˘®ıÎuà†'%Ê:h¥–©∫‡™wßJm¬¶m8i0êbra(@¿◊E´ãö≥±]˚8€‹`'∞"jãX	uÀ≥6∏∏Ã6‘JäRc»E?>Ê\y∏IrË◊û©i©ãö»$˚∆ÇZºµÊ‡˛ä-‰èŒÙ‘=a3yΩ»ƒCCπË'‡:QﬁóÆz†*¿™≥±o+ÛäO0Ê‚Í–
+xΩæSi°˜Ô‚Ørlr¢I?ƒJÁ^øG2å≥≠qñ˘Ω~ZŒ$J
+¥¥A"N1G9S—DÄ∑È(\”=ı› i#Ëk˙©V‚±˜àŸ‹/í*+¬◊iË’ë∏£¶«„.Ï&Ü;*5ArÜa⁄â˛∆c8)È(·g£úë‘`ù¬ò†Exç®œ.[:]ˇ¥¬P¸àEVv	[≈V&ÊZÊ≥¯ë
+Ø¥:ºWÀÆ˘x90)q2 ∫ﬂt)∆l◊ã›‘gßQ*gã2ıπ™ìº:®tÀ•H™rüQ≠‰fè”?<_†∑CY∏y$ûÚbËã≤ N›#Ã¶7‚‰K{}/"bzÅoÇxF¢¿µ®∑;˚ˆ'Áy]≥{^±‰∑∂∞˜(◊ıwÕç=±ÇÚK|Ô#X°¬r"ntQoËÎy˜ãØû§cΩuS˘9!Ò^‘),&‹ìkµÓõ˜`+"¸'_~Wmú≠:tÁ≥õ ÜeòL>´‹&jÓE#D£∫Z√–¸«•ìM{'ÕûÛRÎM¥ßõÎN≠Ø›±ue‡$Ø+$´€_øs˚˝◊
+äËçÇälòodqÈ•n.€|odÖï¥t¶W√t˜+ﬂü0ˇ¸Ò:∫˝\PÃ∫Û;ƒÄˇè‘8yòTÛYüÜp|S∫gÓøºtU¿§Öπ_sKI%A@ôΩí3è7åE€gú∏¶s-^DœûfBÀîfÍ7NÑ∑ı’ï\ ûRZuz<ûÚ,N~TƒXÀq›)ªíΩ¡¿J\/“€h4¨QQáBJµî7Ωèµç)M‹wì…˘Bœó◊øƒ.q¶÷¥¶@‹`?≈µù!_`Thõs2Pé⁄0å}k‘®$∫‡`I√ò´@⁄pnıIG~·$∂I…åK⁄"Œ‘bb_Ÿdw7qv¬‚_˘≥E;¯)„˜ΩˇÏ¶·Hhr∑ˆﬁ˛ê‘“¿ÁÙì˝∑“h⁄n6 Zª§≠ÄáHNYI2˜ñiëR0«Xœwâ=.Ø˚Õ\4Ôìnw‹T«î›L¬ª∞µ®bEˇ·vπáÍÄybÉ'i⁄1ùN‹êÓQƒï{Éë§F.#WpóJï≈HÆ˛¡øÓ<8}l€ºÇ»kÚÒhì˛∆™ %3y≠¢ö‰E∑Tåf4§‚T®≈∂ÁÁ¬õR˙Ç8í* #'Î¬®)cõ>îä,Pi(5çò™Ï¢/)u¡ÎÉÿÖ€t‘ö∆◊ôKõ¨§J?1ô)∏EØt…Bp_OTŒ‡·◊“14s«ıdc≥Âu+)]1‚Ø‘B‹–-"ï¡≤nK∞Æ≠øÙ&⁄UuÌQùXs¶vM?8ˆÏ≠ﬂeÈ⁄Ωóef£Ä^ÒioGàd{ëúÇº-±Ωz»TÄ—ç¶ lì≥EÍ_»,~Ø2^õ˛¥Ü%Úö•Ní–!\Õ°èé°ra˚˚_˝ó˚◊ø…L¡ŒîW	<ÀèîµÚÉÇÎTU–ÜfµRÂÂ¸"I|vËæ∞œ´ìì£/˝DeI8°R¬Tä,i{Á,ö%Æ>èAÀ˝nàa‚‡<Ç˛.3
+K$`¨√	Ê∫èŸÅÖ8èãìxA5>Ñ
+/É¨ÇI∆6D∂L´÷hL’“*søòÖ.X„y‹ ﬁÆ(x•qôˆì+ßiÆÚ<lΩGé∂ºs¨ØXThbMõ&UoVëØ∆ ûŸô°¶xZ
+7‚Âoc≥
+\≈ƒ(E5˜ÇaoŸŒ•1sÿ¬]k…N4¶ TÍ>Éﬂ•ﬂ¥&RÇµ†E˙∑j/æÅI∏Ë≈/Vÿ»jÊ∑Cπp≈ (ìèüÆdUÜlc=∞⁄Ùsa˜UwV„àœ=…BôÃU&°(·‰s2∆ÍCŒπ≥Üö	9+@ß±-–˘V%D*ÒaÛ	Ú,Ÿ‹iÔQIuÏΩ[ﬁØ≥∏Êû%]©”≥'∫ÆÄ5]Ω·™µ‘y⁄ÙÎù’ßûéºﬁ¸+`ﬁºS’√–SøJ·‘íØÌ3ŸŸ(é8Ê¿†hr.ßóï„5Ye–≈ïœ?«ùŒ^:>ÿ‰-Îø±Záñ2∂Ùf˜µ$Ìz˜'»E%ÔïƒÎu8º¡óá@5oΩd·°Üû7Úî•t!≥ç9å¿úø>a?–" 
+Œùq)ÿ PŸOd)†à%∫/O˜Û“<Iò⁄üS^´vò~28¿<$ãﬂXè¥*;ÿ'S•ÔÆc("À¥`õE1ùu›$¬ŒI„≤æÔ‚3b÷–√ùŒ‹QNCPçıgåqÿªeZÇbPÑ∫X^k|”∂ÉqkµÜë;T#∑_ûñl’ˆy∂R"àäQBk]3àAi“†$q±kÚ”Ë#¢	ú‡}db√ãe§á¥©âÅ¸M9U‚≥xF#˜Ü3P≈jãÔ:Ì÷õ„ˆÈ‚*π”Ö4Ö¸ƒôq–gx¯úEëótQÊ™3£jÍf7ö„æ.x™çg¿±˘Ò†uU8ûp Ú´∏øπŒŸ˛ß—[Úî Qı>Ï‹©ƒb\”Èä¿%é,6_∞’€«_R⁄))V˝„˝∫lR·"ßÎ1#åÎ5Ã”Ÿ#È#ù«u¢¬≈ ƒ¶eÜYL+˙h´2ÎâÓ2‹d≠k˛å◊5O≥ï6™ïËPà*%ièÜªGÂ*(ítôúÂÇGÕ˝Q©7%/O¢Pö˙i‹Ñﬂˇ˙ª˘V˜º~à*Áo™EÎãå	≠4›º†8Xˆbµˆ£9ÕNUæúΩ‡ª¡9Ù™˛ Gp¥O<ÙYSÍèÃíEÜ¢.ÇH(j∞ì47ÎÅ$5≈â¯7ò∆HÂ<;ë7Gi¢–‘ª@x/Jé¬”ëD¢ﬁ7Éy\‡Ú‰>œ”å$…4Î˙p¥¢Á‹!C¯¨÷,sè°•πÀÑª¿—Êı:∆£ÕÙüMÓë≥ÏG„z09Åë®ù%ÖåªƒªÑ¸Ÿ•sú¸<>ˇ˘cj–ÿ•`<ôôÈ»∏)é˝2[ìóúØ[tT¯}Æ3⁄ãÖÉÌNkåwÓ¢…&Ÿ'‘¸à√⁄†&,F¸dRd c‰G[H[¿^Ñ›ÓıbÃ^¿∆ÛÅùxÊWQ÷é /∂Xl {â4ií)"'Q'R0ıfÒf8õb∫=ÁP‰_)ìl7c∑E4¨å¬O?&√∆Å†„Z›|I∑‡∂ã0∫≈fêù¿∫tY·<ç®Í“≈ßﬂmÈ‚
+Kó»$∆◊ñ¸{π˙,éA~àÅ^àG†ﬁúÅ‘_–zƒçÚw¨É“l◊‰Ó}º3ApÌpÈ˘c˛–J-ÉıuvvçÌ˛˝ﬂ'ÀÀ∞Àj?`≠˘ZC˝ÂßπΩa/f1Lh÷GÚX‰¥ÍÁjÌ*å>òG˜ˇƒ∆‡ˆßXnláﬂÕæˆ˚Å7W≥¯?	4∂˚wˇôΩ¬‘≥ohCù˝òJoπ¥	mÁªâ±ú÷9⁄Ñ„Ωévö≠∏˝√	∏]ˇ‹õAƒ˘c41;ºP—?úà$Swìr‚!
+A'~Ÿ˜/a≥˛±KºëwÙŒ"¬∆˝ÒœÕ^„≈DÑÖW;æ7¢:KG¡GX~{c¨*?ü<‚%ÃŒêD»ºGˇ+˚⁄õ≈q Ü¢Y°·˘îÌ˙ìÈ zGHsJD|$435ˇ∑ˇùΩc∆‡à_é®µ®~RÈd¢pæ÷a¯ˇ*06˝øfmºàäBΩkV{9É|BFÑwÓÙˆ]–M?úu=”Ëˇ/ˇà¨¥‚à·Í˙/b!V{íÿ_G^ﬂwÍá≥–4˛X≈_œÉ¿ñöF	ï&¨'ﬁkN»‰»πDçU¸À˚SJ•≤I™≤ÀπPüñ{5ç˚e£}R»4Î-"<3Lπ- ˆ ÛÉû“°/ç’Ï9rÁ©)∏∫í˘±‘w0xæ÷Tshõ+{Ê¶à‘Œ7©,É«π%v¢Q&Ûâ©π'€Uìa…è:>@Ò»˛%.¡>{D#B¨ù‡‡ı¸ ΩS-oty¶˚úΩÑ)∞∑¡∑Xo÷-bÈG}¶'¶ö?–ô≈YWo∂&3-î:[wDo™õÒ˚àO’`åTj'íVf2ﬂ4´æ>⁄oÅ.™\™ZDë’Ö*˚È«iZŒ4Û=TÊc*—6√)$ëx	KŒùﬂ¢◊ÎÕ`§ÆıﬁJÉØrﬁ‹ÿÛ+G¨=ã9)B–GFÑ
+YØv¨Ï‹p2„†Ôâäû<ã™îÖ˚±Æ≠?¶"ÿ“ëPfÂïúD8QπM¨‘J≥•hA5≠~2Î;aπÓŒIöd	≤X/]•sMﬁÉá—l,˜
+M±„!(l$	NzêìOQÎ^EÕ‚|‹1ÿ8†√÷EÙ|ß_9%Â3…g√[bºï∞ÖÙÃe	vÏ◊iB‚@’‘U˚\$,Ã∑’ÀŸÜÍIé’ˇ‹jÔî)˘d°mzwû”!∂ÏÃµÀüNbáP∫Û¢µã—NShÔ´W°é éT¥J:∂!‹ºûdZyìd:3/‰ñ–§Ÿ“•Åxo‡òc ¨Â'2JÊ8	\NsΩ…)I∞«œVò[–Xæd≤≥å}ÿNÚR*ËŒÇ<ßXlÿ^¿F¥{«2z|£õ-Ø|fπÛ–¯$óåW©Œ_∫¥÷ π|À=†è‹Ïúo®ôﬂ»ûÛ$IÙ#Ô\,[ISπ√.=~µ∞¬$_"{¢•0+πQﬂŒéÍ”å“]Edleﬁ∏ﬁC_Z)] eö PÉÉ7πÛ‚◊Õıï&{˝Í€€j‚(Ä·$z”Ó5´Ø6G∆Ùª˘qÎ¨zô›`5Æ‹ª˙™R]pµP¡¡Eeq¨Á#©ŒóWÂÓÍß:ˆ1$L=2ˇ‹MÔræ^ÔV¡¿1‡œÏçüõ⁄#ç%˚Â/µƒôéJ…œΩ ŸüV$ r•ÈrâU+Æì˙xûıÖA≤}ˇ´ﬂV_êÛ!‡ÓÉZea˚ îÈXFVZ„/qD+˚dt|*iÈ≥á`ÃDô∆Sw@Ü†Ω“~˜%Øc◊õ¬î]3,Í/£óÅçfò:DX(ƒ£ÉM◊1’Ì ƒABΩBîÔOÍ_ !ÿ$O‰‘Îﬁ∑ì«~à∏!⁄hGâÑZÜ|*›+Ëó√◊!.;3>¶Ò(–'Û†Ä6—Û‰	˘0«MnÈÖ'U†Ï„Û˙ç†ü+@ô%^2I‡w+ßjV]ﬁ"	Î¯S¬£o±È«£ÃÒª|_±^2∂µ»ã/™¨¸´¿â˝˜lö-∂⁄l<UﬂOÂ”˘‹ç`K„÷‹b\	‘ﬂ˘#∏˙›∫&∆Œ-∂ææQ°èDÆú4H¿J\‘≥+Áﬁ©πﬁ–¥«îoÙf+∫æ^±F_b÷Bâ≥§-Æx¡ßöízô:ÁÂWBÇf◊wZo4´ºpXk
+à*Ωí<¨ K≠Í^JmFÚïÃa»Ø|o8¡ŸÑ¸x[ÖÕ÷]ñøoo±gò?˚Ï)l]Î•_“•pÈSÕ“Â=Pˆ	“≥•Ï∂ªÅU€⁄?kµ˜˜€'X¶MsÂS∫ÚÎ√√]™Â∂€˛˙xg∑Ωk¶}¸Õ^´Õé€≠√◊Ø€•nÌd;÷
+ápHY:VY˙óÁ™°û“WQ˚¢⁄Ω≤gsVRTk©Í{J‡Î·E|Ω —◊¶	”0πèÖ›:†ˇl
+“Y-å"êŸ
+÷Ø©4ñ>EM˝–·I∂Ó†⁄™ü2WΩùucΩùBÉ¶‘@3~-SÃ.ì≈ø⁄ô£ßvÃ,◊,"âÌπ,…?ÀÌ«ó ∞ä£ûÁvæÊ?ñ˝Sßy˘	˙[7Ô©çuËbùê¡D¡Ø˛HÊº…Òñ*9˙ÚSπn¥¸Ë 6.;‘Yñüª¶–t-©›0â¸K|1}áÚÁ˝ªN{ø›:9ÕqÍ>ë≈É‡| Ω_ìdsmrÇ	ŒÜÚ^_ıAŸ‘…Œ…õŒ)˚ãõŸp∆X§MxÚ3ÆrbCô˝–òÜoP ¥@ ‘ñ™µO«±qæCWf¢¸±“ª Oû∫É«JíÇüì¥»5äÑMöè•h K®>%ùúî:æZ+[â5$SJ∏‡¯NÌ3]!
+’á≥é(à˝≥l¬Ö2‚$[0˙3,*u¬UDπ0°‡ßBì≤,ù∏_‘èñÁ‘ä•HlÈ9∫Çº•ä±—låyv¬£ÚnUîKHwø+é≠ÒK_é©GtGY˛”\8˚L~£L\òéÙ›øyüÈø™Ñqñµ)Uÿ…åÔ⁄X»FÂé¨Ä≠hÆH™R∫≥êZx·Ó‰∫¶≤"å˙ca(~näÔÿ:<8Ä3©ΩKΩ››Î§_∏ [ÊH,î^]a%ÃâUP´π£i
+Ë+ßà£>ôZKA˙ÁL=ıªﬂ¸˝ˇƒ«?oÃ⁄	ˆ6S%˝‰gõÃpñ?ÿLπ±Ûè√ëk•prß©2]Ú)M6õÖx◊ÉÁﬁæf5DŒ«˛2âﬂ“≤rffõ€y2ƒÊãscıÔ)≤•†råIñà¡8unÅZÉ&-„}tÑπ0›9pôYΩk	⁄€¡íu±n¿ﬁ€‰ÓŒeFâa/í ˚ÙUø;Ç/–]“1Zd∑.*∫x¶0g”«~ˇ´ﬂb2`Ú‘ïÍœ$f∂£ﬂ˝ñ≤ˇíg~ÒT<‘˙ÃSn–É]R—†‚÷,ä∏£±VÕuæDJ;4	?¸hÃ¸È«:g`‰ÛûU4Ú≈M?R#ˇ$?Aµ*zÿòÖ˘≠b°*÷¬¶ò{ë∑ÌÆ|›∑?‚…ßıG¥vˆ˜^ÔúÏú¶ËÿÒ;~ôÅÈÄl]¸Ï¶0jdï,VtJÏº>⁄ﬂ;y≥€>e; •«3.πáò: Faü£Å@ÃÛ%¢„ñ’¯ﬂ$Z
+ ÃRUü»œ;'Ì◊ßÏÑ2XŸ0'I:æ˜Q8¶
+õ¨˙ÂàÚóÙ0¬q‹èøœÓê"sê“˚ëÀw —ıÓA}uΩäâïàËáåîK]ﬁ∑ƒ‚	Q˚O~0ˇàï0U˙êPÓ±™&Ç∫ôßF˛¡l£∏…´4˘{ih8™¿:ü-N"WS/"Ô~∆Wå»¡ò}Nı4Í'¡»OjÅrA:Î©ÖwTˇî*∞Ôª[Dw§#µGÕÓÓ˝s˙edF—„¶"u$—∆œ>∫u‡ÙŒêËöM¶<¬]^»ywV±@3Öî∏4pz?Z˘S\˘*F†<√ØºK_déıs∏1–-∆¡4D∞—=æØ£wdﬁ 9πé	:œ72ﬂ˙‘“õÁÛNH†Ò”iÌ¥èŸI{ø˝∫}r¸sˆ≤›ﬁuÃ
+‹‰w3÷WŸ®_âÔM˜\ßRw·´µ:@w“ôÉãØ√∑¢Ï£}SÈT7ı∆¡Øˆ˛+‚ŒÆ›õÍ9rñ~≈ﬁÏüÔ‘_Ót!¥pxt≤˜zg¡Mq´ FùV9]©?ª0I»ÇS\+ÆÀ„b`ÍI≈z·ÈQXXi¢à<›í≠“œM£Iå´m∑Jf∆˚œnjô9ˇÇ’^{”Al£~8™-±ü∞uVgÕ•%∞B_˝~muÈñç‚˜ï¨M+q0ÆÌ"¿e^A[èa¡≠¨`õ0ﬁwh—’FºùˇYcCqŒgº ¢‚&ò›]§gL©Xk«''K’å ˜¿Ñ™§[Dö∂U‚Ÿr]ãÌlˇyÄJ«¶=Eua{•Ò¶RºtÂêÿ∂§hF®ßS{∞†˛¨zkŒóŒ/≥@Òx¬!È»˙ß9F≥F“Ä¡©ùëu>Ë{≈#1©Ü]≠≤Æó•r‚–„w(_Ω(©^õÜg¥≤ñˇ› ˘ÍóMÔluÚq9S'ˇΩ¥¨∏´ÇI;2ﬁF«‡ª8¯÷ﬂƒ{∆ó≠H ™7W‘e«ùT6êõ;Q‰]7∞ÍyÌÜÒ4°M÷\Ûòª„œñYP……+—ıp
+o±Dƒ’êx99∑ëä9˙ü5∏`•Ò•´LBiq‘SúÒúß¿Wº£∞X¬®F]ˇ	¬åø`≈É†πb/∂#?õäáÆ„CõÓæﬁ9É„≈©Èë˜±∂∫≤,˛≥ ¢`9?fKŒ]ë±åÓIä¬pS¯§π¶ó?ï‚'¯¡›X·òÂ	‹Ó¯Ö"f,k	Q÷ï!◊æƒÑÂÜÆ“çEWËzZk¯› Ÿ ŸS
+—E◊´m4óõ´´À´kÀ+ç'KßãU€Ÿ,π\´ R‹]ô¸ìPI*R≤ÜùÍ∫ßGqÁ‰ƒè›;»?e“y\p…é0wˇ|*À^‹£OÚÂYˆÛï~@Ob\«®lM8^ˆ'#¯F·sJΩow±Å%‰≠ÿõ‘x¬çí$ëT@ÇΩjÔÏüº⁄d7ô‰òè[p◊4ùãM™ñ(ñM≠b˘xÉj.ó®ê
+πÀw∑|]¢"ŸÕﬂ	[L–˜a†aEz≥›]≈ãü¢Gπl{ÎSï)û´Û	Eﬁë)ÛΩ¶ ïßÆäûS©»äëñƒ6PàÀÁ¸¢=!‘Iq_íˆUƒüR•…yÊîC»2ﬂƒ(tˇáuu{ıèOTæb<níBú9Q¡õù˜‘a≤vi.iÒA§ƒ'p[‰|^⁄âJòê¥E<~≤b„P6ıD•U[~€«2ÌóÌÁ>~µy'NZ)À»V»1æe"◊∏Ü≈>ïÛ√Ÿâ?ÇMà(Tˇ·Ül^ˇ˜Wl°˘¨—dˇÔˇ›¢ÄEÛÀ∆˙«C¯Öÿ…8Åìi‰OQ˘F‡/#˘\ƒ≈t˚äñj‚È^.såù:¢UÉ˛÷B4◊	™:°X,∫zwÍÄ≠Ü5Ì1ÈoÂ∑}	œOç˝È^∂ë⁄4ö˘Næ∆îÏä57Áû
+ác/:ÎÇëø∏Ãû∫=»Ωás¿E)õÙ¯‰îùD¡≈Ö/9[∆INΩå˙Ê∞J¢$∑	>⁄h∏¢)›qîà†t∏)Jzåàs∆∂òÜÊ"ˇÓO‘ˆ.…√ä+F¸À»6SzP¶Ì/∂òéd£¯).≥Ãc‹ﬁõ´‰ﬁ}∑+zMÊÑøwt|¯¢ÕV1$Ê¥7˚l≠YÔ^O9®göHÚ_`Ó2Û«ó˛0ú¯Óã%◊˙ÃNŸNÔ√8º)rÅ^±^1Ì9ç≈fÉ¨£∏¡:¡EgâPHisËëº ì	ÍOVn˚/FU:YÏäŒ∞ÕÁy„ìœsÛTí0£‘êåêCNi!ˇä‹öOë˘f∫…:oZ≠vßs*\§l$Ë=ê±îˆ⁄˚Hƒ)‰Ωﬂd+çß8”',/Á˙&[olå*Aº?˘>˝ÑSà$mˆo⁄«??e/}ÿ´8â)AA≤#ré≈@•	Ã¥√é€ù7˚'òé π≠nÿ´áØYBŸºlp˚Ç¡≤¡ãJÊGÚEÉ¥˘M÷|⁄X-˘Gª∂Òº®∞‡5Ω(9•‰·ÂÚ+)EÁÙ ˘vßƒóßU∫sßE›:|}¥ﬂ>iÁi8b©Æ¿	O≈Ÿ˚,Œ‘Ü3#»3÷“)aaˇ—ø^Æ∫]fM'⁄á∞õí=7,◊(¿ñTË7%x!üZÅ8r≤¥‡´»„π˝◊ıf&$õ©UPµBASKj´'—¥ÉC∆g—*w	|?w4%è˝s<ΩZW∂Ç	1XiŒÄŸ◊”SF„Ø›L2JËÌü-·zv2gÌ≠´âuœ™T€˛˛Wø≠bü;ßÄ¢óoèsIt_olœ@qIyq±ÔÔ3y√ÓÆ¨ûº°xŒù˙Ó±Õ2ô•ìù:ìDÚÑsJÄsÆ/˙OË\Êî!úfnŒìÍ©∫
+Yy~æ;u8Ë∂îóA Ù0>êì´)Éãù«yÉ@›Õ"§€µºå¸∏l¯ŒÉïí\~\–ÊÀU ô›L—êPVï6©≤÷B©≤F6˜¢p8Ï¬
+úÇZÔB\0ÀFÚào≥«√,πS÷‰p≠«ë&U]éõ˜≤,>?V°¸Ån4ÆÏ≈µErq-{o˛©/.∫c˛æbãÍö4RTÄdmªìÊl´zÀ)ÊÊË+Ò?ó;Z°üãywπ€≠‚á&!èzÂ(¬3È›fl#∆¥Ü∏y≤<|ÃïÏL—q	"oô›Ä‹öE–„&Hﬂã`
+»(œIù˘*ˆ¡ËgæB8ÿiµê÷ÅqE÷8∆ñÏsÎ¨CYF4S˜Zÿìi˝È¬∂ï¨Â)òFR]Úhüìá3ØèœÉãYD	â±`j Ü√p2√6r‹Ô∏å]«ˆGë≥;w˝ïÈuªTSñù–◊‰,\Æª4_Ì≥åOº.[]›doÉó;Ü5~1ÑŒàO%>ûaH6üP,x•ƒ\}∂∞¢4–'(ÇQ¯'æ÷+8`ÓçœCEÙΩP9mQãïµ]ÂëÎXñT0)ﬁ?ëıblt©é°Ø—Ò&<of¢ëπ°µ*Mï0Mõg∞¶.àî’3y=åÖÌÚ2ÊUsì•¸¸Ò`M€íc)ÃÖÌv<ı∫√ àóùŒﬁ.(ª$¯H®y¢A¯ΩBâÏ£≤ò!»Õp6e]I¿ì©Gıæë˘ˆ⁄’  öb¢æloÑŸ-ëïvàµ?(æ¬˝Û⁄£b|ù´`⁄8ñÊ’÷Ã≠jV~ƒ*‚◊-#P◊û=_ÃΩ∑ßw·˙©ãÉ-ﬁ‘Ω˛¥2Ç.à(`Î^≤íÎ”‚bËÎÓ(ÿyœÅ7æ‘JçFÉ<˜zø%ˆÄéÇˆò˚Ïò®<T¸AÛ=Ä>´¬'πZ¡ì£Í¥Æ@∞∞´˙3`C|®Ø=w˘Tuæ∫Rv«4{Jaí&˘MXá>,úz0¶˝IdÃõuS®LÊÑz$ å5ã9vôßz’Xó8°_∏ µ›Àˇîì√‰`s%kScçj,"Q(Rpπ+2N¿E1Uœµ◊´—$”è"=ö∆Ïc}ù1˚ç¡¿–'†h*ΩM_•tòZgDÒ⁄	F®Û‚0µ∏®¨¢§R+™U>ø7>ïüJı‹Ò*≈Ã<ˆ€¬[Àà‘1¯a§/zÂJTπ∞çû_~™ßíôE§.wØYLÁ'ôA_¢<XÃ;Ä˛´‘èäöŸìÏ∆«Wæ· ◊ıïŒsæßDÎ®µu‚†Ø/¯ÊñSòçr*Ôî
+uÚ£`ŸU8ˆ¥ºπ&Ÿ7çâseŒtM√MÕê™≈å^1–ÊÛÕAnSπûÆ¸ „û∏„|ÚMöFX™™ pV€Ó˜«C2ù`	T¥.Í;™Ã∂Ë…s"aÀù©¶,ë÷ı¡çl E@Ft-‰HG˚˘cj“Õú‘h¸Ü’Bc§=©-7ñ"Zî7—{ˆ/Ω·TµàCRWqyK*O‰Òﬁ≠øGÍ—†W˚VÄ«RŸÛS¢öl–¶ê;a,Ú=≤cO?=~úÒ ç±RFO„ˇ¬Ú≈òWÄÍÎ√≤ÛÜ†Ö?2˜}©†‘9°l˛±["¸SòÔM>‘∆õl$≠™°∑#\nó9Eã˛~¢∞°@ÓT≤òë CXÃÕ	ë
+Ö&yÒKñˇJAù˘$À∆¶@gTØÔ¯y∫ëìõˆÍ¬¬vΩépO°¸py_Ø?Ã/s~N∂Sw÷˚ü}=-Ïü≥∞˝˝?¸ØLı´ëÛD›9,n÷Ñì• Mæ˙ã≥VMBD¯úu|X>R˘ˇÕ?1≈/¨ñ|√œœa€Uok›g__èŒ^˚ò»áç˝›?≥¬∑Ú’^”1IÛ·¨Î–‘M¡÷˙™qAà◊"‹ èﬁ-™Üqqô-*ﬁø.ÙjÒ4DEçˆÁí†AıÿÌìAa>ºÈ´•∏ß„#oa@æ˚XÊV„ˇ‡Ù•√∞§uJÄíAßOuw¶+œ}0€”ûó$.—zH-Z ≥!ö¡.E„" 8=Ω·E”Á>L¸íà|X 8BlÖ”U5X«lyhî†+¡ÎöWQÜ\*K?+r ¶)—¢,≈IÄJZÅ!ºÌBîæ‹≥ïBO≠@5SIEÊãúÒz"I+ l^¶ ‘(…sVÍÌs…hAá$…vé@0«ˇL15∞´∆`shjíVØøm™û§™ù°´®¥∞-ãH™z÷∆nAπ©›hqÂérêòé≤pLÜƒq¯2|#[ìÁÙehLK$ΩÇ”†ôgqLí¨ÆÑfÆnà·hﬂ$
+.Ωﬁı>ÚÕÁπ‰ë?¬¢®-û·¡∆L5µÁ^•?ÿºbZMR˚∑Úºﬁº◊ÿïàÃßq‚‰È‡ZÇø,!Çé¿aŒ œﬁiùÏ}”¶'æ|i∞ˆ~ˇ&Í%®‹ '”˙·Ï!fÍú»ÑK°)hÈ~ßÃ–»ŒÒkQjÏÅ¶ŒÑ⁄–§´H+u©˙∂a=Ø¯QË‰„>◊»πÕKÕ+ü˚˘Ápç,Á∂d„YI"≥	Œﬂˇ˙ªåî«‘9&ƒõÄJâ)ŸÄ∑∫cÉ$ô†HßÕu®Å^CQƒô4€$ﬁéã>ı8à)DoÔóÊs-¿©ÖmÈ‘ÃËÌâFﬂ¿v‹G5y‰çg∞ﬂ˚∞]¯¿⁄Rs,UET^ÌÙ/Ωq∆V∞<wzº÷üBXπ;Ó9Ñu‡É)~-‚WXCòm·ç‰ÿﬂG$≈öçıØﬂ>ﬁh<Öˇa]TÃ—-ÿGoMlÃ˚q%«|Ip,∞	âÜñ‚ÀZòä~y`vêÑcÇ?w·∞	´Ó ÷E}0;X±5uü§-œ´°ë°ΩÂNŸ¸<´˘Æâ∑âk¶$∏ìªt±¬Ir∆]bgoèv÷2e€Ë∑¨ª~À™ÃpIåµ”≥Óp…⁄nıç¶πV\“ˆ°˜·*˚gHÄ…Lô∆≈èT6˘ #˘/√±_Ó√»ªzgë?
+/Ωa“ã'_:ˆ‚U8í>¨˛ŸŒœ2]¿_X$›tÊE◊ÂÜ«º;ºΩµßÜt;S¬ûv9⁄úŒÍπHªò=˛‘ƒ÷‰éÕÌÃd?√Ò≥®msıNmçC;S)øñ˙¶,BÒ#πt&◊
+§¢%Å∞ƒRZÃ#LÆ,©:ÍjHZ$Y6ı–îr(À@*^Z#≠Uæ‰†]√Ù=–€ïÉä™t÷≠C5Òªi‹;˙«»ØŸNaLﬁ¶«—∫ßê¸M©±Î¡3:e\€ï∆UB¥^◊üVp¶%ê›,é›<õ∏âcpÄˇ±fôÍ†π eÍ“ÓUÄ∑O†;O,EcŒ>=a≠t_*‡u≈^Øsù.iìD‘Ëâ>‰oAﬂã£ÆÇœ2›Û˘¡€Nv©</|Éªv/•B˝Rôò¢‘;»[¸±òƒîq ÇFA~“£˝˝]F|=û|§Éè†KÏµÔ≈3CoÖ©Ï=üw˘û‡√h≈e›√û¶≈AhÍõ∏tÿïsÙîﬂ“Ï 5ew§ﬁÒ∏∂í≈,gOá˘Pˇ‚xÆ2∫äw∑å	]:Ø7+í?uZÌ≠∆ûU¶y¶√Ü>€çˇˇ˝Ô∂ÙHì_c‹⁄@;Òh≥XäYO+}£Zæ§˚Sã‚ç§Q¥µà˙ím±rùΩ˙Ü,–<dœA_›XR=+ao5<…Å>?Õóƒ&yò¥j‡≠hñØYÇmÈI+¥∂¢ëüjNk&« _hH•~ˇ…ÁÛ§ô´≥nu¥Å0 ≥q¡ìé46¶H∞õÃ–v˙ßs¬π⁄úÈ“≥ºÜõ†È©¨ÆX}Ë÷ΩkÛuW™∆VmÙ'¢<]ã>Qèy–ü}ˇ˛âÌ˙Áﬁl8•t]Iú5ó%sƒÂbCÂh–ΩçàÀ%N,Uh *S!¬9q‡_I?sMÆK⁄òÙN¢ïØ%ìTÈﬁ#>µ‚Ã∏=DqƒΩ?ä¸˙y0ƒ‘÷F?ÒgÈé{ƒhàÿB+Úqãfr!ínÅ¡[ÑWç˜ù∏ØjﬂVû2Í$y~ÖB]‚§îqV# úÚÎµƒL~¶≥í’f±∆…k^§∂≠ıÓãSˆö$e¸(
+a.Õ∏?ûÀf‘;JÓ…Øã2(Ö¶L¡„*.Ys:¿“V8®uñ§tÃ•Q ÉP⁄ l,L˜	üDˇ °£¡‡pÒNS6?qÛÛ=âh'lë	7”W”p¬D%∑å√Ï zk4ÜR?5.õ™˛È“$õ"$}¢ãBdÏ%¶O˝0±ë{Bò'ÕÖm|k⁄èea©éOXÉ9f›ﬁ»◊Íå˙àÕ=CÌ9
+ÖlpPj“ØÖ_2√ÏÉÒd¶C…ÛÉ{bÕ≈ì¨Nœ“]Jzr]˙—÷Çﬂ∏h∞◊◊g´z&˙´ªU 1«©^†;úJê˘Ç:ë«≈;§àfËÂ,Y.Jò¥®17HZ=BJwóècY∞Ìl¶9#•Ìì¨Uj¢ÚbEnwæ\âÒ·3/B∆Q∑5k,tdX¥\ì˝”™e?ûUãY¥»ù  ãdòó≠1)øNÑı1«JëvK~≠0/fGY+ÊdÌh}|˘îÜL–ò“˛+˚⁄õ¡Q
+›¯é’:·˘Ã˜…tÄ4®ÄXQ¸Ö&r1al‰üˇﬂ±vÎ€ΩéÇè∞˜∆hVmfÇ˜zSJ˘€ˇŒ^á±MÒoâìÍN¿w«˛4
+´>∫ˇW>˚~Õ⁄¯7;çLIV{9≥«îC˘0ès± ùu=òáÔˇÂY'Ç∫ıø¨ø@
+<⁄SÒ òT|.õÖ~ˇ˝wÏ ◊Tå{cûÛsâ—Ø√æ-∆î|·.ê‘1Ÿ'‹”9ÖÀJGlR††‡˝Â•vµ#e:.ÂÅ	6SÔC7¸®7ëÈ
+≤ïÄb+$.¶b*π;T¢Ó9ÕA≥3∂JN\Âº	IRG"üöF›„óä4∏ƒ˜*Ù"ñHq–F˙yí¸¡¨óópLsÓ\&Ω˝èh≈‡KÉ GR{ê`îÌ¥lT?ôÄòVª8W!	Àùk +zAw7∞ÍÌ^ø_'›=®z∫ZGo3ƒe¨…®	X_˚óødè≤
+ª¯~IƒΩt>9ûz7¢ÈÌŒ·ã ßÃñ¡ÎM∏0z±≈\}r=ûåc… ù◊ﬂ!@fä”ﬂì«üÂïS˝]â”+·l*û˙{5–˝‰©–?C‚—71ﬁ•Û—ﬁÍ¶—8ª≥I‘àæ≈ﬁ5çZ?èÀÁ›È“≤\	ß∫ÜÓók3◊7≠€X[£ß‡!Y‘ÉÙäf©”•“.…8ÓKX∂|Pà;4∑\„~x’Ëã"@m$¶™!uk§\8‚ˇ^ô¨º∏ò7Ù#ÑåﬁËô˙˛‘`Ø.a<Óä7Ù“Iö;}8£M0“nÿøﬁdÔ0rDÎKD råÄ–èÛ`\™!!I7ê(dôgPj∆,>JêŸ¯ë8h.GÇY∆Ü-d‡∆“çÃÌ“º∏œ
+B‹∫¡â≤§◊%]	ö≈Êòâxª¢_ºPOBOâ∞ÆT?‘:˙»…'\ WUÍ •ÚKE4Ç¬}–[¬˜ ij®^[¥(!sµÑ˛πêE<ÕÍo≠4)H5±.á‚Œò¬ÖÌÕ±$Är∑bä¯A©S)Áf1“#†nï:ˆ˘Á≈¥öOüSfQ‚yráÂ¢^˙JÀô®ó÷TíIVY"€œ§É]É•R-V´O˝*éSû€BßGàöÅ±»ç«”eÙaÆ_Bm°;n≠ 0[•Ú<≈Ü·B–˙oﬁß*ˇg…MZÜEz„,∑gæzHB6Ío“ﬂQxÖ%Ö˛≤⁄BÙ_p„µ¨@⁄âQı’§bsSu|<Yë\òÔVŒVŒV7&œ¢ãÆW[}≤º˙tcyµ˘ly•±ÚdÈ‘JˆüeµƒÇ»∫/·éßF∂}”d—ï—ÿÍ˚“9øäºI˙∞‰âJ‡ùí!Y>G‡ñI‰g©[ï3ÛÂ J1ÑëRÌ•D
+‘±Ïk–üÂÁõ¬∫7@¶≠Ø/Kµî,ΩNµÆ–¿¥#aŒ∏…SâdÜÆ"_°Ò59#ÀfÒ”ú—∏€á‹i≤-ï¿Ñ∆•≤(Ï&6ı.ä§ˇäF+nÔèìù‡w’A?7&Í@IÃΩ&¨â‹ﬂˇá3%#éÒÙzh¡ó6ãeT“e.7¸=¡MÁímüf∏≤¥Â·*RUÕ¢Ëªr!¶Xƒ˙'§î #[`	q€;p‰áÿ†áÈ;◊jqÆaàÊúÏ†é“ﬂºnñ@Õ[&í¯–à£_íSXeÈıŒyV¡.—YÆ‹ÿ°á:úÖQ#kÃ ˙S£Âå¯QJ^¬na›D÷;@Øù9GÒ„ ;äü≤Ø◊zìç{¥¿˚ÊΩ⁄5¢…DZöª¡Ñ>[rN•TÏ Mr-z€4òÛí~ÈT-g3%–òåˇ@ü¡ñä4€‹ç\;d˝&?ö0T“Ÿºç¸>IJ˘M'b˘·æÅ	?©ã–*àv}$¯Cí@Ç¨T!í0èR	Û«,DôßºÀ<W‡*ŸkQ˚|ünh}o9/Cr√⁄ÜaS—UÎ˘$?€ö¢Ù∑±NqÔñ!Ú¸$Ú‚A3oﬂ≠ce´˝vπ"∆üuë˚îûŒ^˘ÂˇêˇÆR∏Ê&{Ñ»ﬁÙ–;> M(Ëy¢‹[øãﬂçë•”kK9∏Æ|‘è≤&‹U¿—Ö®ÍaJΩæ“’U+.Òä∆£‘+
+€Ω¢ü∂í\*Aƒ)õÏ˝å¸±jÃœ_Ç]ËG`èß?∂örÈ¶Hñ˛7òZz?•‰hıa˛“,&íòäsDÕb'ª.ñ$qìYŒ”˙ˇöı¢Î…y¿&Ék™§QA'6ıF^7éñyÆÊ\?˛d5‰Ã€KŒ‘í„ñb4≈M‰lÀ}˙Jsìâ1Ç≤ˇPµÊÈ]GAµRsdbº∏:ó4¿uHEµdT?∆<œ—d "é¡„”y≈z|‰CK„.¡èò¡"¬m{ÏˇbDd	~8∫dÒhËSv≠(Ê±dÿD<ìrë·øÁa‰3}]≤ËTBÃâPFπÁæ7ùE~√⁄#ÈÇaˇÃ&¡è1~®ïè—«k⁄r∆ƒ7ﬁÏâ‚ƒ›&ºÉ˙¶ùlA’Ïf¶É˙ó◊Éßqı"}E\√£ ˜¢â˝ª÷·¡ÀΩØO3j—π
+ùè÷ g7ô¡õµ}∞Ûb_êˆÓÓu¯?nÕh$ÏèˆäS”´=‘v‹æbÛÊ° §„åü¸¥ƒ}kﬁd|ègoèLˇœsLïy1Î"ÜΩvN7D› àŸµDÍ¬´ØìÂà]ñfUfNÛÎΩK	Ç√gR©G˛x÷∞˘D‡Ö3k⁄	£‡[æz∫◊(õêﬂvg|çY ò±M≠qÚ&"Â≈¸lDŒh6£¯1≠m˝SñT%vÑ∑N*™KjØK™∆?®⁄§ºpÀÁ¨=é¬·pƒÀUp÷jªyÏRCØl≠+NpÏJ¶-]ô˚ÊQ0”ZU"–fòU‡eòìç¡@F™›¶?Eì≤‰-ÀıﬂYb™J=∑Í‹D≥àut’ÍÀÀ∆t9Sß¿ô®}Mæ¶¯Ò”˜/ÉûøÁ/ÿ5ÄEvÂëÇ®ØùÑ30[˜vó•ˇ‡oI!âŸ+8óY¡◊èBLùî“!^Bs¸¬˚T¸Àc≥qãô/l˜«ÌáÔqê&^Í/)π—öP*U!8\7]2Qﬁ±^$=£Öâe≠ Í}ï7∑H≤∏wµô_ÜÇ∂0Jjƒ%c. !¿˙ª∂≤2Zº∆6÷ tπß$xrP”kc√&Xq¿„∑≤ŒàbôØaáy—ÙöJkææŒX =0»oÕ;uÉìnıµ=IœÃŒ∫«V˚∞√ìV’7ê$\√ÎãΩ¬˚—eÓ˜˙_5‚Y≥k∆µ‰—^∫MπbÔ;∞îΩ™∞˚Á†|î,bÛV‚ê¬œAò8,|öB4Ñ@Êõæd ·éK!öª◊‰E)ÚÙZ-5Õ#T±"òﬁ~DEÏß-AÔ√ûh$∞pL6qØ$<=≤§EÛ¯.’íÇ[≈€]πQTî.¡÷?óß-{fkÔE~`Ú$6$9ﬂ]F°é™YF±3e¥{≥Ô›A˘úL·L‘Á‡ôñ†œù}…âkÿãØ«=ÊPÀb/ñG+»Œ‰x±ï?Œ:¿:SR3ë)rß‡4°®MÿfáR¢om©1â©—«Ú.¿è∫oè‹g7I∑nO©é-Âˆí£•‡˝F ÜŸ˚V|Ëÿª.∞∂v#}jå”˚ÀúE8
+)x‘Ó47ûÄ‘éºë%ÁN^>L©∑xˇì2Iâ°A}∆aËº!f)˘º£>r@∆Á?Ωâœˇõ`<}∫Eﬁum≠iÙSó$ø5@ŒCœ¬—7(Ï‚ZÚ\„3Ñc:ˆ£Ω~π´OÓ–˛P”hÀÊ£	5.«gc∆S<ÄP…[¿oá¯ÕÇ√9°Kº…R]®%&ÈêˇdÃº«∑ë@õ‹¥bÖíëﬁLˇ¥Ö4¢â˝πå·€o≤ÖåìU0KâöπvR‡ [.4ñ©¡NßKü±=>ıˆæâ˜√ºÔ≥^0æı«gÏLV4@®ÑQç˛åh]ÅT¯	’7_1∞»:ÍáÈ˘‹Óaê,-ﬁ§dX+∞Pp≠ëÄ⁄4JW˛πÓ‰Ö4êæ∞åì7Yãë¨·RØ÷nÌvvt5·‹Ÿ‹Äá‚#è˘#èÌ<µΩ∂óbs¬®C,2∞µ\÷Æèo‡d=1Ës$¢ë+:ÚcRæis.Ä∞?˜#ºÛÆ”8ÂïÆ6˘3áMæ£Ä*i´KˇÁeó|@HY;öò…sË¸Ùµhp&Ôç/√Ç¢ˆ*ˆ#≠C
+kÜ∂#ﬂ~[éc⁄«>®Èa÷~¶¶z ÛÆº`jV7ƒy±DîxRßgáÈ4¸Ñ0É¥13¨@±0ö|aƒX›„‰`Ñ\fˆåÒaÈ0Ïı_Ä•˜d¢;ΩüÌ∆9¨30°¢Vÿ˜k0KÖÉ?Ì6»ﬁ+8≈ÕsKBó8Â˝\}j5◊Æ‚‚«*Î
+ìU¯.9ALÖSoúˇE4√<QˆS97íw4m °tæ?Î⁄Ã-≥î3ÔM≈ö]kñå8ﬂ[Aêπä2A±ˇ+Èß~FaO∑T‰˜¸‡“Ô€‰∂∫wÚTàúæårâÓ:ˆŸMv`oùüñ)üXÔœ;á Z/ê1Çouä[/@_ôF…w(¶H5∞w€.Ä≠"¯!¡K‡Ke S[¯ÓY7Rñ!ßÏeZÄÛ-f]Æ&N?>»Yœ_rz„(êÇ»ë´M"
+∫>ãΩsê˘‰≤™*Å
+cƒ5YëMzµÂﬁëë5P•6·ØÕ«JÙpË7`@∆µÖ]P‹z”úA\8aŸ9L2»V–G°cÁVpﬁÓú≤W©™ímy„"ªÚ∞¿∏ÁsüÔ.-æ˜.t´1Å·]¯∂≠+7Óæ7É•ÄÍR ÉAi"óA4EtÀ∑~÷?¿¢Äf¿≤Uñ√Ë”hL2}g\ÍÁ†+,útbÌ¥3ØE	|Ó˚˝Æ◊˚`~ék›Xe≥B˜È.cÀdˇ3oä“Ö{[`˚>ÿ	”Ÿ{˝fÁ‰¯î}Õ√ßÿ2‡·8Î'ò òD√%EP1Ä ;9º∂œr°çNªu‚¸x5„8 “≈êå[u≠˝∫~Óı`&s
+·˝¶ﬂm#^e⁄•f8Ÿ◊¢≥+éâ=tÊ˜z©3@z ‡∏á¸Íì•Lp´πV€\Ω@˜§lâ∂|¶{”M≠Úº‹≥ºÊV`ÔGÖeµé, ø‰r
+ﬂQ°’™¥È
+≤ùü6]ÁnJÌÑNA$ºÎºiµ⁄ùŒ)ï∑Gu$#˙hq–—&ÿG™FÓ˘ﬂàì*£ƒÓêbÉáa:úv5∂( ‰zH¶i¯ÒeHAõç˚e%âŸQÁ.ä6ï…Eå9hµ´◊V“lÀ∫≠ÄT‹_âû+4≤TgÂ`◊ FÁëm¬≥É1˙—XpéG
+Bå26X;9Âí€3
+]NEŒÕiÄ 4eÍÙXéJpòŒ :∞U∂Í¡TT|µ©-*û^£/<Œ˚qåÒƒ7t˙h¢≠∏∫N_w 
+»)WsM2YÛ0≤*K∂ZÊÌzJüW§∆Ãó4‘%/©6î)7†zµ{kD¢ˇ5 ±å∂≈cøŒ≠â%$Hm;ˇïÆÊö1%ﬁ–Æ©ö∞%+ﬁ-æB&º£ ‚¶Æ(U⁄é˜ÂRU™‹X‘6pùÆ„˝y]£Í›yı*π€$xÃG◊‹≤Ã≥i}óö†yTÓ=ƒ“˜ßa‰g<í{ˆ¡çŸe⁄‹%Ë3ŒYs;√°∞]3i≤h8fÜzÄ!Ú?Mf—:&(∑ÜÁœÛj‡i(2˘è,ÅŒ¿ëßT^ÀN
+2à™G“öâa%%É®pjÈƒ®\xÑSà∂ëŒR0”:(QjÎ4`ŒB+∑⁄@LÃì∫∞±Ú¯KGPÊ∆è&a¡t,13œKΩb è¶Œ∆6?Øºq?x|úêÿå“∂∞_fzÒë2ÀâÃ2a[)p d‡ùo€/vﬁúº:`óMs’ÃçP+/îù„O¿Üå¡ÑæÖA”˙XÚr÷π“á#©Á£+<„ÊΩÇ3G(’ÕöÔl{ã≠rÃÚ<ûãEÆ[dïìD0´÷í†É"y˜>ÆŒﬂ«fC¬⁄<>ˇ†mŒﬂ—5–!2nåéå√=h◊ t`∆NÆ7ÿK¥Íÿ7"‹fc˝pZ¯–’9À&± ‘OAï|ï÷öö‡=ïq∏‚ÀºO:bÇ ÂîiDLp∏ÎÅé4‘¬?7›¨^……ıÜ·Egäy˝è{aË#°∏º≤-∆Ôl∞&g kkãâOkëºâÂﬂÖÇ™Øí4å‘$é(˚3ﬁz—X˘
+$ôÓ∑2ù€πŒ€9™≈óë]˙2∑lF#/…„"ìÒ0=övJΩtñ4õ
+¢<‹/÷G“x Á|
+©∞HN"ßg‚<ÀGz£.<(ÛL˛Ö[˜
+º°•<Lã2l‰‹≥–oÚfz¿ß.¯Ó†äŸ’"MÇ	ŒÒdöI./´M£)=±2WüR∂/–Â¬ì±ÿç0
+@-¢%hwXMá≠pvc ¶Íâ¸ÉCV{É!Ãù¥{˜.`'°g’»
+{èŸ5ô´í∑ﬂﬂ-tÆckîE1ÃYÁ*ï‚è1xFÛQòºqc·‘•n´ﬁ*"o`5óπHÉµ∏æTøU0dÙπ·'~o0–®ÓL¸^çYxNƒy≠¡“Œâ„.ï@≤È:≈ºmØ⁄}‰YßÖÊ(fÛóG8â`g#?väIQeG[≠GsÊ˝ö¨òaH“”Vx(ÒGÚ\¿ÃThLUWV-Âîêødaª›j!ˇ¿§πÒ‰√j™∫%G9a<=Å≤dlŒI„Tµv6Ê∞£$qD`ß„$`ClY``
+yí†‡ê≈õ".fN≈DÏ=ü@s›kÜXèdÑ'£⁄‡«Ü\q’◊ïwˇ†S}Rl[Ü%q´¯0~—'ùkr¶[<›Ãë(fπd—˘áa7â=
+∆Ø6¡Ã≈≈ò≥&&aÉé·jîé I6®ƒÃøD^/“· ˙Cû‚ΩóÙlÒ†'€¡]3Ü◊˛§SåÍ…0Ä˝óL&}¿Vã„z'|êu…3ßÖ3†ﬂ?˙Ò2q™’œA
+dﬂ√¨_Q/–rçWPﬂ¯√&!¨Ï.©Q#Ÿ„<ÛÓÙı=p√Æm íıÏk‘a∆àÂcØ`WxQo`„Ç»Î~.ÿ˘+œ—¶Ÿæ$'z◊H˛SQA—§Ãgâeö§°<a	oT‚'˝æ“3[l“ÎÇåôMâê´O.S¯ﬂ´˙§æÄˇ@ü.ÉÃjÚ¬´÷gQ}zQEu–®Í†ˇ√ˇ(Hñîé3+mÂZ]’4G⁄™Ñ"ˆZ~$∂Ú√ZäÜd~ìÅÒUæ¬Qa>Ït°Í™À”ÉdÚŸÂö6¬Q›±]‡o‡í4[`déß≠gŸ xﬁúìÇ˝	€˜Æ·45;¡ı¥æyÍ^j&C ¶Ïßº-È•'Úµ2≠óôáÿ»˚Xø¬Ìo8¬î´à%Î#ﬂ?™ñpÙÄ1E
+E y!Í%«FÉΩ≈≥$-+Õ“ev·√—D≈í sLÎ2;˜Fûs8.C∞ocb.¬Ãªzñdü≈ΩÅﬂO %B3”eﬁ;lÚöEﬁ[D6cÙFBˇHú¬Íæ†ÅÕìw}vÁös…ñJ<æÂπ‰[—Ô≥—¬vzºq7¡Ê√ÛÓ&'e=¶&´1Ô¶∞ë¬íG“˛Kp≤ÙßÚg™§¿ARZgó;‚8¨VWƒÙàÆ£¿C©‰ˇ˝`KDr çÄ-±¬®fâ7~œ©O¬)hîóÇÒ≥◊aﬂwßNÑ	Em1£=ñjˆ‘¡‰P<Ì)∂.ß∂/ö	!Êhﬂr¬tAàø2◊+ÎÒhkñZãïÁÎä=∞*™¢ü4û/ú6^Ø≈*¶§^+I6≥fµàÈ<·ïßΩ4˘˘⁄L% OF*ƒòµè.T`z\,¬Ù¥TÑIΩ≥ïÛ/ôspÏ Œ,è8}Ç'Õº5"™’¥Ω;•° +èî
+Ï¬∂B¢Ë…3Òs£[ñ Ø&‘KŒ0JñJ≥X1(˘e£∏à‘HáÚ	π’g)∑G‹∆`üôõQ´Êò˘¯Ê∑c{c‘˝—5Öb3BÃCaêU‡ßXË5&¸3—‡Iµ
+øˇ—qíÖ;»≈∏P˝—CtaAøÇ—l¥Ã«áB¢säuºsübî›(-|D·1æ16{âN—`ò8;cÿ^Ñ«µ÷òßIi7K≠SΩIµ¬¸^4y⁄Å¿-x_4x÷‹ÿøJDBR–†¥Â]™ò¬˜©	a∏®‘ÍfÆwzÌÕ Û∏¯ÿ–’yl#vú}	,’wx≤≥œˆ[?›=|{¿vZ'{ﬂÏúà:Öw€Èœ.‰ˇN„≈?_q\sŒäó‚vÌ∏è
+U˛¡$]œ‚âè≤v/Ì|YµòNÓ§u·¯?‡∏óã‘wíhˆáF˜éâaX°ÎaDc(2öå‹˛Ü≈t7j8üËtjÊ√ ÂÄ±ŒÍZWS≥QÔ\@¸ïÚà‰èOV≠}‘œiÌ\—3çkQu{öÅÑß‡ùª;“aﬂk˜gk5õØíJ$…‰•8ƒ.Løµ•©~ªª0„H"áŸë7ˆáÛêÈ/2!˝’äl˙kAﬂ"Ø¢YuÄÊí
+~’æd-xÚíZ˙›®£RUˇ“à√òÂd∞≥Ù5›Ê©œÎé?J∑-t‹j5Ω¬ÓT'nÉc∑Vlƒå“ˆåhn)Öã∏ÄN◊amè∞/pÅ?ÙÖÆ&Œ6Ø2ﬂﬂüöˆ  .á¥8{J\zä%€rìΩ[îö(ã\M>£¡ƒ'éÙ3Æ”ó†çáWgx
+„ø∞ÊÎôÙ¬”3F^4=KtÚ≈SùtÜëe1ôxSF‰äoë^Sˇ¡öa£]®«˛9ıÉ÷U!ŸS=0r∞9¸)Æ√]ˇã&Œ]´=‘ﬂ«§bPY·á_≤r:¸kØøÃ@”ı?ÇÊEF≈_êe‡MXΩtãΩ⁄kÔ∑^˝¸l∑}≤≥∑ﬂy«üxäØ°ﬂBπ≠k/m≤∑…B˙+
+»ÄLÀD5\ëAèX%yàœp]◊Î_¯-tÂ√’EåE*¯2N™Ùªµù¿∏’ÈÅ∆Å‚}¬mÇ5º•u´}˛π8Ú`ßKeÆ&G∞ﬂ ı¥KÕDZ%•XY≤V…KLƒù(ÇÁøâÀÎ‘JáÌK&l∏Ôµh∏'wY·6P-Vo•K·vl‹…\MmR•o≠7.ı°È¥Ïr≥∫⁄ƒ¿78‡;˝>Ã“Ó≥Ù≈èfñ¨ ∂¸ ˛‡€ÿîêµÌê|÷ñ·sÆn|˛…» ª gØ%éÿåµ&PR -ÌÊΩj[9°Ü“Æ∫πöÌ†)∆¥fÌVŸ,Uƒî2¶j&nÙ#íJlUdûëã Ï`\ø™Ø∞I§ı5 ⁄g<´qv!ô>ˆ∆ÿﬁ∏œyûµôû∆Ó%A2SÿÈ™˛¥∏ßŸÙ8'”ﬂZ’;Èö	vU0tåERXöâ5ˆ∂qÑln}unﬁóÌ√Ï≥ÖΩeœËb,s8')S©zŒ#⁄π⁄MV™I},˝‹$íŸº*Ïq~ç>°2iñËúBÏsn˝Ñw¨BNû≠Ò [WÕÕÖ?≈Ö≤l(#„˙
+:ÉgZlV˚Zæáöf‚IJ‹tÏèÇ‘]ë/A3çf„ûó∂YõÅÅîÜCÉÙ€Çq[2Ù‡¨‚l	0jﬂöÀÇß"Ω^œAëU·E\\UsÏ©ü'#^úW$ˇºûâ¸y(∫ºµ„àZπ5eQ\§Ú*¡"W‘§ ß∂:å@∫ò–6¥wW„6r~˚æ&÷òÃé9–°±6£Y&πmaJﬂv[6~(˛qcâ‚üƒÒ≈ÌD€0K^†≠õÏiÙÀ_fµJ€3ÚH§lÆ?ÍEï∂Í…òÔã√éA%≤®’f÷Óó+	òpb¸›ò}ªV…ıJ2•‡R+[R‚˚!n[úı‡5<öΩôòÑ]Ωπº–í∞ù√·÷«˘_˛’ã„÷¬
+ÃIs˛ì`¬pì`•"ßåÀÒ5Ò¿ÿÂ7ÔcøÁM∂h…,dæ˝´0æ~ÙßÉ≠õfc„ñıa 6ÿÍ∆À˙ó˛œRºì⁄}/k*&¶ü‰™á›µËFògﬂÊ=	?¢MlÏÿüvt~G„ÏˇÔÈ’gÏŸ∑t˛Ô”mÍªTV’x£‘Òôyà¡DZEBÆN¶Tág≤⁄∆ú°Ws
+º)d˙	¶G<â‰ÿ'XÂ¿Û˜÷DÉt”˚
+óÚ¢YÃKr]úÜ™bÂ√G…qîL/˝4FLÉâ|oX«<ö{J€%í/	öc/h…«<vØ÷jç,rÎé,rÎ÷zﬁ7:íÀ™<∑àX_]\ñ1¶Ö]Øø≥oÜ·kƒ§vúˆÀ8Å"q4Ô¬≤å6µ±X,∑)∫ây^Äno1	#oå≤nz}Xà”∏±†Ø.ñÌW3”ØNoÇ•p$£y‘ßVMB*÷˛6x∞√ÛsE«í‘™¥cùŒﬁÆL√¬˜KÀ∏vm-”µ6“E]Q¸[8mΩÒî')È†;V—≠,”iù¶Û∏0˚›á…yG]Qˆ‰î#±·« ﬁ·”∞ç‡˛Ò˚r°í~Äèi}ùSﬂÓ∫∑Íc‰ºÕòcWù≠Ã”)ºXM¥f¥ÀÛ¿ŒåFiâ˛˘îà∆Ó¢É…Qw
+
+øcﬁÎûOWÿ∞x‰Ä˚Ss≤Ëÿ@ù8ùÊvæ;8py÷”g7…Bus«Z˝≠|…Y}gvè´|=9¡ƒ;UÚ“Ó⁄º3∂ﬁ⁄‘≠y‘%Õqw‚G#"˛ÀhF»r‰~‡qÜøß+$π√nMná`<ˆu
+ruäÆyôK]˝R¶Ïí‚ª"TÎ ámïÈ©d(dZòv]¶w/jµGtva˚∏›9‹ˇ¶}|÷:<nüµ÷nY2œç˘˜¿ﬁöW•ΩN¥_√‡Ô^èΩQ–√u¨Ìª5È›if9&ïâß*üÆ(*s¨î,/]ÖÕWêôù◊ §Ô`13˛Ìª”e·'@W9Ãõ∞1`à=≥÷!ı$gKüÜ`	;L‚>jªcªç…,‘ä%‘˜õøˇ∂w∞w≤∑≥ø˜ó{_≥£„ΩovZ?gr-c%™y ∆®§0ZÊäp˙^~ˇ´ˇÚoˇ˙7¨ÛÛŒI˚5€Ÿoül≤BÆ¬Î√›6€Î∞ù„◊Ì]cóÕ„Òèø≈¶ﬁ—Îø9Ÿ;<8eá`ä,Y>iÛY˙§ÿá;µ˘´ˇãŒ¶ΩMøÊôKINì?>£&>ºï÷D&¬‹¶PT±iSÖ„Úù¡1¬2ö{ˇ˙ø—4
+çtìe+¥⁄#?∫ ´‰:oXÕ?Æﬂ˝ñ	˝	„ºõÚ±2{å¯˛j"ëD¨–;4ˆﬂÿa7&ñ/˘f-	PYÌ‰)lgóƒŒ∏√˝Åñ¶LZ:«Pz„‚Ö∂rÚ™AéŒ√ÛZ˜il-}$ıN˚ƒHtﬁﬁÖ—ˇ¬ZüŒ‘åü"•Ÿtû¸gù-*f|ë^sì˝ªœn“!¸ˇ  ˇˇ ôPWœxúÏ}€rIñÿ˚|E6∑=gRMqIÕ@$’‚,%j	JΩª
+ÖT@%ÄPò™A4õéÿ'á«{⁄ÎÏÜ«„ó}∞üˆ´˝'˝ûO9ôY˜ºTÅPK=ÓäéQóºû<˜˘ÏËà‘[‰ƒ∑¶Ô{°ÔBÚs“"§}˜nÎ/BîóÎçÇ∆låkÔgùlv]◊[ês'…ÈÕÄŒB«õõ¨ÂÚüﬂ‚¸ùLØ¸Ôt◊–©Êë3$µ‘$ì∂∑»≠ÊªÃL^~:Ñ÷dv˜Ü|˜˚¯øˇÛﬂí>PõNî,ºÈŸ}\¬ã¯üßwM}ﬂ±i@c'§.¨C––OG◊˜ü˛Ìø'Ø/O{Á/ØŒ.ûø!'ñΩêÅ5°æEúÄŒ›%y|˛ÚÚÚÙ‰^ù˝„q¶Ûp‡MËLŸπ∂K2ÛœwBÁkj≥	í°5q†Km∞°”;B›ÄÆ}PKØ;_‚œ]zœïˇù~Â-ÏV§øúY¡˝∫˙wˇ2≥Ó_E†#⁄&# „ê⁄¶eV>Äß#–ÈôMé‡m‚ﬂıˆ¶˛hhˆÂÔˇª≠X ! /‘á«! »ﬂySJÆÉ˘ y‚êK‹ã“à§∞:ø˚-9˜⁄Ù6ˆ<óÃ‚Æjè©5Ä≥GNßCœ8”πòÖuXÃ≠{t˘?¯»Ø|g4¢˛9ˆ¸ôÁ[!Â˜kè}œ≤Vb«tx>π]j·BÜÆíU<"cÄÕåó]ﬂo8Sõﬁ\kõÒ‰ﬂÇkõ⁄^ì¶ørÜé≤’<|Ú	Z\qUø˝-9”¡{\≥xÄ]¢s}Pïÿd.OfíßRì‹Ê‰¶Sô∆1ËŒCo¬Ä2◊-[‰LèÏÔlÔ˛¥-ˇa‹˙˙©[aiõúÈµR6<„.Ò‡Ïzs¿|ÏT 5t⁄ª∫<;æzãTn≠$nºÏwDΩ˙êÕﬂßÀ|bMø¶á¥ ,Y˝x†Î•n1B#∂X}€µcÒΩû˘ﬁ–q)»aù§.3é ≈˚@¥Æ≥>Zw~⁄%Eó‰4¯¿Ö|e˘H£…Öÿß{êûñÚ7s∏´3ÔªŒÄºá~¨0ƒó‡sÔ˝|Fºœ’ªJ„c◊º∑Ω≈î`'Û†**æÚB8DÁQ#¿ÊæOß»ô^<ybÿÕ*Ä≠ttLa©¸%,Äê∫π‚z›£CÿÄÑù¡	ÄàC1ôª°SúﬁΩÅÁjªª˚âÚëO√π?e√Q}∑U®K¿ˇE–∑Õ6â6Fà¶‡Çß15˝ÊÚz3⁄ÃÕm |∆øe¸0˛.2pìÒ≤oëÂƒ_YN €òX~¯6å©Õöy≥M>˚åè!ƒçèˆ˝ôg”≠∆ƒö’j0•m‚ÿ7[‰Ë©)‡–vÆqøén·›;2p·?˚»pLÅm∏s¿áµÕÔ~ˇ_‡h¬…Ü©gü¸Èøˇo≤˚Ytªπ•Efø õ!Ω	Îæ–˙n≥IÜﬁ4¨t‚Ù=◊ﬁ‘~{P#?≤1•a‹0¢dLe◊NÜeílPﬂ˛÷ÿc“Áµ„π4¨wöMSGÿˇ&pTpîÍOÓiZªÖ´1˛· ëÍÛ≠-˘á‚#˘3 7˙ûoSøL	ˇÉOÁ!,:0+m2tÈâm‘·Ä"-˚ıÉ·≤ﬁß·Ç“)aã˙acovÛÜ§VdØŸ‹P¸0òY”G=éçI˜¯ÍÏ’)IÄ‰pá=◊}úûBzÎv±◊ú	Pö°O8÷∫ÊîÎ´ZC˘}I3á;èÈrO∂2(ÛvÁg‰…‹uÅ“‚b~»ärJÎZKÄ{˘ß VÈXË!ﬂ4f˙
+‡ñ~∂ìﬁ˛√Ó‘éäÚ˜4;ö['H5Ù”ü–÷a2⁄"£ÓL°GÀ=∫Ω÷8·ÚÄ4…›]ÒMã"ÛfK˙&Ωq¬BÉÖ∑R€<tnÄFYÑmní˛(’ΩÊŒ√}Ú5 úZ≈œY}óÙ-@Ëæ7´˜›π_øq7rù°!fı!lôX7ıE=ò§∆«Fú£vÙGÑ«‡<ﬂõÉDj◊;7 Â◊ âÑœÄg,»T}ÏÿÄº˘Du ¿Ö#å-†Hı◊Õ∑Õ∑ªÕŸÕ[‘∑j≠€≠˝ΩÌV˚·v≥—⁄€zC∆ı◊⁄¸çÙ "ËªÄ˘…„yÎïÖßxÚ}ˆTzz¬ÂQ{!øå¸Ú¶«¿ÂΩ?∫≠1b	{wñƒ⁄–~VÅ≈Rnıœùá¿•{∏É@Ω«!Ód
+ƒrg—ÿ>¨yIì1.ıª…¥òdvSÔêŸ⁄hwÿÊ≤7nÇÑÙ»Ê'«)|Q_ˇüˇ¯FäW¯rI—3n…Sj·< ‘Æ™M…A$ ∏≠/aM kÔ*n˛£‚iY≥z[çµ{ L“ÏAÿ €#yÇΩAv™aÔ◊≠fL>§ÑüÃg¿‹Åáíö≈ÿ˙˙e∆êø3Ò¶ﬁ∆£g^eπg‰ À~v≤ÍWh*î≥_πYøﬁQØ‚∏]òæ;3uaj$úíYá¸ÇQ≥¶Å≤´∏O(ÙÁsÒÍÿÚm’¿v∆Ìïv-ﬁÄ˘'}‰’Ssò ‚nÏiF‹}yıÙ‚ÚÏÔNO»≈ã´˙≈À+“;˚Úy˜\ ëØë¿ƒsÇ3AlZéõßµq c»pwÒ nûepªb1pèA˚ÎKâM›+étL7™úÌ<pè"ÙXÔ4ˆb‘ÿ¬%¿}WF‡eÇ∑ƒ_©á;∫ù?ÆGYÃ≤∏ˇóÇ©áàYÆ∫xÏ›m4ÅchÔ¡öf°aêáB®"m¿ªdLÒ ÒøáéÎm¸≈vm(qkgfÖcbm<É~«_\∑û∂Æ˜û6_5øû¥Hkº?ZØZ¸GÁ∫Û¥˝™?‘€Ó„:<◊§ﬁ¥ôz}\Ô¿˚–tkﬂ⁄ºÆëj¯∫æój˘∫ﬁÅ_˚–tÎZÖß¢°ÙœzÊg;˚6O˜q;˚q3˚≤˛i}øﬁ)?ê‹S◊nˆÌ¶Êg˝Av	Úogü÷;˘ëdﬁnÊÜmÁ√Ïc˝rÓ©_éÅ∞….öª)∞NP\ïË&ò]M~«_üÕÅï”≈≥ìrk'§ËƒúŸ*¡∑FW‚ÕgŒ¿˜31ñEõﬁn«l_Fºx–‰ÇÉå√‹K∏z¿z1YFZW€2¥ùÁÚÂ¸≈CŒ_¥¥∏T∂€)©¸‰Ù¯º{Ÿ}~u†ó¥UMq êp∆è¢}ùÜ¯÷ùA~◊BÍ«]ô_Ωº<Îùú£‚˛ã)““,j˙¸jÓ;ÅÕ˝+>Ù¢›gUûv/OæÍ^ûíﬁU˜Íeo≈Öë¢òçG›Ûsr|ÒÏ≈˘ ‰ ã∞"õ˜ƒÛ¬ïÖ≠Së©Ñ≠Yﬂ>å—≠‡…r¸≤¢b÷`:•aF±›^ÔÙÚ
+xÂÀ≥/ü^ı»ÒÒã.˘ﬂˇLZ_<‹o¥⁄M≤Cæ<yqI∫~ÿ Ì¸|r|L^X~HZ{d‡MfÆÉÄ~dkêß÷‘÷Ì=%Å3öZ·‹ß$fgËPª°X˙Ÿ=§( ÉàlG>L•zu`ë}oíaõhõ»pö^ÊÖ»©ÄÈmï∆éÈÏ“Ø4m9Ö^M
+âãyÊŸ çVR◊Q€AIó˚·ú#oP⁄ï÷ŸïVŸ}Pç›~seç›§†äëÏØfa2K†Jf“x∏∑Mp‚{≤9eI|“bÔKó Y™≤Õ´îã[¶\,j“ÚôV±(ƒ2|/Bc{EÕñÙ$ÂnF'◊:π&Y‘;m‹‡0pÿ/ Eø¨rçÌ#´Á‡.◊È5ÏvPüzS™8»
+Œèñ–ôïCﬂ)êB<®ÂÿÉbGE$‘ÏH9u\K´09Ïπ¿Ö˚ANtF…ô∂zç\Ò j∆¨êÛK.º"I'Gˆhà/–I?+ÛG„›¬Ï&vj.∆MØXì`Á∆_µfm∑≤Rßw/£yóÈﬁO„ÆM·<*D¡J’Ë¸˘§ÄÂUkvSo7ˆ≤äwwî÷%Ç88Ú˘©∂Á5SøÀTÔiÂªÏôéQ|ÏŸÀX)XU(Ñ 
+úb´ï≥¶Ó¶ÿ√©ÁO,ïÊêêS¿j}«Ëi≥9ôÉπF@Àl2ö[æÌ3’&æpÏ§ú∫#œ‹–CˇEƒÃƒ‡lOCÊƒFßuü`C—îøh«'ÛÈÇ9Û˝õyééQ)ø_9äK  u Wﬁh‰ñWÅf pWÄ{\¢OIÓ1S|]A‰∫ß)ÜµqÃ‘Î*ÃoM˙®•5†~>›s	yê"N¶ÏﬂxÑªWˇ ôóë⁄Dìƒ(Ì¶@ÖIâ£	@√Û…∆£ã©ª‰Î$ÅK√`ÿûÄ3 º5˜Ûh¥‰ƒ¸Xã∫Ò*ÉæÒ*Ö¬ıöçF£HÆ∂µü†œX≤wßSÊ2y@>ìê=È´ö∆Ôî¥Øîã‘ªòÖu¶Æ3•uvD–ÿ∏®∑––‡;”˜¿o`?=ø.…õô3≈3íà1ZB^–T‚Z¥Á\+SoÄQ`lÍŒîπÎΩ¡<8Äøÿ8êG%üÎ◊ºÏB°„‡+~TÆ7—´(F`˚z7§ªwÍ•‘¬6øv¯ÈmêpË—épÛ"D<lAá@ör{íÑ‰4ﬁG"÷LÌÄzÈÎ\m•YáleoÍ{l©”w._∫’&ZÊZ√sÁju∂ú’îOP¢Huí£7#ﬂ ˛á¿¿	Ar£’g%Ì∞∏kı©õ!»LÚ∞ó'ÇDBW&Lè€c‚Rî√÷¨°kg:õáÄ·òóPáwÒ∫∂@Ë9Rm €7ﬂêÕÊ√8®:Ë¿0˘ÿöé†¡]ó„µ>gÛé∆|@h˛—∞¡fh¯Rè∞Ò*Í.R*ã=£  \àÃ/Å,è}ıßgvÙÑ˚˚S‡ƒ?M∆ë!p∑æ¯° 7å¯G–^ëe]¡è%µ3	ùp˘£¥VBZ{ËÙt≥π?sÕö∫µãkÒæb6â b]æ/ëÕ+ëœ|:rXQ¥DCs‘C†ÀËèÇõFKVRxSæ˛£ Wa±Ñ'NèR‹z§8ÌrˇπHrÍIVíÊÃb€yVF(ñ§;¬≈ê<·È2ûQ‘aî‡cy¿üvá‘¨©»KQ≠3Œ§≠IΩe`R◊ƒ¢Æƒ†F]âQ5±©k`RSéo+≥ßzN·ñßU·`0 	˚q@¨È“I…ØCèõ
+YH%ˇN–].…˝PÿpƒÀÃjGj—ON≤ºÈù)dpáèEﬂì*>/jÉΩ◊qIÓj¢•∏¨âà_œΩêê
+L…å"}ıÍ¯Øp¯Ã‡ √®Qìê50ngÓÕ8Û3ì6¶Ü`–G|-7£$däÏ<ÂAÉúÒ‡˝||í)µ¸˛r;R◊cÍô9∫ —kÔΩ ·(Z>Ö€∏≤¥£|†∞ˆ¨kfÆ
+}ØtúÄ\Ä`˙∑NÃÎé¨ ~¯iäE‰√Zb≥⁄3CÁ‹î òb;Ru’,≈«]ÓV6ÄWSÿ±	ò™ÜˆX¸ ˇeHÅo8úù`˘ §å∞Mü≤ˆ·ñ&¿_ÍèîÃ0ÿ∞‡^√¡¯Ÿ—⁄î.»1„ﬁÑˇﬁ·˘uÃ
+Q∑\Íc‰æé2Û(ùC™†ΩËåµy|ÒºwuŸ={~’#/_útØNO6ı$ºÔŸÀÚé˚¨§,ÈÄ“ÜŒhé“j0`§ø<n˜s•óH„ù¡¸ √-jÖÂ≥;ıûJ–í‚»ÖKŒËŒÉÏÈ≈C˛a+C≥/‚•Ø|jïé†*üœµ¯ÉfzÕ“§'K g@z Ù-`ÖŒ¶Cèú{£Ä\\íû7p,WÁÎåÉ€mçß®∆ﬁ¢;@c3,ÓœxÏﬂ9|.OÉ¸€& ¸'Hß˘⁄⁄ JyÇÂé@»Æ£Ã	|§}{ê°HyèV2¬<©ÂÑ9 uª“ÉUÒE.q#`KXXæ$~WÍ!ªùÚŸ‹/Ì.U“q÷ÿãTE⁄d°(e}@Û^≥Ò∂ÌVèxWh<Q$l£•ÁØxÛΩ<|#†2·QLQ ,Ê √“eÎÕocÏê–4 ñl5ÉMÃ/ ˜˛w
+¸s?j„åÑ„ÿxÑ˘ıŒ¶—Ÿ;qÇ‚ΩÂ·Œ∏S“ç\ µGíU—õeéjKÌÒRd¨B«E$ì
+∂…“õ˚Q.1∏9ÅûÜŸ»~É≈yŒòm“=#_‚0ë'‹AB∆ò˚ÄRﬁÊµ„ásh†{Iê`ÕpÃ€dL]∆Ò√+H¯¶ ∫˘sπk◊
+j=∑Vôë]Á¨&#ÁßäÍå, (Â•x%Y|Ñ+ó◊µ ≠ÒŒ±cL5fÌ◊Ÿ€*ÊQÿ¯`ö™7ÑDÁuÜfùo™L/rï˙Æñ’Tîë 
+Zçê5ïu8Î˘íÊ%Ê*QÊÚ[≈pd¿ñÚ“Öä|Í∞¯JŒ«éGûGßsÄƒ°¡·∑Ã0Ÿw<=@˙ﬁ"8∫m´@#ç0Ë™Äü|20XÚ∞A¿¥iÙf?d(<C& ƒ≥ÄÏê+K·∂øåBÎkƒáÒ¿´¬a¸·U+ÿc@«∞”‘?⁄†çQÉúPå¸€&Wt0ﬁ∆ I€©ø’å¬®∂åL—«ﬁdb‰°|ç>‰∏ÒjÉØÊúh¥3Æ@í¨ã¥üı~hJ\ƒ)Ú˛>J°∆lE…nß˜†ï°”˜€yPH?Ï4ã·˘—©ŒHŸQËD¬”j√'‰;«dÏüZìŸ_¶R¶äôK∑@%n´6á…ºt‚±44òŸìyHu¶Z?ë/Ãßá…@ªç=ÉßHX’<±Eê,]\`¶üæ<IHv4˝È *¡ﬁÃ∆…%c‘ò!~åˇÀ{sÄ´Pcg)˘êçôNâÄ®tâ—ÖOUå‰™é°˚BÂ¬Ëí8øhÃ£Ã,ëøD˘È-GõwÍ∏Øí2"OòT∞Í»l⁄ù∆(¢N¥≠è5‘g≠à7πéùà2r≥^Ù”h”„áè'Hﬂ‹œ"≥Nß@RÍ(?‰¨Wg%mÒh≥fíÕ»`K•7‚i=í‘&¿{$3(u[£Ω$’5iò∆˜œEèVÇ˚B%ö&v∫zD:íæãëQWhä è-yÃ≤ö¯%˘%Û—…<⁄‡|ó1 Â´y<ﬁœ◊Q˙µcé]æÙia’∆£a¿éŸˇÛ¥ã%3F⁄¥ü‚∏ÿMf¥(∏çe–6‘˝Áåvë†PªEØÜ”˙¯¬Ú[¢á∫Ufï:⁄‡I#9x(«P>´¢nÅ‚p#X°*ôum¶yM´:§gL1ø}+°œ	ôT†ßX∂ôã0eDd;Ñv£|!yPR5nÄˆ[ñ¶›•”Q8&èHSÁÒerKE©f LÇ_gXZ)”‡UŒÅ5u¸FhVì¡r¸s¡∫_Ç°NY'~Ω•∞ö˛≤—+)∞Œ»ØÚY∑Ìø1´‘.qí˜"
+,$ªMù!)ÎîÀè¶Ù2S™l$HO˙™jgø˚ßˇ†@0+òÄ’¬Íï’'¡¬	cñ>∑Õ^‰tb9.	ÊìâÂ/KqÜ'‘©ErÅr⁄l–l∞”ÔRõ˘NX}5"X%o3ŒºÀ<∫`QjõºõMcÓÊ€wI*‘ëßç-ëT$Z8‘Ö%‡kÒâΩé[{gÚtÆ-Ólg˛v”ì‰6i1Q%ÜAÔÔb"‘Çí£ë{Í‚3ÓÓJd o*k»›ùÂÁÍO¯›#‚»¶Mji:%uã‘û∏2 ãµN‹Ø¨óO\çöîòì^ñ˘"¸ áœAg∏◊Ê•R≤¶ ˚ˇLN,Ù`Ì	¥Œê¸⁄üIReôÇc Ÿf7ì	lß#'∑j&ÒüΩVWavÈ`r¿˛∆Qwn·w>´˜pU@‘ÈhÛ¶Wt´‡∫2ëFÌu{üùaø°L∆√ØKäÜ'ÃCsmπéU¶õNx®sH‚ŒÀÑU"#·R¡c:ÜK·*·G#OÃæcÕf.{A¯r®˝úµ^ŒUdÂ~jDƒ3C°WÜ•cø–=€†83G—·Ö¯”˘@°ÉkΩ–¬Ø≤±wxÂË◊»û≤Óê0‘6°O5HÆ2ŸŸíu∞E>+V¨óHÙ:Yò∆äi‹+>,*‚€€GÅpÈ…U%î`¡D∏˜0Ã+Mîå;…ŸæåP+ «ΩWÄÌ|8¿¡òR•1ó_¶è√o1u=Àñ–Ä*ı*‚ˆò¢@åFZ*<÷0&ﬁ™z\fˆ{?.–Áè«Â”:./Nû€Ã'∞æüYÅa~ƒ≥ÚÎ ˆÂ˚>,ÿÈèßÂ”:-9ΩëoÕ∆X∏|ts°6˘UÔ‚9·,Ú=Oëp>ƒ)Í%É]◊i2‰B0.K Ii‰º«ı◊ù=8±qm…XJ2Ûµô˚3¨.J5M•8#Gˆÿ4∏èÏÎrµ«Û21√]å_:v¸Aﬁ˜˝ ∆2π·ÛO5ˇ†xHe°çGœΩ(Ír%r0:äïX%K6¥Ö¢Â¢>ˇÅ∆ã#∫D&òH.BtÃäÒ òZ‘Î‘áÅäÒŒdŒÉo5“ü~&®ñÿæ”≥®»´!6/^ã+z7Œƒ	ólª…´Cj; ;a$Ã!iÎ´JãZπ∆hiu∆¸≈<*XT[cwågê“}e(…ﬁ^ˆ8tbòGbJ·Á*á‰ç*¨Zâo“J*üFˆFfˆ•‹7§µó©èÿäÎ#∂;∑Ï„¢<b¶rÕfπﬁçV¢πÿ/Q-Vüt/s–zÂîFiJm<ÆÂz0ß$œ¥ßØ,íqÆBÄMäUó!r—u[ $Éƒ<ƒ◊˚YïØÄ/·«ÕiThC3Ñ%z´Õ}é∏Ÿ,v”4ò<wö}¯n†´™îøx¡hÚ‚Ú‚oŒûù]˝-9æ<ª:;Óûó]é
+În‰pyÉ∆ÑU‚≈‹F‹æìZπ«Å,=Ij„J°^k€‚ï_ò¢`∏QjóƒDd˛â0œÆ22=gÈÊ
+#¥E RÂ1ÊºÁä:}•;›Ω∆Õ˜Î^È±ÚSWa¨ôM95≤°3î^?%´RÓƒî;Ç%OV©äZ_~I€ béÀmzÌË3‡˙‹
+ÿºàr’E/˙yÈ«≈Ïiæhº§V{µÕãπFË=¡ö6µ÷÷»®k˘Ò˜Sö 7Ê–‰Æ83v°™¸^öUXë	HÁûbËZ≠:»I=f.©B£tH$I¥€mnîÈŒfÆCÌ*∞[ö‘}åµ{%äx™"G [¿Á{Ë¡düŸç`ﬁBÃWknì˝≠ªF£±ˆµ,ıZâó4πL0ó∆ J˘#Ÿ}µ`ä13E≥4˘íNÅÖ QáVü¸lGﬁóæ&âKá˘‹Íoô˘6g˙◊–‚VSñ∞Uß.Yg ÷˚:2«≠‰¡?Œj)“Y∂…¬ÿQ∫Û–ª§®ÃKöÖ•m^;»X≤Es\®+õáìÒ—"TMÂÕã\8€◊ø °ou:æ!ÕöÈW¨e∆ w*?WÈÀ§¸Y«–S∑‹¿R‘Ω”Ê§ƒ`,ÓÎØ
+÷õ"ßøÿΩ&˜JaÃXˆAoÃ(.¶!Ö„Ω≥ˇjS…Ç®•˚û¡ yÛE Haÿ±Úπ‹Y˙Ωæwc2{∞˜®}$€ìUÚ∑üõI"üEgUl\Å_˜0Î3&ºGösY„>K_õÁX:CIàtÊÿ≤\áÏM1ük¢a,ïL6~1˜é†x\L‚∑‹≥´˛zsÛç∏„^—∞7´øn„©‰øë˛fnƒs`Yp“%Á6}[¸»ÃäﬂB£ˇkˇïS“ffï≈∫“ßî√à‹LïLπ`Mπ∏Àÿ!*îE√Î8 ◊ã 'mπŒ◊Ä±l∆^|ÃOfÔ…<@∫y˘‰∏˛p∑Ÿ&3‡i=Æ–lÅ∆LBƒmàXC◊qE⁄ú(Aæ/
+
+èApÙÄeCßØÄ!E¯$b¿*>Kù ò–^Å∂Y+ñm√¯Vs	3d ∆lï¢Ã"a9ûUY˙KJôZgΩ ı0ŸW$ú
+ïy‡Ê`AÌêÀ#≥/È¿ôaùa“ÂÀ\&c±WsLÕºkı®Õßøô;æ6¡zí˛õãºBv„Ã˜e≥V+ì#úIo¨…Ã•Äx˝◊êˆbπ>¥SÜ¶’R_§#à‘,°ôÇ6∏Ó|}™@ètº~"RníßÄd @}n*3¥>∆¶LëöRÁ%bêc¡™:+U≠…6QÌ‘¸ ˇ,2SÕo‰œÑ‡\≈Ù˝ı˚l∆rÕIÚS «je25êÉxtù⁄DÂ∑m˘ˆ&¡d˚ûO®&∑Oˆ(¨ûƒ>J@œó~#ZñçG˙√Ô˛Èâü§;µ‹%pàAπ,ÒπV£ı≈Vø˝Ô‰â¯	ÏhùeJ-”®9µ¸¢drEƒ∫”sxùÙ@*±Á®hàHZ	ΩÄt\Ÿ‡ë¨J$ìÃX@aπ§ÊËéíŒ §tÌÃ∆vôË™§ÿoáE„w¢≥Q≈ªP°∏ywÂŸH+X≤%OLﬂ°‚ÊÑ2w-‘kï5¶-π°`Rå–Ñ?Ã
+Á¨ÇS*è‘^3Ô˘î£F(ìŒf≠ßLUX-ÆöIìdåõ‹Ï¢ﬂhÊ–6t\bÕEîÔ ]∂¢œ˚®◊§3·v*ôÁè÷ox„—1[pœí^R?–˙MaÀ+t[îVûØkõ“~ﬂ|ì{(ú,>¡<°B≤ÜM\◊ˆ∞Ùı’˜&e˜Rc∑`7ÊZ´YÉ¡60~
+˛$?'Éÿa`õ4∑»Iµ∞ïÚ!@å⁄l47Ô&üŒñuØG‰yƒ«Í#Ü‘å2£4Ä,'‡jòºL:¿|6ßÿgZ9EÁSj±Ã®4¥l+¥4„”çêg π<’9 4JŒÑ3)…âU/igºA⁄I˝‘:™ÓÆ2⁄ﬁºˇk¿?ÒêªsˇÒºÃŒwˇ_#£:je± $O{pÏMfÆ√ú∂9ÔÛÅÑaç)
+¡.:¬§¿˛µ@»ëÁã{,XÏw£®ã÷i‘EÊq_ìí§ôëIã%◊≠éÑR†\†äπ43	FíüvÜ˙®«(˛¸#:¿f∑: ˚ƒ˝á∞U\ﬁÍ^`+3Q¥rß∑SÃıüQ∆ËÁÛî∫Æ∑‡˙ﬁtÙ(wË kX€¸ÂÊ÷ÎÊtU‚Ø5»c j´¬¶¿ç–sﬁËı–˜&‚óë]»xmj¨Õ•yû◊Zp>&÷,ò˝∑\ùõ†Wgj;#è· Ú‰◊Œ+w9d‡TºŸ)·mJJDÁ≤‡Ò^LÌÏÊ%
+ÿaÈüí¡rÄí◊Ì3+7‡`z~-ÕmÏêŒ≠;V·öŸü∞Úb⁄vB¿Y–!·Ÿå¬X∫ó›‡€
+≥A_\n8÷≠fÛ_òÇk øuß›WîÕƒ†Ã”l&∞XàÚ•siò…0Áö/Xô8Kº’%&‘ùƒΩ2‘∆-HÉŒ¶ñ Bî}/„ ¬?ºbJ9r¬ºj+|X¿Pæ3.Ô2æº\,°ë:s9pahËÏ◊ŸäC®∂9ñ´Ôàª “¡¬7w⁄πïPØNº«+G§Ë⁄Ìd`'ÙÁS BtcuáÈ¢ªt≤«©û>øUá:‰‹¶gÈ≈.Î.ùÍƒúóx6é·l‘JDäîÈÆúÜŒr‚\ßL∞Py+1Ø	h¸yv\u“π#ÿ ¿› p¨Ï3pÁH±ú)2§ˇÙÍŸ9<fûT3kâÒ˚kXΩ{Ò˜	üPjc^›T((È[S=”{À†“„UÛ*P.∫∂ö≤ûò⁄|Ä|îN1Œ»Ø ∂S!÷Î=r≤Z‡]Ê¸g5ÿÔÿ!KVãÙ‚≤Öü	¡
+¿≤}kfãé∏„1µôWKT y)Ø =æMÖZ5¬)·ÅÓUt¿qRb≠3≤1”À∫ÍÅHœÿç√âk 4Q6ÀDÈÚ†xÒdÏû≈õ√Ñ[°&gjñßºñ›ùmí”Ògo¿XµnÒÑL≠kgÑ.ËçÅÎÃ˙ûÂ€ç”Ù
+@Gdh`gápÉ$;2$‰ú≤è¿ÑãÀKl˙ì¨-l ¨Bî•,”)`ß·„Âô]€îÏ◊¶aåŒê‘‡µ-√.DÄˆ"z~ ˜æl8à√[Î;"Ÿó·„wá¡ıàCÆﬁﬁìeﬁ 7w
+üå√pv∞≥≥X,ãN√ÛG;Ì&`/htÉ,;m¥w7»ò"ª¿ˇF~˝±ws¥—$M“ﬁ%xÀÛm0ØVÇBÕ{ÙJù˚òÀÔÛ«FwÎQõÒ¥À¨Ÿ—Céô€øˆúitˇ—·Ãsóxó0WZzªIêá§ıŸ%≠6∫FØ†[ııË—±7CWÍ≥w¶Ö≈> ﬂﬁ<¨ï9Q≤ΩHÔ´©ªªmÇm ,•U÷h≈´XßïÎ”∫IòEòsπa∏ï˝√d~)ùÎ2óû]á]ERaDæµ‡“Ä•ù2OMTÏÖ±™É°&R[ãéÄÆ∞“*ôÃëà"uz:ÕPó‘X[äB≥ÔŸ¯_pŒŒLG£Ñ/˜§hÇ˘¢¿∑LmÅ*◊M’x∆$¡Ö–tƒIéËyLÓﬂé_ î]ÊXø’ŒL⁄I§P†	+D=dCì•Âè[”'ují9à˚Sk≥∫‘Q∂w˝ïeÉKú∏h'·°Ÿ+åôB¶oN©	ù≤<Lòz'.05#ìÔÆx‘‘‡`åØ2∆V^“°OÉÒÒBÂxë-T[2•S∫®q…†H}lì9Æ…<U\ƒ’0˚<-WPÇç≠aZKá!ø’*≈u$›U-¨c(.m6rP®aUÖÍãÅŒó\¿Ar≠%yÊŸ ˙◊^N1Ç Ä?Y…¨/ÁÄ9∂R"Pæw“˜-ñÒΩÊiÄ"Ú””ÛoØ.^ú˜^«ﬁ0·π»(q7dﬂ)>M≥<“§FÍBC“2BENHZ7®¯Z±VPÒù4Q@ì<‚/÷õ‰Îz\;À‰dÊπ˜LÖÅäy üFkWõÇxù¬Ïi 4À0Ìm∏’ñ,Ñ±˚R˙°æ&ìÆÀÑŒ·˜»DêÕ`Ü„õ€ƒ∂&Ω
+C∏Ï√)Ç“Ÿì6VÙ6ÂâûÅ™ïbÇK÷}äΩ‡H6ñ{÷“í≥ 
+÷à·¢¥àÑ∏gûp·wP.I¯É≤u%≤PÕ;ÀÚtÔñ*eÚD–Ü•J3¯§° Ã˘Î¿LÿﬂRÌ\¸Ñ'^jÀ≤)µ=∑ß5P?Ú¸Â«ß
+Í°¶j≤jÛ ≤Ç
+e DUG‰#Æê•‰:¿ÏrÂTJJ+&œX9E…õùqG
+ IIcïRZ]ô—Jm}‰D„}ç˚ê∫òﬂ≈T|E‰N$üt∫‹K2B+_ôU^Ófµ:¡<ˆÏrukΩD'}/r'y–ººI‰	RÓ∫=)W’*3á™–ã§äg)+gÌCï_Íöù∆ÚJOû@)_‚ã’Y}YÒXÜ4°.°”Pù_i¿®⁄"É{ˆrjã’ßûg“[˜‘[ê≥ê|Â˘ÔÉ{lﬂnq˚LÀæ[·Yx‚QEq¥ïVßsÂ!cˇIØ˙≈år≈Ñ®˝2∞F(≥°?è|~øœΩ{ã+mç;ÒWtI”):° æ§⁄e	ÊµÓ0Úm{GùÎæ"»ƒ´€À¿;ƒØrŒ:∑i˘Í6ë#◊¶QŒµÀ∆…$ïNx•ÂR∫Ÿ[1{£ìÜﬁ∂©™/∏ZÌ_•‚yaiQbW·H%)QG2ôÈT~B?6/(§¡`r∞â∆oÍ{\˘õR—¶dãÑ?dw4Âöﬁ|y d⁄‘îÃRûﬂÎﬁOΩÀJ/–+„W·Û7U +’ìîÎn+b%Í≠îÎÿß®|NqºûÄ∆R:*'àæb©ôÊ:TöêRZ§R:$≥I£?úﬁ|Û!TH≈qV\¨+ö9πÕÆ¶Ö+ß“YQá¥™iç˙£è¨=™¨; üÍz£è§5™¶3Zè∆HS´PÎ’U]u‘µØ1Tƒ&]ëHJË4E¶?¨∆H4úRiHlê≠˜\O$#W©ò%ì`bVEá—ı©jç§–Ú7í≠îÓïä)ê3ãF•–!⁄°$Ôﬁº?A‹-–ñÃ©Ü6D¿¬	Zs7¨Iùb∏C@◊∂£≠C†™…›œ¥[\¸@o+H+∑‚X©/§ -£ÚﬁêkUjàãèÔk‰K≈·.d.IÁñ 0Ë§œÎ9ƒÁ˘ú5ª√•MU¢Mı#R¸`ÿò‚CjüL*⁄5 D˝)Êe;ˆ&ì9I?a˛Y"&I’çHì2•Ñ)69ïYYñÂyÍª≤…Ä÷ê˘$Ω_÷T"∆Q}ÚíbzΩZ‰ä≈"}âÂî"“\>rì>t›0œXú©µw«[ÜÃ<Ü‹Ve≤ZÛYe¡ïPü J¥Ò◊Â≥X˝†@Wô´JÁ˝Ò˝A◊È‘˛îaÜ∑2dâoÑ´Ïæå˝Ω¢Ïõõ÷'∫BVx8L^»}§Æ÷#õºOÀ9ëŸ}ëÒî¢T≈°_ oﬂ1®bïf˛E]≥T<W>õû≠”(åßÚ¡iæ»◊¿…≠ôªí*>˙™5Èä7…°K…3πP∂î‹´‡’=®ú©‰èyEÙãÁ§ñˆâTï[0:˝}œ ¶ñ*˘ı˝¿ÿg´ô5È dA,πøÛØ'O æ¨ñwIzÙ∫Ä≠à˝{3:¿l±°.àR0Ô0”GÕ’«¶qÇåhlbdzí†MSôe7D,Ö·
+X˙Û?K9Lâ‘≤Ÿ!mÆF¡‘ZÏ Ú±uÌx>©ùM«‘R˛•Îı-óSÙ-S∂»BJKﬂÑo—ÚÄ‚˛`Ó˚§ˆÑ•ñáY.'Œ◊‹Ó?D˝æä*˜™=Õú‘ÜSÄ=Ò©=•÷ıíà'¯Æ7$˝%K≥â·‘î⁄A’nËƒ˚µº8˛;Q◊NñSkGr‡M0ë;aπ’*∑›w≠¡˚∑}ñÍ1˛I[∞P=œ∆Ë⁄	Êÿ0Oa7vfﬁ´⁄¡ƒ9É∑>Ã·≈tœ»3ºC.˘R;ıŸqÜ}‡ÒM4§Ó≤j/º\≈sÑﬂZcB0‡o[∫„”ë¡ˆ¬–™>„h©\˛H¥Óè«c˝Ácé1'Fò 7éùÄë˛*õ†?¡∞,©ç8>q~ûqè∆û3Pd¥Y…s‰	œ Ú—5{Ø8(æ£¡°›á—ﬂE[zÚsﬂ¿˜ﬂ÷^oˆ}áqtõ€¿$X˝%˚óRˇ{v6–Û\¸k`±òv>`OòÇkj<Åß¡(]$gTöπG1Wê!∂1ò√®£3KTc6”â:ÃŒ@üé¢lúÜ1≈9¡jîŒ«‹(À®,·DS‹'öõX®l≥9‰,pf¨¿ ˜≈RiiHìc¨DE–*¨´‘¢Så∂’Û ¶j–‹_ÿ ;Üî<>ñTÚS±Mbõë©Êî¶&≤ƒ7-ƒqÿÛ®Rÿ~ÏNıßP¶lì^∞”‘Áª[—çJÅ∑O¨ÂGÁ≈cÅ!Q”‡∞*·Ï‰Ù.|k∆è®E€–¸≈+Jﬂ3ƒä)†ÀbV ˘‘N–+¥!R’ÿê&~ùXz˙@h÷à«Ü§ñ¨Ñ9KI!n\≠ZzÂD`;∂…g@¶p	y‡Í(UÓ˙u£—HuèN3À7ÊﬁÙ®≠<Åÿ¿j÷ı◊ªÏú$¬ñ∆+VK∏rÑ(≠\)Gî8Hˇ(Su•
+^zRd†1Üc˜∫‚v·˛jÓ±°÷?6À2óÃ˛ˆA†J9…
+Øù4ØΩ¯ÕVsã…:I(<f™yíÍŒ1Üt±9ys∫Ök:rπR¿R±yìÊ"#ﬂ§K¨MN±´pMN%<W,¶~	WM2°O$±W~/_∏Û†j2‘Ï&^ióøJõ©ñFœßr~“Ú˚%˝•ôvÌ √É?%O®≤Ö'éƒÎVÚùfÌ<£”˘–o∫\‹}±+Û`E/} ^ôﬂ¥ﬁÉKÜ!3∑Íå#s⁄√WnOÎCù¯MßΩ©ı>‘Uª[!j}’¸ùõ∏‹4wÆﬁΩq#èªáÃ„.G?øÈúKuv#◊‚ÖaJ|°h•(˛6V&/Ì-˜ÍïGèáù÷‚¥“¢C¥&©• #Î‹ZzÛê9|eê2¢dBV3jj9z‹.(˙âåÃTÏ)N°˝2∏&0˝D◊ucù¿ƒ,Ê9Orà4QC†Wgh=ÿs€”ñlè ΩTµí€Ó˘˘€ógØ∫«˚ˆŸ≈…ÀÛ”^T&¶*J€ß&±¡Œ∏Ωz ßr¿\÷î∑$èQÌ>ÀZzpú&3b3ÚÁbs∏Ö1ò∞ò∂(DK¿ò©ªä‚^qªx≠ÆÈ&
+]ŸS.Âª%¸uEÁs3´ú…[Ä√^ÕQ]ç'™;™˜®Â∆¿%ãl‰	∑·†Ò≠™ﬂÕbÛ›¶
+ı√˙Í¢ySÉ9CﬂΩR§∂äÍ°hNØëà˘qYqV@úE∂ﬂ”⁄iìzRª|â7TÿYÌnhÚ‹f˝	@Ô_œ©*ÛÄÃ†ˇ,˚a9c~∆\,S»êt}√∑ôtõXs€Ò∂âoŸñøMBÎ=b∫MŒ–Ÿ&øô;_o5£4&ÿîô[
+:Ûa˝Q4Ka‰RÚ/Sı®™Q›	RSLÌtŒΩ@ÎBÄLÓÏQÚT
+˘MT'Õ÷+bÀ(Wãÿ0j≥Djob–g9Ó±4ÉÚ5™1Å	≈†j\⁄Øän…ì±Ë5Í‰rRƒ#∑éÎ -ïø¨‰§< Âµt2∑ƒ±»ÜÂ∫€ÑY‡W7íR·ﬁ ŒBx@‘,π€÷µl”!±/’zTªÁ∫ÑÓÖÂZxhªöÛ	¬÷$Œ‰ƒ,ΩqO[ÂfA7¿Ã2#˚7ˇ	GÜ5¢<†=]Ò
+9·M÷C7∏∏∑í£ÛÅO
+RC˚Ó˜ˇÄ#C}Íz3EOÚ%ıÜ®X}`º£í£[æΩ∞¸Ïn~˚Ø…SqFvNG0ÆK<µ˜XÆ∏£d`íqΩ·i*‡Sç'≤buy∂≈#Çÿêˇ8N˜	≠4[Æ®6ÿ∞Lˆ+fª‚Ì´ıË´∫≠>+Lß∆ªB?
+`∫ÀzÆ
+∏Vñ˛ï≥πºµÇ&VÒàˆBkt¯Ÿ( Q&ªKáÂ˙`
+Ö◊Õ∑Õ∑(èΩıG}´÷z∞›⁄ﬂ€nµn7Ì≠7z„‡ë)=J±ﬂ¸f;Q‰¶?˝¢©…≥ªäÔ´HUÇŒ§9YI^pù∏lÀ∂∏§S*MçıƒŒÙ›ñAB÷Ö§!ô1H°ØUâLy·Öd_NN»ÀãÏï©h%4<9˜©V÷}™M&ˆAæ∞∞\˝#ìÓ•k!–⁄Dk¡FÀµÂ}∆®ê}‰SËÔ_ﬂäP ìeU÷<ÏÍ≥≥Ÿ}gR€ä¿Ä’˜UˇF‡ËL#ﬁπ∑à™©>7zL¯!…∂ñ¯1¸fã|ÛçÊcxg∞Í∑é≠˛RÒôbûwÚ˜9)DvPj»ì_Y}Ó.ﬂ+©`â6{rpo9ﬁçŒ®¸Aj® πÏFÛ≠âADd“\ê!ıÅaΩò¬Á\‚›"íõ’ZV*åÙüÅπdE {H¨Øh÷6B‹L∏ıvÄK‹◊ûæ8E…ÚËHÿ…´†S1-®ù»≥Y%AmMÕ*˙ñ‚Ú|Ê5ÈH„™‰8Ö=)ß–⁄€zC–Ô:˚'ßI7&√GNU∆Ûõ ±©Î:”πwh]ÚÃyçñå¸ÊN˙∆Bå*: ç:ü=3s’[hﬂH†ã˝âˆZt;dpZ…Jz¸∆ø0Bá<t¶‘.SŒ†ıO∏¶ÑWV©l;@â*rôâ‹Ò›0æ‘
+K¯ÒûÉ–
+Á¡:÷Pî2‰≈>ek®4ï›ºJèñIñ›„´≥Wß@≠ãœ.ª'›K˘£ﬁÒe˜Ÿ„Û≥Á_öŒ<ø§‚K5+]©~“¶(òò€([Ò1µ Î*ÚhÚN6W1îÂU  ™â0çW
+˚êB/,uƒYIC^Fµ‘°puYG¢I…slßﬁ(C≥+bh‚añ*2ç˘X”0•6µ‰±Æ»#{#G5&®¬≈
+Ω*ø∫=<g$.ö†¢2¶S66úÃiÜ€#Kï0ë¢˛4e ,÷Qﬂ0º%'_ﬂ˝ÁoÀ8ÕäqÍ}/ïBƒΩEmÉ[•§ˆ&f¡ŒyX(Ω,Àπ_î∂D∂/_köAîp–˜* áÔ˚∂‘'füìÚVéDr⁄ûˆéw†ëGƒÛ	„œ—Ë86EC∏Ì'(q|||sı7óµÊ≤˝"˚EDû≤vΩ€ß…x-€±oZî&ËÏ≠µ∫˛≈=¿Yº˚…O˛   ˇˇ ¸Gƒg

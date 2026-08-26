@@ -68,23 +68,25 @@ export const AutomatedShieldEngine: React.FC<AutomatedShieldEngineProps> = ({
       setKeySecondsLeft(prev => {
         if (prev <= 1) {
           // Trigger automatic key rotation
-          const nextCryptoID = '0x' + Math.floor(Math.random() * 16777215).toString(16).toUpperCase();
-          onChange({
-            ...citizenState,
-            anonymousId: nextCryptoID
-          });
-          setLastAutoAction(`Auto-Rotated Public ECC Key & RFC-9402 Beacon Token to [${nextCryptoID}]`);
-          setTotalActionsCount(c => c + 1);
-
-          if (addLog) {
-            addLog({
-              deviceModel: 'RFC9402_AUTO_KEY_ENGINE',
-              action: 'censored',
-              shieldApplied: 'EPHEMERAL_KEY_AUTO_ROTATED',
-              distance: citizenState.rangeMeters,
-              rotatedId: nextCryptoID
+          setTimeout(() => {
+            const nextCryptoID = '0x' + Math.floor(Math.random() * 16777215).toString(16).toUpperCase();
+            onChange({
+              ...citizenState,
+              anonymousId: nextCryptoID
             });
-          }
+            setLastAutoAction(`Auto-Rotated Public ECC Key & RFC-9402 Beacon Token to [${nextCryptoID}]`);
+            setTotalActionsCount(c => c + 1);
+
+            if (addLog) {
+              addLog({
+                deviceModel: 'RFC9402_AUTO_KEY_ENGINE',
+                action: 'censored',
+                shieldApplied: 'EPHEMERAL_KEY_AUTO_ROTATED',
+                distance: citizenState.rangeMeters,
+                rotatedId: nextCryptoID
+              });
+            }
+          }, 0);
           return rotationSecs;
         }
         return prev - 1;
@@ -92,7 +94,7 @@ export const AutomatedShieldEngine: React.FC<AutomatedShieldEngineProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isAutomationActive, rotationSecs, citizenState.isBroadcasting]);
+  }, [isAutomationActive, rotationSecs, citizenState.isBroadcasting, citizenState.rangeMeters, onChange, addLog]);
 
   // 2. AI Threat Scan Auto Loop
   useEffect(() => {
@@ -105,17 +107,19 @@ export const AutomatedShieldEngine: React.FC<AutomatedShieldEngineProps> = ({
       setThreatSecondsLeft(prev => {
         if (prev <= 1) {
           // Trigger automated AI threat evaluation
-          setLastAutoAction('Automated Gemini 3.6 background threat scan completed. Environment clear.');
-          setTotalActionsCount(c => c + 1);
-          if (addLog) {
-            addLog({
-              deviceModel: 'GEMINI_AI_THREAT_WATCHDOG',
-              action: 'censored',
-              shieldApplied: 'AUTOMATED_SURVEILLANCE_SWEEP_OK',
-              distance: citizenState.rangeMeters,
-              rotatedId: 'WATCHDOG_SWEEP_PASS'
-            });
-          }
+          setTimeout(() => {
+            setLastAutoAction('Automated Gemini 3.7 background threat scan completed. Environment clear.');
+            setTotalActionsCount(c => c + 1);
+            if (addLog) {
+              addLog({
+                deviceModel: 'GEMINI_AI_THREAT_WATCHDOG',
+                action: 'censored',
+                shieldApplied: 'AUTOMATED_SURVEILLANCE_SWEEP_OK',
+                distance: citizenState.rangeMeters,
+                rotatedId: 'WATCHDOG_SWEEP_PASS'
+              });
+            }
+          }, 0);
           return threatSecs;
         }
         return prev - 1;
@@ -123,7 +127,7 @@ export const AutomatedShieldEngine: React.FC<AutomatedShieldEngineProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isAutomationActive, threatSecs, citizenState.rangeMeters]);
+  }, [isAutomationActive, threatSecs, citizenState.rangeMeters, addLog]);
 
   // Auto-Key Rotation Option Handler
   const handleKeyRotationIntervalChange = (secs: number) => {
@@ -386,7 +390,7 @@ export const AutomatedShieldEngine: React.FC<AutomatedShieldEngineProps> = ({
           {/* AI Threat Scan Rule */}
           <div className="space-y-1.5">
             <label className="text-[10px] text-slate-400 uppercase block">
-              2. Gemini 3.6 Background Threat Sweep:
+              2. Gemini 3.7 Background Threat Sweep:
             </label>
             <div className="flex flex-wrap gap-1">
               {[30, 60, 120, 0].map(secs => (

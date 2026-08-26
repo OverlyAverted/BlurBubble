@@ -111,7 +111,7 @@ export const AiVisionCensorship: React.FC<AiVisionCensorshipProps> = ({ citizenS
           </div>
           <div>
             <h3 className="text-sm font-extrabold uppercase font-mono text-white tracking-wider flex items-center gap-2">
-              Gemini 3.6 Vision AI Optical Censorship Assistant
+              Gemini 3.7 Vision AI Optical Censorship Assistant
               <span className="text-[9px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
                 LENS AI
               </span>
@@ -193,7 +193,7 @@ export const AiVisionCensorship: React.FC<AiVisionCensorshipProps> = ({ citizenS
 
           <div className="p-3 bg-slate-950/80 border border-cyan-500/20 rounded-xl">
             <span className="text-[10px] font-bold font-mono uppercase text-cyan-400 block mb-1">
-              Gemini 3.6 Lens Recommendation
+              Gemini 3.7 Lens Recommendation
             </span>
             <p className="text-xs text-slate-300">{result.opticalDefenseAdvice}</p>
           </div>
