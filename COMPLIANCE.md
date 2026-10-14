@@ -104,3 +104,18 @@ To defend against retroactive lookup networks (such as PimEyes, BeenVerified, Sp
 *   **On-Demand Takedowns**: Upon scanning or detecting unconsented profile lookups, the dashboard automatically generates a signed CCPA Article 4 deletion request.
 *   **Direct API Handshakes**: Direct compliance headers are delivered to matching database brokers, requiring automated removal within the legally mandated grace window.
 
+---
+
+## 6. RFC-9402 Verifiable Citizen Privacy Passport & Physical Certification
+
+To ensure seamless mutual compliance between citizens, physical event organizers, educational institutions, and smart camera operators, BlurBubble provides an on-demand, cryptographically verifiable **Citizen Privacy Passport**:
+
+### 6.1 Cryptographic Digital Signature & Proof of Standard
+*   **ECDSA P-256 Asymmetric Key Binding**: Each passport is digitally signed using standard browser-native Web Crypto (`SubtleCrypto`), binding the citizen's ephemeral anonymous ID, active privacy parameters (range, face vector opt-out status, acoustic scrambling), and UTC timestamp.
+*   **Zero-Knowledge Audit Trail**: The signature can be verified in under 5ms by any compliant scanner or judicial inspector without exposing the user's real name, government ID, or precise location history.
+*   **Legal In-Situ Notice for Security & Venue Staff**: Provides clear physical and printable documentation certifying that the citizen's wearable device is a passive, non-interfering opt-out transmitter complying with FCC Part 15 and CE wireless non-interference mandates, rather than a signal jammer.
+
+### 6.2 Dual Interface & Accessibility Standards
+*   **Simple Citizen Mode**: Provides accessible, zero-jargon controls and 1-click lifestyle presets (Transit Commute, Public Cafe, Street Walk, Ghost Stealth, Home Safe) to ensure non-technical citizens and parents can exercise digital privacy sovereignty without friction.
+*   **Tactical Pro Mode**: Retains deep RF link budget telemetry, calibrated D3 RSSI gauges, and multi-factor compliance scores for privacy researchers, legal counsel, and hardware engineers.
+

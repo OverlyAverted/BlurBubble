@@ -153,8 +153,31 @@ We welcome open-source contributions, patent feedback, and physical hardware fla
    npm run build
    ```
 
+---
+
+## 🌟 Key Product Capabilities
+
+- **Dual-Experience Interface**:
+  - **🌱 Simple Citizen Mode**: An ultra-clean, minimalist interface designed for everyday users and families with zero technical jargon, big tactile buttons, friendly masking options, and clear range badges.
+  - **⚡ Tactical Pro Mode**: Advanced RF telemetry, D3 signal propagation maps, calibrated RSSI gauges, Recharts 6-hour power consumption area charts, and raw cryptographic registers.
+- **1-Click Privacy Lifestyle Profiles**:
+  - 🚇 *Transit / Commute*: 6m radius, strict face blur, acoustic watermarking, high haptic alerts.
+  - ☕ *Public Cafe & Work*: 10m radius, AI background magic removal, silent notifications.
+  - 🚶 *Street & Park Walk*: 20m radius, smart glasses and drone detection, balanced battery.
+  - 👻 *Ghost Stealth Cloak*: 40m radius, full ultrasonic microphone saturation, zero retention, rotating IDs.
+  - 🏠 *Home Safe Zone*: 3m radius, battery saver, trusted beacon whitelist.
+- **RFC-9402 Citizen Privacy Passport & Compliance Certificate**:
+  - Web Crypto ECDSA P-256 digital signatures with SHA-256 digest validation.
+  - Verifiable opt-out declaration with legal citations (GDPR Art. 5/17/21, CCPA, EU AI Act 2026).
+  - One-click print-ready export (`window.print()`) and downloadable JSON passport for security personnel and venues.
+- **D3 Radial RSSI Signal Gauge**: Real-time Link Budget, Link Margin (dB), and Packet Delivery Ratio (PDR %) with live RF jitter simulation.
+- **Recharts Historical Power Area Chart**: 6-hour power consumption matrix across registered wearables and tags.
+- **Global Hotkey Navigation**: `Ctrl+K` for instant command palette search, `S` for shield toggle, `M` for audio mute, `1-4` for view tabs, `Esc` to dismiss.
+
 To learn more about the legal frameworks, patented ideas, and core math behind this project, review our documentation suite:
 - 📑 **[LEARNING_PROJECT.md](./LEARNING_PROJECT.md)**: Educational sandbox overview.
 - 📑 **[HARDWARE_ROADMAP.md](./HARDWARE_ROADMAP.md)**: Physical smart-glasses, drones, and camera integration guides.
 - 📑 **[COMPLIANCE.md](./COMPLIANCE.md)**: RF emission limits, CE/FCC regulations, and child-safety protocols.
+- 📑 **[TECHNICAL_WHITE_PAPER.md](./TECHNICAL_WHITE_PAPER.md)**: In-depth technical architecture and cryptographic proofs.
+- 📑 **[MASTER_PROMPT_LOG.md](./MASTER_PROMPT_LOG.md)**: Continuous development log, milestones, and design registers.
 - 📑 **[OWNERSHIP_VESTING_DECLARATION.md](./OWNERSHIP_VESTING_DECLARATION.md)**: Sole inventorship and dual-licensing rights under copyright owner Paul Gordon Stuart.

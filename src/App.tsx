@@ -53,10 +53,16 @@ import {
   Globe,
   Calculator,
   Key,
-  Rocket
+  Rocket,
+  Antenna,
+  Sliders,
+  Gauge,
+  Mic,
+  MicOff
 } from 'lucide-react';
 import { GlobalSearchModal, SearchItem } from './components/GlobalSearchModal';
 import { AppStoreLaunchModal } from './components/AppStoreLaunchModal';
+import { VoiceCommandController } from './components/VoiceCommandController';
 import { CitizenState, DetectionLog, PrivacyLevel } from './types';
 // @ts-ignore
 import appLogo from './assets/images/app_logo_1783164957092.jpg';
@@ -355,6 +361,8 @@ const INITIAL_CITIZEN_STATE: CitizenState = {
   showSignalHistory: false,
   showThreatOptimizer: false,
   showAutomationHub: false,
+  showVoiceCommandsBar: true,
+  voiceCommandsEnabled: true,
   autoKeyRotationInterval: 15,
   autoThreatScanInterval: 0,
   autoAcousticTakedowns: true,
@@ -505,14 +513,88 @@ export default function App() {
   const [showShieldContextMenu, setShowShieldContextMenu] = useState(false);
   const [showCopilot, setShowCopilot] = useState(false);
   const [isAppStoreLaunchModalOpen, setIsAppStoreLaunchModalOpen] = useState(false);
+  const [isVoiceCommandModalOpen, setIsVoiceCommandModalOpen] = useState(false);
   const [statusbarRippleCount, setStatusbarRippleCount] = useState(0);
 
-  // Global keyboard shortcut listener (Ctrl+K or Cmd+K to open Search)
+  // RF Link Budget and Obstruction Level state for statusbar-bubble-indicator
+  const [rfObstructionType, setRfObstructionType] = useState<'los' | 'pocket' | 'drywall' | 'concrete'>(() => {
+    try {
+      const saved = localStorage.getItem('blurbubble_rf_obstruction');
+      if (saved === 'los' || saved === 'pocket' || saved === 'drywall' || saved === 'concrete') {
+        return saved;
+      }
+    } catch {
+      // fallback
+    }
+    return 'pocket';
+  });
+
+  const [customObstructionDb, setCustomObstructionDb] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('blurbubble_custom_obs_db');
+      if (saved !== null) {
+        const val = parseFloat(saved);
+        if (!isNaN(val)) return val;
+      }
+    } catch {
+      // fallback
+    }
+    return 4.5;
+  });
+
+  // Global keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsSearchOpen((prev) => !prev);
+        return;
+      }
+
+      // Check if user is typing in an input or textarea
+      const target = e.target as HTMLElement;
+      const isInput = target && (
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.isContentEditable || 
+        target.getAttribute('role') === 'textbox'
+      );
+
+      if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+        setIsViewSelectorOpen(false);
+        setShowShieldContextMenu(false);
+        return;
+      }
+
+      if (!isInput && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (e.key === 's' || e.key === 'S') {
+          e.preventDefault();
+          setCitizenState((prev) => {
+            const next = !prev.isBroadcasting;
+            addLog({
+              deviceModel: 'KEYBOARD_HOTKEY',
+              action: next ? 'censored' : 'ignored',
+              shieldApplied: next ? 'SHIELD_TOGGLED_ON_VIA_HOTKEY' : 'SHIELD_TOGGLED_OFF_VIA_HOTKEY',
+              distance: 0,
+              rotatedId: 'HOTKEY_TOGGLE'
+            });
+            return { ...prev, isBroadcasting: next };
+          });
+          playAlertSound('tactical_click', 50);
+        } else if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          setAlertsMuted((prev) => !prev);
+          playAlertSound('tactical_click', 50);
+        } else if (e.key === '1') {
+          handleViewChangeWithHaptic('citizen');
+        } else if (e.key === '2') {
+          handleViewChangeWithHaptic('glasses');
+        } else if (e.key === '3') {
+          handleViewChangeWithHaptic('tech');
+        } else if (e.key === '4') {
+          handleViewChangeWithHaptic('audit');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1055,6 +1137,47 @@ export default function App() {
 
     // --- SETTINGS & CONTROLS ---
     {
+      id: 'feature-simple-mode',
+      title: 'Simple Citizen Mode (Minimalist Dashboard)',
+      description: 'Streamlined, zero-jargon privacy controls with 1-click lifestyle presets',
+      category: 'Settings & Controls',
+      keywords: ['simple', 'minimal', 'easy', 'lifestyle', 'presets', 'citizen', 'beginner'],
+      icon: <Sparkles className="w-4 h-4 text-emerald-400" />,
+      badge: 'Simple Mode',
+      onSelect: () => {
+        setActiveView('citizen');
+        setCitizenTab('overview');
+        setCitizenState(prev => ({ ...prev, interfaceMode: 'simple' }));
+      }
+    },
+    {
+      id: 'feature-tactical-mode',
+      title: 'Tactical Pro Engineer Mode',
+      description: 'Full RF telemetry, D3 gauges, battery power charts, and hex registers',
+      category: 'Settings & Controls',
+      keywords: ['tactical', 'pro', 'engineer', 'advanced', 'telemetry', 'd3', 'rf'],
+      icon: <Cpu className="w-4 h-4 text-cyan-400" />,
+      badge: 'Pro Mode',
+      onSelect: () => {
+        setActiveView('citizen');
+        setCitizenTab('overview');
+        setCitizenState(prev => ({ ...prev, interfaceMode: 'tactical' }));
+      }
+    },
+    {
+      id: 'feature-privacy-passport',
+      title: 'Citizen Privacy Passport & Certificate (RFC-9402)',
+      description: 'View, verify, and print cryptographically signed compliance passport and legal proof',
+      category: 'Settings & Controls',
+      keywords: ['passport', 'certificate', 'print', 'pdf', 'crypto', 'legal', 'proof', 'compliance', 'signature'],
+      icon: <Award className="w-4 h-4 text-amber-400" />,
+      badge: 'Compliance Proof',
+      onSelect: () => {
+        setActiveView('citizen');
+        setCitizenTab('overview');
+      }
+    },
+    {
       id: 'setting-app-customizer',
       title: 'App Interface Options (Choose What Boxes to Show)',
       description: 'Toggle visibility of top status bar, telemetry boxes, signal maps, battery widgets, and scores',
@@ -1168,6 +1291,39 @@ export default function App() {
       icon: <HelpCircle className="w-4 h-4 text-cyan-400" />,
       onSelect: () => {
         setShowHelpCenter(true);
+      }
+    },
+    {
+      id: 'action-voice-commands-hud',
+      title: 'Voice Command Engine (Web Speech API)',
+      description: 'Hands-free voice triggers: "BlurBubble emergency" and "BlurBubble silence"',
+      category: 'Automations & Tools',
+      keywords: ['voice', 'speech', 'mic', 'microphone', 'emergency', 'silence', 'hands-free', 'speech recognition'],
+      icon: <Mic className="w-4 h-4 text-emerald-400" />,
+      onSelect: () => {
+        setIsVoiceCommandModalOpen(true);
+      }
+    },
+    {
+      id: 'action-voice-emergency-cmd',
+      title: 'Voice Action: "BlurBubble emergency"',
+      description: 'Trigger maximum emergency shield lockdown via voice command simulation',
+      category: 'Automations & Tools',
+      keywords: ['voice', 'emergency', 'lockdown', 'blurbubble emergency'],
+      icon: <ShieldAlert className="w-4 h-4 text-rose-400" />,
+      onSelect: () => {
+        activateEmergencyShield();
+      }
+    },
+    {
+      id: 'action-voice-silence-cmd',
+      title: 'Voice Action: "BlurBubble silence"',
+      description: 'Silence alarms, mute audio alerts, and cancel active voice speech',
+      category: 'Automations & Tools',
+      keywords: ['voice', 'silence', 'mute', 'blurbubble silence'],
+      icon: <VolumeX className="w-4 h-4 text-cyan-400" />,
+      onSelect: () => {
+        silenceAlerts();
       }
     }
   ];
@@ -1728,6 +1884,36 @@ export default function App() {
     speakAlert("Emergency lockdown deactivated. Resuming default broadcast protocol.");
   };
 
+  const silenceAlerts = () => {
+    setAlertsMuted(true);
+    try {
+      localStorage.setItem('blurbubble_alerts_muted', 'true');
+    } catch (e) {
+      console.error('Failed saving alerts_muted to localStorage:', e);
+    }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setActiveToast(null);
+    setBuzzing(false);
+    setShowHapticRings(false);
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([100, 50, 100]);
+    }
+    addLog({
+      deviceModel: 'VOICE_COMMAND_ENGINE',
+      action: 'erased',
+      shieldApplied: 'AUDIO_ALERTS_SILENCED',
+      distance: 0,
+      rotatedId: 'VOICE_CMD_SILENCE_ENGAGED'
+    });
+    triggerAlert(
+      '🔇 Audio Alerts Silenced',
+      'Voice command recognized: "BlurBubble silence". All notification audio and warning chimes are muted.',
+      'blocking'
+    );
+  };
+
   // Auto-simulate pedestrian handshakes & crawler interceptions
   useEffect(() => {
     if (!citizenState.isBroadcasting) return;
@@ -1962,6 +2148,105 @@ export default function App() {
     prevIntegrityRef.current = shieldIntegrity;
   }, [shieldIntegrity, citizenState.isBroadcasting]);
 
+  const handleSelectObstructionPreset = (preset: 'los' | 'pocket' | 'drywall' | 'concrete') => {
+    setRfObstructionType(preset);
+    let db = 0;
+    if (preset === 'los') db = 0.0;
+    else if (preset === 'pocket') db = 4.5;
+    else if (preset === 'drywall') db = 10.5;
+    else if (preset === 'concrete') db = 22.0;
+    setCustomObstructionDb(db);
+    try {
+      localStorage.setItem('blurbubble_rf_obstruction', preset);
+      localStorage.setItem('blurbubble_custom_obs_db', db.toString());
+    } catch {
+      // ignore
+    }
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(15);
+    }
+    playAlertSound('tactical_click', 50);
+  };
+
+  const handleCustomObstructionChange = (val: number) => {
+    setCustomObstructionDb(val);
+    if (val === 0) setRfObstructionType('los');
+    else if (val <= 6) setRfObstructionType('pocket');
+    else if (val <= 15) setRfObstructionType('drywall');
+    else setRfObstructionType('concrete');
+    try {
+      localStorage.setItem('blurbubble_custom_obs_db', val.toString());
+    } catch {
+      // ignore
+    }
+  };
+
+  // Dynamic RF Link Budget Calculation (2.44 GHz BLE RFC-9402 standard)
+  const txPowerDbm = 4.0; // Standard EIRP +4 dBm (wearable beacon)
+  const currentDistanceMeters = citizenState.rangeMeters || 12;
+  // Free space path loss: PL(d) = 40.2 + 20 * log10(max(d, 0.5))
+  const calculatedPathLossDb = Math.max(0, 40.2 + 20 * Math.log10(Math.max(currentDistanceMeters, 0.5)));
+  const calculatedObsLossDb = customObstructionDb;
+  const rxSensitivityDbm = -95.0; // Standard BLE sensitivity cutoff threshold
+
+  // Received Signal Level (RSL in dBm)
+  const calculatedRslDbm = citizenState.isBroadcasting
+    ? Math.round((txPowerDbm - calculatedPathLossDb - calculatedObsLossDb) * 10) / 10
+    : -120.0;
+
+  // Link margin above receiver sensitivity
+  const calculatedLinkMarginDb = citizenState.isBroadcasting
+    ? Math.round((calculatedRslDbm - rxSensitivityDbm) * 10) / 10
+    : 0.0;
+
+  // Percentage on a -30 dBm (strongest) to -95 dBm (cutoff) scale
+  const gaugePercent = citizenState.isBroadcasting
+    ? Math.min(100, Math.max(0, ((calculatedRslDbm - (-95)) / (-30 - (-95))) * 100))
+    : 0;
+
+  const getLinkQualityInfo = () => {
+    if (!citizenState.isBroadcasting) {
+      return {
+        label: 'MUTED',
+        colorClass: 'text-slate-500 bg-slate-800/80 border-slate-700',
+        barColor: 'bg-slate-700',
+        desc: 'Broadcasting is disabled. Transmitter output is 0 mW.'
+      };
+    }
+    if (calculatedRslDbm >= -65) {
+      return {
+        label: 'EXCELLENT',
+        colorClass: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/40',
+        barColor: 'bg-emerald-400 shadow-[0_0_10px_#34d399]',
+        desc: 'High-power field saturation. 100% interception by smart optical sensors.'
+      };
+    }
+    if (calculatedRslDbm >= -78) {
+      return {
+        label: 'GOOD',
+        colorClass: 'text-cyan-400 bg-cyan-500/15 border-cyan-500/40',
+        barColor: 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]',
+        desc: 'Reliable link coverage with sufficient fade margin across the perimeter.'
+      };
+    }
+    if (calculatedRslDbm >= -88) {
+      return {
+        label: 'MARGINAL',
+        colorClass: 'text-amber-400 bg-amber-500/15 border-amber-500/40',
+        barColor: 'bg-amber-400 shadow-[0_0_8px_#f59e0b]',
+        desc: 'Near detection boundary. Dense obstructions may cause intermittent packet loss.'
+      };
+    }
+    return {
+      label: 'CRITICAL',
+      colorClass: 'text-rose-400 bg-rose-500/15 border-rose-500/40',
+      barColor: 'bg-rose-500 shadow-[0_0_8px_#f43f5e]',
+      desc: 'Signal is near or below receiver threshold (-95 dBm). Recommend boosting TX or reducing distance.'
+    };
+  };
+
+  const linkQuality = getLinkQualityInfo();
+
   if (!ndaAccepted) {
     return <NDAGatekeeper onAccept={handleAcceptNDA} />;
   }
@@ -2065,6 +2350,9 @@ export default function App() {
                   }
                   playAlertSound('tactical_click', 60);
                 }}
+                onMouseEnter={() => {
+                  setIsIndicatorHovered(true);
+                }}
                 style={{
                   WebkitTouchCallout: 'none',
                   WebkitUserSelect: 'none',
@@ -2083,7 +2371,11 @@ export default function App() {
                         : 'bg-amber-950/20 border-amber-500/30 text-amber-500/95 shadow-[0_0_8px_rgba(245,158,11,0.15)] animate-pulse'
                     : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-400'
                 }`}
-                title={citizenState.isBroadcasting ? `BlurBubble Broadcast Shield ACTIVE (Integrity: ${shieldIntegrity}%) - Left click for sweep, Right-click for Quick Settings` : "BlurBubble Broadcast Shield SILENT - Left click to activate, Right-click for Quick Settings"}
+                title={
+                  citizenState.isBroadcasting 
+                    ? `BlurBubble Shield Indicator [${calculatedRslDbm.toFixed(1)} dBm Link Budget | ${calculatedLinkMarginDb > 0 ? '+' : ''}${calculatedLinkMarginDb.toFixed(1)} dB Margin @ ${citizenState.rangeMeters}m (${rfObstructionType.toUpperCase()})] - Click to toggle broadcast, Right-click for Quick Settings`
+                    : "BlurBubble Shield Indicator [MUTED / 0 dBm] - Click to activate broadcast, Right-click for Quick Settings"
+                }
               >
                 {/* Haptic Visual Ripple Effect */}
                 {statusbarRippleCount > 0 && (
@@ -2558,13 +2850,19 @@ export default function App() {
                       userSelect: 'none',
                       touchAction: 'manipulation'
                     }}
-                    className="absolute right-0 top-full mt-2 w-72 bg-slate-950/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-md p-4 text-slate-200 z-[60] flex flex-col font-sans select-none"
+                    id="statusbar-bubble-indicator-tooltip"
+                    className="absolute right-0 top-full mt-2 w-84 sm:w-96 max-w-[calc(100vw-20px)] max-h-[85vh] overflow-y-auto bg-slate-950/98 border border-slate-800/90 rounded-2xl shadow-[0_16px_45px_rgba(0,0,0,0.85),0_0_24px_rgba(16,185,129,0.15)] backdrop-blur-xl p-4 text-slate-200 z-[60] flex flex-col font-sans select-none scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-slate-950/60"
                   >
                     {/* Tooltip Header */}
                     <div className="flex items-center justify-between border-b border-slate-900 pb-2 mb-2.5">
-                      <span className="text-[9px] font-bold uppercase tracking-wider font-mono text-slate-400">
-                        Shield Telemetry
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-bold uppercase tracking-wider font-mono text-slate-400">
+                          Shield Telemetry
+                        </span>
+                        <span className="text-[8px] font-mono px-1 py-0.2 rounded bg-emerald-950/70 text-emerald-400 border border-emerald-800/40">
+                          {calculatedRslDbm > -100 ? `${calculatedRslDbm.toFixed(1)} dBm` : 'MUTED'}
+                        </span>
+                      </div>
                       <div className="flex items-center gap-2">
                         {/* Rapid One-Tap Audio Shield Control */}
                         <button
@@ -2599,6 +2897,260 @@ export default function App() {
                           {citizenState.isBroadcasting ? 'ACTIVE' : 'MUTED'}
                         </span>
                       </div>
+                    </div>
+
+                    {/* DYNAMIC RF LINK BUDGET TELEMETRY HUD (Calculated dynamically from signal distance and obstruction levels) */}
+                    <div id="statusbar-link-budget-telemetry" className="mb-3 p-3 rounded-xl bg-slate-900/90 border border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.08)] flex flex-col gap-2.5">
+                      {/* Card Top Title & Protocol */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                            <Antenna className="w-3.5 h-3.5 animate-pulse" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-black uppercase font-mono tracking-wider text-emerald-400">
+                                RF LINK BUDGET
+                              </span>
+                              <span className="text-[7.5px] font-mono px-1 py-0.2 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/50">
+                                2.4 GHz BLE
+                              </span>
+                            </div>
+                            <span className="text-[8px] font-mono text-slate-400 block">
+                              RFC-9402 Signal Propagation Standard
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Status Quality Pill */}
+                        <div className={`px-2 py-0.5 rounded-md border text-[8px] font-mono font-bold tracking-wider ${linkQuality.colorClass}`}>
+                          {linkQuality.label}
+                        </div>
+                      </div>
+
+                      {/* Main Numeric Metric Readout */}
+                      <div className="flex items-baseline justify-between bg-slate-950/85 p-2.5 rounded-lg border border-slate-800/80">
+                        <div className="flex flex-col">
+                          <span className="text-[8px] uppercase tracking-wider font-mono text-slate-400">
+                            Received Power @ Perimeter (RSL)
+                          </span>
+                          <div className="flex items-baseline gap-1.5 mt-0.5">
+                            <span className={`text-2xl font-black font-mono tracking-tight ${
+                              !citizenState.isBroadcasting 
+                                ? 'text-slate-500' 
+                                : calculatedRslDbm >= -70 
+                                  ? 'text-emerald-400' 
+                                  : calculatedRslDbm >= -82 
+                                    ? 'text-cyan-400' 
+                                    : calculatedRslDbm >= -90 
+                                      ? 'text-amber-400' 
+                                      : 'text-rose-400'
+                            }`}>
+                              {citizenState.isBroadcasting ? calculatedRslDbm.toFixed(1) : 'OFFLINE'}
+                            </span>
+                            {citizenState.isBroadcasting && (
+                              <span className="text-xs font-mono font-bold text-slate-400">dBm</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Fade Margin Readout */}
+                        <div className="flex flex-col items-end">
+                          <span className="text-[8px] uppercase tracking-wider font-mono text-slate-400">
+                            Fade Margin (vs -95 dBm)
+                          </span>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className={`text-sm font-mono font-extrabold ${
+                              !citizenState.isBroadcasting
+                                ? 'text-slate-500'
+                                : calculatedLinkMarginDb >= 20
+                                  ? 'text-emerald-400'
+                                  : calculatedLinkMarginDb >= 8
+                                    ? 'text-cyan-400'
+                                    : 'text-amber-400'
+                            }`}>
+                              {citizenState.isBroadcasting 
+                                ? `${calculatedLinkMarginDb > 0 ? '+' : ''}${calculatedLinkMarginDb.toFixed(1)} dB`
+                                : '0.0 dB'}
+                            </span>
+                            <Activity className={`w-3 h-3 ${citizenState.isBroadcasting ? 'text-emerald-400 animate-pulse' : 'text-slate-600'}`} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Graduated Signal Strength Gauge Bar */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[7px] font-mono text-slate-500 px-0.5">
+                          <span>-95 dBm (Sensitivity Floor)</span>
+                          <span>-75 dBm</span>
+                          <span>-55 dBm</span>
+                          <span>-30 dBm (Max)</span>
+                        </div>
+                        <div className="relative w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-[1px]">
+                          <div className="absolute inset-0 bg-gradient-to-r from-rose-500/20 via-amber-500/20 via-cyan-500/20 to-emerald-500/30 pointer-events-none" />
+                          <motion.div
+                            className={`h-full rounded-full ${linkQuality.barColor}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${gaugePercent}%` }}
+                            transition={{ duration: 0.3, ease: 'easeOut' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Interactive Obstruction Level Controls */}
+                      <div className="space-y-1.5 pt-1 border-t border-slate-800/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8px] uppercase tracking-wider font-mono font-bold text-slate-300 flex items-center gap-1.5">
+                            <Layers className="w-3 h-3 text-cyan-400" />
+                            Obstruction Level:
+                          </span>
+                          <span className="text-[8.5px] font-mono font-bold text-cyan-300">
+                            -{customObstructionDb.toFixed(1)} dB Attenuation
+                          </span>
+                        </div>
+
+                        {/* 4 Quick Presets */}
+                        <div className="grid grid-cols-4 gap-1">
+                          {[
+                            { id: 'los' as const, label: 'Line of Sight', short: 'LOS', loss: 0.0, icon: '🟢' },
+                            { id: 'pocket' as const, label: 'Pocket / Body', short: 'Pocket', loss: 4.5, icon: '🟡' },
+                            { id: 'drywall' as const, label: 'Interior Wall', short: 'Drywall', loss: 10.5, icon: '🟠' },
+                            { id: 'concrete' as const, label: 'Concrete / Glass', short: 'Concrete', loss: 22.0, icon: '🔴' },
+                          ].map((preset) => {
+                            const isSelected = Math.abs(customObstructionDb - preset.loss) < 0.2;
+                            return (
+                              <button
+                                key={preset.id}
+                                id={`link-budget-obs-${preset.id}`}
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleSelectObstructionPreset(preset.id);
+                                }}
+                                className={`py-1.5 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                                  isSelected
+                                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                                }`}
+                                title={`${preset.label} (-${preset.loss} dB attenuation)`}
+                              >
+                                <span className="text-[9px]">{preset.icon}</span>
+                                <span className="text-[8px] font-mono font-bold">{preset.short}</span>
+                                <span className="text-[7px] font-mono text-slate-500">{preset.loss === 0 ? '0 dB' : `-${preset.loss}dB`}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Fine-tune Obstruction Slider */}
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <Sliders className="w-3 h-3 text-slate-400 shrink-0" />
+                          <input
+                            id="link-budget-obstruction-slider"
+                            type="range"
+                            min="0"
+                            max="30"
+                            step="0.5"
+                            value={customObstructionDb}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleCustomObstructionChange(parseFloat(e.target.value));
+                            }}
+                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                            title="Fine-tune RF Obstruction Attenuation in dB"
+                          />
+                          <span className="text-[8px] font-mono text-slate-400 w-10 text-right shrink-0">
+                            {customObstructionDb.toFixed(1)}dB
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Signal Distance Telemetry & Quick Adjuster */}
+                      <div className="space-y-1.5 pt-1 border-t border-slate-800/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8px] uppercase tracking-wider font-mono font-bold text-slate-300 flex items-center gap-1.5">
+                            <Radio className="w-3 h-3 text-emerald-400" />
+                            Shield Distance (Radius):
+                          </span>
+                          <div className="flex items-baseline gap-1 text-[9px] font-mono">
+                            <span className="font-extrabold text-emerald-400">{currentDistanceMeters} m</span>
+                            <span className="text-slate-500">({Math.round(currentDistanceMeters * 3.28084)} ft)</span>
+                          </div>
+                        </div>
+
+                        {/* Quick Distance Presets */}
+                        <div className="flex items-center gap-1">
+                          {[
+                            { meters: 5, label: '5m' },
+                            { meters: 10, label: '10m' },
+                            { meters: 12, label: '12m' },
+                            { meters: 25, label: '25m' },
+                            { meters: 50, label: '50m' },
+                          ].map((preset) => {
+                            const isSelected = citizenState.rangeMeters === preset.meters;
+                            return (
+                              <button
+                                key={preset.meters}
+                                id={`link-budget-dist-${preset.meters}m`}
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setCitizenState(prev => ({ ...prev, rangeMeters: preset.meters }));
+                                  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                                    navigator.vibrate(10);
+                                  }
+                                  playAlertSound('tactical_click', 40);
+                                }}
+                                className={`flex-1 py-1 text-[7.5px] font-mono font-bold rounded border transition cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-emerald-500/25 border-emerald-400/80 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-300'
+                                }`}
+                              >
+                                {preset.meters}m
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Formula Parameter Breakdown */}
+                      <div className="p-2 rounded-lg bg-slate-950/90 border border-slate-800/80 space-y-0.5 font-mono text-[7.5px]">
+                        <div className="flex justify-between text-slate-400 font-bold border-b border-slate-900 pb-0.5 mb-0.5">
+                          <span>Link Parameter</span>
+                          <span>Calculated Value</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">P_tx (Beacon EIRP)</span>
+                          <span className="text-emerald-400">+{txPowerDbm.toFixed(1)} dBm</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">Path Loss (FSPL @ {currentDistanceMeters}m)</span>
+                          <span className="text-rose-400">-{calculatedPathLossDb.toFixed(1)} dB</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">Obstruction Loss (L_obs)</span>
+                          <span className="text-amber-400">-{calculatedObsLossDb.toFixed(1)} dB</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">Receiver Sensitivity (S_rx)</span>
+                          <span className="text-slate-400">{rxSensitivityDbm.toFixed(1)} dBm</span>
+                        </div>
+                        <div className="flex justify-between text-white font-extrabold border-t border-slate-900 pt-0.5 mt-0.5">
+                          <span className="text-emerald-300">Effective Link Budget (RSL)</span>
+                          <span className={calculatedRslDbm >= -85 ? 'text-emerald-400' : 'text-amber-400'}>
+                            {citizenState.isBroadcasting ? `${calculatedRslDbm.toFixed(1)} dBm` : 'OFFLINE'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Real-Time Diagnostic Interpretation */}
+                      <p className="text-[7.5px] font-mono leading-relaxed text-slate-400 bg-emerald-950/20 border border-emerald-500/20 rounded-md p-1.5">
+                        💡 <span className="text-slate-300">{linkQuality.desc}</span>
+                      </p>
                     </div>
 
                     {/* Threat Detection Frequency Display */}
@@ -3495,6 +4047,42 @@ export default function App() {
                   {/* TAB 2: INTERFACE OPTIONS & DASHBOARD CUSTOMIZER */}
                   {isCustomizerExpanded && (
                     <div className="p-3 bg-slate-950/90 flex flex-col gap-3 max-h-[380px] overflow-y-auto">
+                      {/* Dashboard Mode Selector */}
+                      <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 space-y-1.5">
+                        <div className="flex items-center justify-between text-[9px] font-extrabold text-slate-400 uppercase tracking-wider px-0.5">
+                          <span>Dashboard Experience</span>
+                          <span className="text-emerald-400 font-mono font-bold">
+                            {(citizenState.interfaceMode || 'simple') === 'simple' ? 'Simple Mode' : 'Tactical Pro'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, interfaceMode: 'simple' }))}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold font-mono transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                              (citizenState.interfaceMode || 'simple') === 'simple'
+                                ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.2)] font-black'
+                                : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <span>🌱</span>
+                            <span>Simple Mode</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCitizenState(prev => ({ ...prev, interfaceMode: 'tactical' }))}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold font-mono transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                              citizenState.interfaceMode === 'tactical'
+                                ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.2)] font-black'
+                                : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <span>⚡</span>
+                            <span>Tactical Pro</span>
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Presets Bar */}
                       <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
                         <div className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider px-0.5 mb-1.5 flex items-center justify-between">
@@ -3655,6 +4243,27 @@ export default function App() {
                               <span>Speech Alerts (Web Speech)</span>
                             </div>
                             <span className={`w-1.5 h-1.5 rounded-full ${vocalAlertsEnabled ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
+                          </button>
+
+                          {/* 6b. Voice Commands (Web Speech API) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsVoiceCommandModalOpen(true);
+                              setCitizenState(prev => ({ ...prev, showVoiceCommandsBar: prev.showVoiceCommandsBar === false }));
+                            }}
+                            className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                              citizenState.showVoiceCommandsBar !== false
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'bg-slate-950/50 border border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title="Configure and trigger Voice Commands ('BlurBubble emergency', 'BlurBubble silence')"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Mic className={`w-3.5 h-3.5 ${citizenState.showVoiceCommandsBar !== false ? 'text-emerald-400' : 'text-slate-500'}`} />
+                              <span>Voice Commands (Web Speech)</span>
+                            </div>
+                            <span className={`w-1.5 h-1.5 rounded-full ${citizenState.showVoiceCommandsBar !== false ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-700'}`} />
                           </button>
 
                           {/* 7. Signal History Box */}
@@ -3881,6 +4490,33 @@ export default function App() {
                   onClick={() => setCitizenState({ ...citizenState, showEmergencyButton: false })}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition-colors"
                   title="Hide Emergency Shield button"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Web Speech API Voice Command Quick Action Button */}
+            {citizenState.showVoiceCommandsBar !== false && (
+              <div className="flex items-center gap-1 bg-slate-900/45 p-1 rounded-xl border border-slate-800/40 shrink-0 w-full sm:w-auto">
+                <button
+                  id="btn-voice-command-header-trigger"
+                  type="button"
+                  onClick={() => setIsVoiceCommandModalOpen(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-300 border flex-1 justify-center bg-slate-950/40 text-slate-300 border-slate-850 hover:text-emerald-300 hover:border-emerald-500/50 cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.08)]"
+                  title="Open Voice Command Engine (Web Speech API): 'BlurBubble emergency' & 'BlurBubble silence'"
+                >
+                  <Mic className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  <span className="tracking-wide text-[11px]">VOICE CMD</span>
+                  <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 font-bold">
+                    SPEECH API
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCitizenState({ ...citizenState, showVoiceCommandsBar: false })}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition-colors"
+                  title="Hide Voice Command button"
                 >
                   ✕
                 </button>
@@ -5989,6 +6625,18 @@ export default function App() {
         isOpen={isAppStoreLaunchModalOpen}
         onClose={() => setIsAppStoreLaunchModalOpen(false)}
         citizenState={citizenState}
+      />
+
+      {/* Web Speech API Voice Command Controller Modal & Engine */}
+      <VoiceCommandController
+        isOpen={isVoiceCommandModalOpen}
+        onOpen={() => setIsVoiceCommandModalOpen(true)}
+        onClose={() => setIsVoiceCommandModalOpen(false)}
+        onTriggerEmergency={activateEmergencyShield}
+        onSilenceAlerts={silenceAlerts}
+        alertsMuted={alertsMuted}
+        emergencyActive={!!citizenState.emergencyPrivacyActive}
+        onAddLog={addLog}
       />
     </div>
   );

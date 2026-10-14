@@ -74,6 +74,8 @@ export interface CitizenState {
   showSignalHistory?: boolean;
   showThreatOptimizer?: boolean;
   showAutomationHub?: boolean;
+  showVoiceCommandsBar?: boolean;
+  voiceCommandsEnabled?: boolean;
   autoKeyRotationInterval?: number; // 0 = off, 15, 30, 60, 180 seconds
   autoThreatScanInterval?: number;  // 0 = off, 30, 60, 120 seconds
   autoAcousticTakedowns?: boolean;
@@ -136,6 +138,8 @@ export interface CitizenState {
   activeGeofenceTriggered?: boolean;
   activeGeofenceZoneName?: string;
   preferredMapProvider?: 'google' | 'apple';
+  interfaceMode?: 'simple' | 'tactical';
+  activePreset?: 'custom' | 'commuter' | 'cafe' | 'street' | 'ghost' | 'home';
 }
 
 export interface GeofenceZone {

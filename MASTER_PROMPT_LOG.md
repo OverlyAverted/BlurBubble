@@ -130,3 +130,82 @@ TASK PROTOCOLS:
 3. Keep layout boundaries intact. Never break the cohesive tactical-slate grid.
 ================================================================================
 ```
+
+---
+
+## 🎙️ Milestone: Web Speech API Voice Command Engine
+
+- **Voice Triggers Implemented**:
+  - `BlurBubble emergency`: Engages maximum lockdown, peak RF broadcast power (+12dBm), strict blur censorship, and immediate emergency notification.
+  - `BlurBubble silence`: Instantly mutes all alert chimes, stops vibration haptics, dismisses active alert toasts, cancels active speech synthesis utterances, and logs the audio silence action to the audit ledger.
+- **Engine Architecture**:
+  - Web Speech API `SpeechRecognition` integration with continuous interim parsing, automatic restart on speech pauses, and graceful permission/browser fallback.
+  - Tactical Voice Command HUD Modal & background floating status pill when listening with live waveform visualizer and speech transcript box.
+  - One-tap interactive simulation test buttons for both `BlurBubble emergency` and `BlurBubble silence` to enable immediate functional verification on any hardware or browser.
+  - Quick action trigger button in top navigation bar and nested customization toggle in "Choose What Boxes to Show" options.
+
+---
+
+## ⚡ Milestone: Battery Status Widget Historical Power Consumption Area Chart (Recharts)
+
+- **Feature Implementation**:
+  - Added Recharts `AreaChart` to the **Connected Beacons & Tags Battery Monitor** widget (`#battery-status-overview-card`).
+  - Displays historical RF/BLE power dissipation telemetry (mW) across the active fleet of BLE beacons over the last 6 hours (`-6h`, `-5h`, `-4h`, `-3h`, `-2h`, `-1h`, `Now`).
+  - **Dynamic Telemetry & Physics Model**:
+    - Reflects transmission radius (`rangeMeters`), active broadcast state, hardware profile (smart tags, keyfobs, smartphones), emergency RF saturation boost (+12dBm), and dynamic throttling from the Intelligent Battery Optimization Engine.
+  - **Interactive Features**:
+    - **Aggregate Draw** vs. **Per-Beacon Breakdown** toggle with distinct tactical cyber color fills (Emerald, Cyan, Violet, Amber, Pink).
+    - Summary telemetry cards: Current Draw (mW), 6h Peak Draw (mW), 6h Average Draw (mW), and Total Integrated Energy Expended (mWh).
+    - Dark tactical cyber tooltip with monospace timestamps, active range, broadcast status, and detailed per-tag power dissipation.
+
+---
+
+## 📶 Milestone: Real-Time Signal Strength (RSSI) D3 Gauge in Battery Status Widget
+
+- **Feature Implementation**:
+  - Embedded a real-time D3-based Signal Strength (RSSI) Gauge in the **Connected Beacons & Tags Battery Monitor** widget (`#beacon-rssi-signal-gauge-card`).
+  - Visualizes real-time carrier signal quality (dBm) of the active BLE beacon across a multi-tier color arc:
+    - **Critical / Fringe** (-105 to -90 dBm): Rose / Crimson (`#ef4444`)
+    - **Weak / Degraded** (-90 to -80 dBm): Orange / Coral (`#f97316`)
+    - **Fair / Acceptable** (-80 to -70 dBm): Amber / Yellow (`#eab308`)
+    - **Good / Robust** (-70 to -55 dBm): Cyan / Sky Blue (`#06b6d4`)
+    - **Excellent / Optimal** (-55 to -25 dBm): Neon Emerald (`#10b981`)
+  - **D3 Architectural Design**:
+    - Sweeping 270° tactical circular arc gauge built with `d3.arc()` and `d3.scaleLinear()`.
+    - Dynamic multi-stop gradient arc fill with tactical glow filters (`feGaussianBlur`).
+    - Calibrated major tick marks (-100 to -30 dBm) and minor sub-ticks with matching tier color highlights.
+    - Precision animated needle pointer and multi-ring bezel with active LED jewel core.
+    - Real-time D3 historical sparkline graph rendering the last 30 seconds of rolling RSSI telemetry samples.
+  - **Interactive Controls & RF Diagnostics**:
+    - Beacon Selector dropdown to inspect any registered wearable beacon or smart tag.
+    - Real-time RF jitter drift polling toggle (`POLLING` / `PAUSED`).
+    - Interactive RF Calibration slider & instant quick-test presets (`Critical -96`, `Fair -78`, `Good -65`, `Optimal -42`).
+    - Live Link Margin (dB above -95 dBm floor), estimated Packet Delivery Ratio (PDR %), RF Distance estimate (m) via inverse log-distance path loss, and BLE advertising channel telemetry.
+
+---
+
+## 🛡️ Milestone: Simple Citizen Mode, 1-Click Lifestyle Profiles & Cryptographic Privacy Passport
+
+- **Feature Implementation & Ergonomics**:
+  - **Simple Citizen Mode (`<SimpleCitizenShield />`)**:
+    - Created an ultra-clean, minimalist interface designed specifically for everyday citizens, families, and non-technical users.
+    - Zero jargon with friendly terminology: Clear status display ("Shield Armed: 100% Offline Protection" vs "Shield Paused: Broadcast Muted").
+    - Big tactile master button with instant visual ring animations, auditory chime feedback, and haptic motor pulses.
+    - 4 intuitive camouflage styles: Strict Face Blur (standard), Magic Invisibility (AI fill), Pixelate Block (classic), and Allow Friends (whitelist).
+    - Clear distance selection pills: Personal (5m), Room (12m), Street (25m), Max (50m) plus smooth continuous slider.
+    - Protected Family & Belongings strip with 1-click active/standby toggles for all paired items.
+    - Instant 1-click Emergency Ghost Cloak panic button for maximum lockdown.
+  - **1-Click Privacy Lifestyle Profiles**:
+    - 🚇 **Transit Commute**: 6m range, strict face blur, acoustic watermarking on, haptics high.
+    - ☕ **Public Cafe & Work**: 10m range, background magic removal, silent alerts.
+    - 🚶 **Street & Park Walk**: 20m range, smart drone & glasses alert, balanced battery.
+    - 👻 **Ghost Stealth Cloak**: 40m range, full ultrasonic mic saturation, zero retention, rotating IDs.
+    - 🏠 **Home Safe Zone**: 3m range, minimum power, alerts muted.
+  - **Cryptographically Signed Privacy Passport (`<PrivacyPassportModal />`)**:
+    - Web Crypto ECDSA P-256 digital signature engine (`signCompliancePayload`, `verifyCompliancePayload`).
+    - Generates verifiable RFC-9402 Citizen Compliance Certificate with public key fingerprint, timestamp, and legal clauses (GDPR Art. 5/17/21, CCPA, EU AI Act 2026).
+    - Real-time SubtleCrypto verification badge confirming authentic digital signature.
+    - Print-ready layout (`window.print()`) and downloadable JSON passport file for venues, schools, or security personnel.
+  - **Global Fast Navigation & Keyboard Control**:
+    - Instant hotkeys: `Ctrl+K` search, `S` shield toggle, `M` mute/unmute, `1-4` tab switching, `Esc` dismiss.
+    - Integrated with interface mode dropdown and global command palette.
